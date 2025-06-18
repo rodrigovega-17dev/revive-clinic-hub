@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,6 +30,11 @@ const Finance = () => {
   };
 
   const currentRange = periodRanges[selectedPeriod as keyof typeof periodRanges];
+
+  // Define today's date ranges
+  const today = new Date();
+  const todayStart = startOfDay(today);
+  const todayEnd = endOfDay(today);
 
   // Selected date range for daily metrics
   const selectedDateStart = startOfDay(selectedDate);
