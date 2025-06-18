@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
@@ -25,6 +24,48 @@ export const useUpcomingAppointments = () => {
       
       if (error) throw error;
       return data;
+    },
+  });
+};
+
+export const useAppointmentsByDate = (selectedDate: string) => {
+  return useQuery({
+    queryKey: ['appointments', 'by-date', selectedDate],
+    queryFn: async () => {
+      const startOfDay = new Date(selectedDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(selectedDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          *,
+          clients (first_name, last_name, phone),
+          therapists (id, first_name, last_name),
+          treatments (name, duration_minutes, price)
+        `)
+        .gte('start_time', startOfDay.toISOString())
+        .lte('start_time', endOfDay.toISOString())
+        .order('therapist_id')
+        .order('start_time', { ascending: true });
+      
+      if (error) throw error;
+      
+      // Group appointments by therapist
+      const groupedAppointments = data?.reduce((groups, appointment) => {
+        const therapistId = appointment.therapist_id;
+        if (!groups[therapistId]) {
+          groups[therapistId] = {
+            therapist: appointment.therapists,
+            appointments: []
+          };
+        }
+        groups[therapistId].appointments.push(appointment);
+        return groups;
+      }, {} as Record<string, { therapist: any; appointments: any[] }>);
+
+      return groupedAppointments || {};
     },
   });
 };

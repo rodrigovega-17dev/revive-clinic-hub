@@ -25,7 +25,7 @@ export type Database = {
           start_time: string
           status: Database["public"]["Enums"]["appointment_status"]
           therapist_id: string
-          treatment_id: string
+          treatment_id: string | null
           updated_at: string
         }
         Insert: {
@@ -43,7 +43,7 @@ export type Database = {
           start_time: string
           status?: Database["public"]["Enums"]["appointment_status"]
           therapist_id: string
-          treatment_id: string
+          treatment_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -61,7 +61,7 @@ export type Database = {
           start_time?: string
           status?: Database["public"]["Enums"]["appointment_status"]
           therapist_id?: string
-          treatment_id?: string
+          treatment_id?: string | null
           updated_at?: string
         }
         Relationships: [
