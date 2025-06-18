@@ -74,12 +74,12 @@ export const Sidebar = () => {
                 "w-full justify-start transition-all duration-200 text-sm font-medium",
                 collapsed ? "px-2" : "px-3",
                 isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
+                  ? "bg-blue-100 text-blue-900 shadow-sm border-l-4 border-blue-600 font-semibold"
                   : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-sidebar-foreground hover:shadow-sm"
               )}
               onClick={() => navigate(item.href)}
             >
-              <item.icon className={cn("w-5 h-5", collapsed ? "" : "mr-3")} />
+              <item.icon className={cn("w-5 h-5", collapsed ? "" : "mr-3", isActive ? "text-blue-600" : "")} />
               {!collapsed && <span>{item.name}</span>}
             </Button>
           );
