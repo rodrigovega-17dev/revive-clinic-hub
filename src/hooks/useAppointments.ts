@@ -1,6 +1,9 @@
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesInsert } from '@/integrations/supabase/types';
+
+type AppointmentInsert = TablesInsert<'appointments'>;
 
 export const useUpcomingAppointments = () => {
   return useQuery({
@@ -17,10 +20,51 @@ export const useUpcomingAppointments = () => {
         .gte('start_time', new Date().toISOString())
         .eq('status', 'scheduled')
         .order('start_time', { ascending: true })
-        .limit(5);
+        .limit(10);
       
       if (error) throw error;
       return data;
+    },
+  });
+};
+
+export const useAllAppointments = () => {
+  return useQuery({
+    queryKey: ['appointments', 'all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          *,
+          clients (first_name, last_name, phone),
+          therapists (id),
+          treatments (name, duration_minutes, price)
+        `)
+        .order('start_time', { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+  });
+};
+
+export const useCreateAppointment = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (appointment: AppointmentInsert) => {
+      const { data, error } = await supabase
+        .from('appointments')
+        .insert(appointment)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
     },
   });
 };

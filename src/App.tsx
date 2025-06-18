@@ -9,6 +9,8 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { Layout } from "@/components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Clients from "./pages/Clients";
+import Appointments from "./pages/Appointments";
+import Therapists from "./pages/Therapists";
 import Auth from "./pages/Auth";
 import ComingSoon from "./pages/ComingSoon";
 import NotFound from "./pages/NotFound";
@@ -41,14 +43,14 @@ const App = () => (
             <Route path="/appointments" element={
               <ProtectedRoute>
                 <Layout>
-                  <ComingSoon title="Appointments" description="Schedule and manage client appointments with calendar integration" />
+                  <Appointments />
                 </Layout>
               </ProtectedRoute>
             } />
             <Route path="/therapists" element={
               <ProtectedRoute>
                 <Layout>
-                  <ComingSoon title="Therapists" description="Manage therapist profiles and schedules" />
+                  <Therapists />
                 </Layout>
               </ProtectedRoute>
             } />
