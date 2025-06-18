@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Plus, Search, MoreHorizontal, Edit, Trash2, User, Phone, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,16 +23,37 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import ClientForm from "@/components/ClientForm";
 
+// Helper function to normalize text for flexible search
+const normalizeText = (text: string) => {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritical marks
+    .replace(/[^a-z0-9\s]/g, '') // Remove special characters except spaces
+    .trim();
+};
+
 const Clients = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
   const { data: clients, isLoading } = useClients();
 
-  const filteredClients = clients?.filter(client =>
-    `${client.first_name} ${client.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.phone?.includes(searchTerm)
-  ) || [];
+  const filteredClients = clients?.filter(client => {
+    const normalizedSearchTerm = normalizeText(searchTerm);
+    if (!normalizedSearchTerm) return true;
+    
+    const fullName = normalizeText(`${client.first_name} ${client.last_name}`);
+    const firstName = normalizeText(client.first_name);
+    const lastName = normalizeText(client.last_name);
+    const email = normalizeText(client.email || '');
+    const phone = normalizeText(client.phone || '');
+    
+    return fullName.includes(normalizedSearchTerm) ||
+           firstName.includes(normalizedSearchTerm) ||
+           lastName.includes(normalizedSearchTerm) ||
+           email.includes(normalizedSearchTerm) ||
+           phone.includes(normalizedSearchTerm);
+  }) || [];
 
   if (isLoading) {
     return (
