@@ -1,14 +1,13 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DollarSign, TrendingUp, Calendar, CreditCard, Clock, Receipt, Download, Plus, Minus } from 'lucide-react';
+import { DollarSign, TrendingUp, Calendar, CreditCard, Clock, Receipt, Download, Plus, Minus, Wallet } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import SearchInput from '@/components/SearchInput';
 
@@ -26,6 +25,40 @@ const Finance = () => {
   };
 
   const currentRange = periodRanges[selectedPeriod as keyof typeof periodRanges];
+
+  // Today's date range for daily metrics
+  const today = new Date();
+  const todayStart = startOfDay(today);
+  const todayEnd = endOfDay(today);
+
+  // Fetch today's payments for daily metrics
+  const { data: todaysPayments, isLoading: todaysPaymentsLoading } = useQuery({
+    queryKey: ['todays-payments'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payments')
+        .select('*')
+        .gte('payment_date', todayStart.toISOString())
+        .lte('payment_date', todayEnd.toISOString());
+      
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch today's expenses
+  const { data: todaysExpenses, isLoading: todaysExpensesLoading } = useQuery({
+    queryKey: ['todays-expenses'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('date', format(today, 'yyyy-MM-dd'));
+      
+      if (error) throw error;
+      return data;
+    },
+  });
 
   // Fetch financial data
   const { data: payments, isLoading: paymentsLoading } = useQuery({
@@ -134,12 +167,19 @@ const Finance = () => {
     }
   };
 
-  // Calculate totals
+  // Calculate daily totals
+  const todaysTotalRevenue = todaysPayments?.reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
+  const todaysCashRevenue = todaysPayments?.filter(p => p.method === 'cash').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
+  const todaysIntangibleRevenue = todaysTotalRevenue - todaysCashRevenue;
+  const todaysTotalExpenses = todaysExpenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
+  const expectedCashInCashier = todaysCashRevenue - todaysTotalExpenses;
+
+  // Calculate monthly totals
   const totalPayments = payments?.reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
   const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
   const cashPayments = payments?.filter(p => p.method === 'cash').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
 
-  if (paymentsLoading || statsLoading || expensesLoading || cashSummariesLoading) {
+  if (paymentsLoading || statsLoading || expensesLoading || cashSummariesLoading || todaysPaymentsLoading || todaysExpensesLoading) {
     return (
       <div className="space-y-6">
         <div>
@@ -177,6 +217,59 @@ const Finance = () => {
         </div>
       </div>
 
+      {/* Today's Financial Summary */}
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <CardTitle className="text-foreground flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Today's Financial Summary - {format(today, 'MMMM d, yyyy')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="text-center p-4 bg-blue-50 rounded-lg">
+              <div className="flex items-center justify-center mb-2">
+                <DollarSign className="h-6 w-6 text-blue-600" />
+              </div>
+              <p className="text-sm font-medium text-blue-600">Total Revenue</p>
+              <p className="text-2xl font-bold text-blue-700">${todaysTotalRevenue.toFixed(2)}</p>
+            </div>
+            
+            <div className="text-center p-4 bg-purple-50 rounded-lg">
+              <div className="flex items-center justify-center mb-2">
+                <CreditCard className="h-6 w-6 text-purple-600" />
+              </div>
+              <p className="text-sm font-medium text-purple-600">Total Intangible</p>
+              <p className="text-2xl font-bold text-purple-700">${todaysIntangibleRevenue.toFixed(2)}</p>
+            </div>
+            
+            <div className="text-center p-4 bg-green-50 rounded-lg">
+              <div className="flex items-center justify-center mb-2">
+                <Wallet className="h-6 w-6 text-green-600" />
+              </div>
+              <p className="text-sm font-medium text-green-600">Total in Cash</p>
+              <p className="text-2xl font-bold text-green-700">${todaysCashRevenue.toFixed(2)}</p>
+            </div>
+            
+            <div className="text-center p-4 bg-red-50 rounded-lg">
+              <div className="flex items-center justify-center mb-2">
+                <Minus className="h-6 w-6 text-red-600" />
+              </div>
+              <p className="text-sm font-medium text-red-600">Expenses</p>
+              <p className="text-2xl font-bold text-red-700">${todaysTotalExpenses.toFixed(2)}</p>
+            </div>
+            
+            <div className="text-center p-4 bg-orange-50 rounded-lg">
+              <div className="flex items-center justify-center mb-2">
+                <Receipt className="h-6 w-6 text-orange-600" />
+              </div>
+              <p className="text-sm font-medium text-orange-600">Expected in Cashier</p>
+              <p className="text-2xl font-bold text-orange-700">${expectedCashInCashier.toFixed(2)}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Period Selector */}
       <Tabs value={selectedPeriod} onValueChange={setSelectedPeriod}>
         <TabsList className="bg-muted">
@@ -185,7 +278,7 @@ const Finance = () => {
         </TabsList>
       </Tabs>
 
-      {/* Financial Stats */}
+      {/* Monthly Financial Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
