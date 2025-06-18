@@ -10,10 +10,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { format, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import SearchInput from '@/components/SearchInput';
+import ExpenseForm from '@/components/ExpenseForm';
+import DateSelector from '@/components/DateSelector';
 
 const Finance = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState('current');
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
 
   // Get current month range
   const currentMonth = new Date();
@@ -26,10 +30,38 @@ const Finance = () => {
 
   const currentRange = periodRanges[selectedPeriod as keyof typeof periodRanges];
 
-  // Today's date range for daily metrics
-  const today = new Date();
-  const todayStart = startOfDay(today);
-  const todayEnd = endOfDay(today);
+  // Selected date range for daily metrics
+  const selectedDateStart = startOfDay(selectedDate);
+  const selectedDateEnd = endOfDay(selectedDate);
+
+  // Fetch selected date's payments for daily metrics
+  const { data: selectedDatePayments, isLoading: selectedDatePaymentsLoading } = useQuery({
+    queryKey: ['selected-date-payments', format(selectedDate, 'yyyy-MM-dd')],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payments')
+        .select('*')
+        .gte('payment_date', selectedDateStart.toISOString())
+        .lte('payment_date', selectedDateEnd.toISOString());
+      
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch selected date's expenses
+  const { data: selectedDateExpenses, isLoading: selectedDateExpensesLoading } = useQuery({
+    queryKey: ['selected-date-expenses', format(selectedDate, 'yyyy-MM-dd')],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('date', format(selectedDate, 'yyyy-MM-dd'));
+      
+      if (error) throw error;
+      return data;
+    },
+  });
 
   // Fetch today's payments for daily metrics
   const { data: todaysPayments, isLoading: todaysPaymentsLoading } = useQuery({
@@ -167,19 +199,19 @@ const Finance = () => {
     }
   };
 
-  // Calculate daily totals
-  const todaysTotalRevenue = todaysPayments?.reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
-  const todaysCashRevenue = todaysPayments?.filter(p => p.method === 'cash').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
-  const todaysIntangibleRevenue = todaysTotalRevenue - todaysCashRevenue;
-  const todaysTotalExpenses = todaysExpenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
-  const expectedCashInCashier = todaysCashRevenue - todaysTotalExpenses;
+  // Calculate daily totals for selected date
+  const selectedDateTotalRevenue = selectedDatePayments?.reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
+  const selectedDateCashRevenue = selectedDatePayments?.filter(p => p.method === 'cash').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
+  const selectedDateIntangibleRevenue = selectedDateTotalRevenue - selectedDateCashRevenue;
+  const selectedDateTotalExpenses = selectedDateExpenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
+  const expectedCashInCashier = selectedDateCashRevenue - selectedDateTotalExpenses;
 
   // Calculate monthly totals
   const totalPayments = payments?.reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
   const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
   const cashPayments = payments?.filter(p => p.method === 'cash').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
 
-  if (paymentsLoading || statsLoading || expensesLoading || cashSummariesLoading || todaysPaymentsLoading || todaysExpensesLoading) {
+  if (paymentsLoading || statsLoading || expensesLoading || cashSummariesLoading || selectedDatePaymentsLoading || selectedDateExpensesLoading) {
     return (
       <div className="space-y-6">
         <div>
@@ -210,6 +242,10 @@ const Finance = () => {
           <p className="text-muted-foreground">Track payments, revenue, and financial reports</p>
         </div>
         <div className="flex gap-2">
+          <Button onClick={() => setShowExpenseForm(true)} variant="outline" size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Expense
+          </Button>
           <Button variant="outline" size="sm">
             <Download className="h-4 w-4 mr-2" />
             Export
@@ -217,13 +253,22 @@ const Finance = () => {
         </div>
       </div>
 
-      {/* Today's Financial Summary */}
+      {/* Daily Financial Summary with Date Selector */}
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="text-foreground flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Today's Financial Summary - {format(today, 'MMMM d, yyyy')}
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-foreground flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Daily Financial Summary
+            </CardTitle>
+            <DateSelector 
+              selectedDate={selectedDate} 
+              onDateChange={setSelectedDate} 
+            />
+          </div>
+          <CardDescription className="text-muted-foreground">
+            Financial overview for {format(selectedDate, 'MMMM d, yyyy')}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -232,7 +277,7 @@ const Finance = () => {
                 <DollarSign className="h-6 w-6 text-blue-600" />
               </div>
               <p className="text-sm font-medium text-blue-600">Total Revenue</p>
-              <p className="text-2xl font-bold text-blue-700">${todaysTotalRevenue.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-blue-700">${selectedDateTotalRevenue.toFixed(2)}</p>
             </div>
             
             <div className="text-center p-4 bg-purple-50 rounded-lg">
@@ -240,7 +285,7 @@ const Finance = () => {
                 <CreditCard className="h-6 w-6 text-purple-600" />
               </div>
               <p className="text-sm font-medium text-purple-600">Total Intangible</p>
-              <p className="text-2xl font-bold text-purple-700">${todaysIntangibleRevenue.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-purple-700">${selectedDateIntangibleRevenue.toFixed(2)}</p>
             </div>
             
             <div className="text-center p-4 bg-green-50 rounded-lg">
@@ -248,7 +293,7 @@ const Finance = () => {
                 <Wallet className="h-6 w-6 text-green-600" />
               </div>
               <p className="text-sm font-medium text-green-600">Total in Cash</p>
-              <p className="text-2xl font-bold text-green-700">${todaysCashRevenue.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-green-700">${selectedDateCashRevenue.toFixed(2)}</p>
             </div>
             
             <div className="text-center p-4 bg-red-50 rounded-lg">
@@ -256,7 +301,7 @@ const Finance = () => {
                 <Minus className="h-6 w-6 text-red-600" />
               </div>
               <p className="text-sm font-medium text-red-600">Expenses</p>
-              <p className="text-2xl font-bold text-red-700">${todaysTotalExpenses.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-red-700">${selectedDateTotalExpenses.toFixed(2)}</p>
             </div>
             
             <div className="text-center p-4 bg-orange-50 rounded-lg">
@@ -519,6 +564,12 @@ const Finance = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Expense Form Modal */}
+      <ExpenseForm 
+        open={showExpenseForm} 
+        onClose={() => setShowExpenseForm(false)} 
+      />
     </div>
   );
 };
