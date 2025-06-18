@@ -1,8 +1,7 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
-import { Clock, User } from "lucide-react";
+import { Clock, User, Calendar } from "lucide-react";
 
 const appointments = [
   {
