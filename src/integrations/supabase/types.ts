@@ -152,6 +152,75 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_cash_summary: {
+        Row: {
+          cash_payments: number | null
+          closing_cash: number | null
+          created_at: string
+          date: string
+          id: string
+          opening_cash: number | null
+          total_expenses: number | null
+          total_revenue: number | null
+          updated_at: string
+        }
+        Insert: {
+          cash_payments?: number | null
+          closing_cash?: number | null
+          created_at?: string
+          date: string
+          id?: string
+          opening_cash?: number | null
+          total_expenses?: number | null
+          total_revenue?: number | null
+          updated_at?: string
+        }
+        Update: {
+          cash_payments?: number | null
+          closing_cash?: number | null
+          created_at?: string
+          date?: string
+          id?: string
+          opening_cash?: number | null
+          total_expenses?: number | null
+          total_revenue?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      expenses: {
+        Row: {
+          amount: number
+          category: string | null
+          created_at: string
+          date: string
+          description: string
+          id: string
+          recorded_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          category?: string | null
+          created_at?: string
+          date: string
+          description: string
+          id?: string
+          recorded_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          category?: string | null
+          created_at?: string
+          date?: string
+          description?: string
+          id?: string
+          recorded_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           amount: number

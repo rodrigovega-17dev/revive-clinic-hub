@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DollarSign, TrendingUp, Calendar, CreditCard, Clock, Receipt, Download } from 'lucide-react';
+import { DollarSign, TrendingUp, Calendar, CreditCard, Clock, Receipt, Download, Plus, Minus } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
@@ -31,6 +31,7 @@ const Finance = () => {
   const { data: payments, isLoading: paymentsLoading } = useQuery({
     queryKey: ['payments', selectedPeriod],
     queryFn: async () => {
+      console.log('Fetching payments for period:', selectedPeriod);
       const { data, error } = await supabase
         .from('payments')
         .select(`
@@ -41,6 +42,42 @@ const Finance = () => {
         .gte('payment_date', currentRange.start.toISOString())
         .lte('payment_date', currentRange.end.toISOString())
         .order('payment_date', { ascending: false });
+      
+      if (error) {
+        console.error('Error fetching payments:', error);
+        throw error;
+      }
+      console.log('Fetched payments:', data);
+      return data;
+    },
+  });
+
+  // Fetch expenses
+  const { data: expenses, isLoading: expensesLoading } = useQuery({
+    queryKey: ['expenses', selectedPeriod],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('expenses')
+        .select('*')
+        .gte('date', format(currentRange.start, 'yyyy-MM-dd'))
+        .lte('date', format(currentRange.end, 'yyyy-MM-dd'))
+        .order('date', { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch daily cash summaries
+  const { data: dailyCashSummaries, isLoading: cashSummariesLoading } = useQuery({
+    queryKey: ['daily-cash-summaries', selectedPeriod],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('daily_cash_summary')
+        .select('*')
+        .gte('date', format(currentRange.start, 'yyyy-MM-dd'))
+        .lte('date', format(currentRange.end, 'yyyy-MM-dd'))
+        .order('date', { ascending: false });
       
       if (error) throw error;
       return data;
@@ -91,12 +128,18 @@ const Finance = () => {
     switch (method) {
       case 'cash': return 'bg-green-100 text-green-800';
       case 'card': return 'bg-blue-100 text-blue-800';
-      case 'bank_transfer': return 'bg-purple-100 text-purple-800';
+      case 'transfer': return 'bg-purple-100 text-purple-800';
+      case 'insurance': return 'bg-orange-100 text-orange-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  if (paymentsLoading || statsLoading) {
+  // Calculate totals
+  const totalPayments = payments?.reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
+  const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
+  const cashPayments = payments?.filter(p => p.method === 'cash').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
+
+  if (paymentsLoading || statsLoading || expensesLoading || cashSummariesLoading) {
     return (
       <div className="space-y-6">
         <div>
@@ -151,7 +194,7 @@ const Finance = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
                 <p className="text-2xl font-bold text-foreground">
-                  ${appointmentStats?.totalRevenue.toFixed(2) || '0.00'}
+                  ${totalPayments.toFixed(2)}
                 </p>
               </div>
             </div>
@@ -161,11 +204,11 @@ const Finance = () => {
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
-              <Receipt className="h-4 w-4 text-blue-400" />
+              <Minus className="h-4 w-4 text-red-400" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Paid Appointments</p>
+                <p className="text-sm font-medium text-muted-foreground">Total Expenses</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {appointmentStats?.paidAppointments || 0}
+                  ${totalExpenses.toFixed(2)}
                 </p>
               </div>
             </div>
@@ -175,11 +218,11 @@ const Finance = () => {
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
-              <Clock className="h-4 w-4 text-orange-400" />
+              <CreditCard className="h-4 w-4 text-green-400" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Pending Payments</p>
+                <p className="text-sm font-medium text-muted-foreground">Cash Revenue</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {appointmentStats?.pendingPayments || 0}
+                  ${cashPayments.toFixed(2)}
                 </p>
               </div>
             </div>
@@ -189,17 +232,71 @@ const Finance = () => {
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
-              <Calendar className="h-4 w-4 text-purple-400" />
+              <TrendingUp className="h-4 w-4 text-blue-400" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Appointments</p>
+                <p className="text-sm font-medium text-muted-foreground">Net Total</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {appointmentStats?.totalAppointments || 0}
+                  ${(totalPayments - totalExpenses).toFixed(2)}
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Daily Cash Summary */}
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <CardTitle className="text-foreground">Daily Cash Summary</CardTitle>
+          <CardDescription className="text-muted-foreground">
+            Daily revenue, expenses, and expected cash totals
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {dailyCashSummaries && dailyCashSummaries.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border">
+                  <TableHead className="text-foreground">Date</TableHead>
+                  <TableHead className="text-foreground">Opening Cash</TableHead>
+                  <TableHead className="text-foreground">Revenue</TableHead>
+                  <TableHead className="text-foreground">Expenses</TableHead>
+                  <TableHead className="text-foreground">Expected Cash</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dailyCashSummaries.map((summary) => (
+                  <TableRow key={summary.id} className="hover:bg-muted/50 border-border">
+                    <TableCell className="text-foreground">
+                      {format(new Date(summary.date), 'MMM d, yyyy')}
+                    </TableCell>
+                    <TableCell className="text-foreground">
+                      ${Number(summary.opening_cash || 0).toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-green-600 font-medium">
+                      ${Number(summary.total_revenue || 0).toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-red-600 font-medium">
+                      ${Number(summary.total_expenses || 0).toFixed(2)}
+                    </TableCell>
+                    <TableCell className="font-medium text-foreground">
+                      ${(Number(summary.opening_cash || 0) + Number(summary.total_revenue || 0) - Number(summary.total_expenses || 0)).toFixed(2)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center py-12">
+              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">No daily summaries yet</h3>
+              <p className="text-muted-foreground">
+                Daily summaries will be automatically generated based on your transactions.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Search */}
       <div className="flex items-center space-x-4">
@@ -229,7 +326,6 @@ const Finance = () => {
                 <TableRow className="border-border">
                   <TableHead className="text-foreground">Date</TableHead>
                   <TableHead className="text-foreground">Client</TableHead>
-                  <TableHead className="text-foreground">Therapist</TableHead>
                   <TableHead className="text-foreground">Amount</TableHead>
                   <TableHead className="text-foreground">Method</TableHead>
                   <TableHead className="text-foreground">Description</TableHead>
@@ -244,12 +340,6 @@ const Finance = () => {
                     <TableCell className="text-foreground">
                       {payment.clients ? 
                         `${payment.clients.first_name} ${payment.clients.last_name}` : 
-                        'N/A'
-                      }
-                    </TableCell>
-                    <TableCell className="text-foreground">
-                      {payment.appointments?.therapists ? 
-                        `${payment.appointments.therapists.first_name} ${payment.appointments.therapists.last_name}` : 
                         'N/A'
                       }
                     </TableCell>
@@ -279,6 +369,58 @@ const Finance = () => {
                   ? 'Try adjusting your search terms.'
                   : 'Payments will appear here once appointments are completed.'
                 }
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Expenses Table */}
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <CardTitle className="text-foreground">Expenses</CardTitle>
+          <CardDescription className="text-muted-foreground">
+            All expenses for {format(currentRange.start, 'MMMM yyyy')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {expenses && expenses.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border">
+                  <TableHead className="text-foreground">Date</TableHead>
+                  <TableHead className="text-foreground">Description</TableHead>
+                  <TableHead className="text-foreground">Category</TableHead>
+                  <TableHead className="text-foreground">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {expenses.map((expense) => (
+                  <TableRow key={expense.id} className="hover:bg-muted/50 border-border">
+                    <TableCell className="text-foreground">
+                      {format(new Date(expense.date), 'MMM d, yyyy')}
+                    </TableCell>
+                    <TableCell className="text-foreground">
+                      {expense.description}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {expense.category}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-medium text-red-600">
+                      ${Number(expense.amount).toFixed(2)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center py-12">
+              <Minus className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">No expenses yet</h3>
+              <p className="text-muted-foreground">
+                Expenses will appear here once they are recorded.
               </p>
             </div>
           )}
