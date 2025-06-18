@@ -35,20 +35,20 @@ export const Sidebar = () => {
   return (
     <div
       className={cn(
-        "flex flex-col h-screen bg-gray-900 border-r border-gray-700 transition-all duration-300 ease-in-out shadow-lg",
+        "flex flex-col h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out shadow-lg",
         collapsed ? "w-16" : "w-64"
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-gray-800">
+      <div className="flex items-center justify-between p-4 border-b border-sidebar-border bg-sidebar/50">
         {!collapsed && (
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
-              <Activity className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 bg-gradient-to-br from-sidebar-primary to-sidebar-primary/80 rounded-xl flex items-center justify-center shadow-md">
+              <Activity className="w-6 h-6 text-sidebar-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-white">Revive Clinic</h1>
-              <p className="text-xs text-gray-400 font-medium">Physiotherapy CRM</p>
+              <h1 className="text-lg font-bold text-sidebar-foreground">Revive Clinic</h1>
+              <p className="text-xs text-muted-foreground font-medium">Physiotherapy CRM</p>
             </div>
           </div>
         )}
@@ -56,7 +56,7 @@ export const Sidebar = () => {
           variant="ghost"
           size="sm"
           onClick={() => setCollapsed(!collapsed)}
-          className="hover:bg-gray-700 text-gray-300 hover:text-white"
+          className="hover:bg-sidebar-accent text-sidebar-foreground/70 hover:text-sidebar-foreground"
         >
           {collapsed ? <Menu className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </Button>
@@ -74,12 +74,12 @@ export const Sidebar = () => {
                 "w-full justify-start transition-all duration-200 text-sm font-medium",
                 collapsed ? "px-2" : "px-3",
                 isActive
-                  ? "bg-blue-600 text-white shadow-sm border-l-4 border-blue-400 font-semibold"
-                  : "hover:bg-gray-700 text-gray-300 hover:text-white hover:shadow-sm"
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm border-l-4 border-sidebar-primary/60 font-semibold"
+                  : "hover:bg-sidebar-accent text-sidebar-foreground/70 hover:text-sidebar-foreground hover:shadow-sm"
               )}
               onClick={() => navigate(item.href)}
             >
-              <item.icon className={cn("w-5 h-5", collapsed ? "" : "mr-3", isActive ? "text-white" : "")} />
+              <item.icon className={cn("w-5 h-5", collapsed ? "" : "mr-3", isActive ? "text-sidebar-primary-foreground" : "")} />
               {!collapsed && <span>{item.name}</span>}
             </Button>
           );
@@ -88,14 +88,14 @@ export const Sidebar = () => {
 
       {/* Footer */}
       {!collapsed && (
-        <div className="p-4 border-t border-gray-700 bg-gray-800">
+        <div className="p-4 border-t border-sidebar-border bg-sidebar/50">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-gray-600 to-slate-600 rounded-full flex items-center justify-center">
-              <User className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 bg-gradient-to-br from-muted to-muted/80 rounded-full flex items-center justify-center">
+              <User className="w-5 h-5 text-muted-foreground" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-white">Dr. Admin</p>
-              <p className="text-xs text-gray-400">Administrator</p>
+              <p className="text-sm font-semibold text-sidebar-foreground">Dr. Admin</p>
+              <p className="text-xs text-muted-foreground">Administrator</p>
             </div>
           </div>
         </div>

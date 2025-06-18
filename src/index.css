@@ -10,41 +10,57 @@
   }
   
   :root {
+    /* Main Background Colors */
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    
+    /* Card and Surface Colors */
+    --card: 222.2 84% 6.5%;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    
+    /* Interactive Element Colors */
     --primary: 217.2 91.2% 59.8%;
     --primary-foreground: 222.2 84% 4.9%;
-    --secondary: 217.2 32.6% 17.5%;
+    --secondary: 217.2 32.6% 20%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 94.1%;
-    --radius: 0.5rem;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
     
-    /* Sidebar variables for dark mode */
-    --sidebar-background: 222.2 84% 4.9%;
+    /* Muted Elements */
+    --muted: 217.2 32.6% 15%;
+    --muted-foreground: 215 20.2% 65.1%;
+    
+    /* Accent and Hover States */
+    --accent: 217.2 32.6% 18%;
+    --accent-foreground: 210 40% 98%;
+    
+    /* Popover and Dropdown Colors */
+    --popover: 222.2 84% 7%;
+    --popover-foreground: 210 40% 98%;
+    
+    /* Border and Input Colors */
+    --border: 217.2 32.6% 25%;
+    --input: 217.2 32.6% 18%;
+    --ring: 217.2 91.2% 59.8%;
+    
+    /* Destructive Actions */
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --radius: 0.5rem;
+    --chart-1: 220 70% 55%;
+    --chart-2: 160 60% 50%;
+    --chart-3: 30 80% 60%;
+    --chart-4: 280 65% 65%;
+    --chart-5: 340 75% 60%;
+    
+    /* Sidebar Specific Colors */
+    --sidebar-background: 222.2 84% 3.5%;
     --sidebar-foreground: 210 40% 98%;
     --sidebar-primary: 217.2 91.2% 59.8%;
     --sidebar-primary-foreground: 222.2 84% 4.9%;
-    --sidebar-accent: 217.2 32.6% 17.5%;
+    --sidebar-accent: 217.2 32.6% 20%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217.2 32.6% 17.5%;
-    --sidebar-ring: 224.3 76.3% 94.1%;
+    --sidebar-border: 217.2 32.6% 18%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
   body {
@@ -56,5 +72,21 @@
 @layer utilities {
   .hover-lift {
     @apply transition-all duration-200 ease-in-out hover:shadow-lg hover:-translate-y-0.5;
+  }
+  
+  .dark-surface {
+    @apply bg-card border border-border;
+  }
+  
+  .dark-surface-elevated {
+    @apply bg-popover border border-border shadow-lg;
+  }
+  
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent;
+  }
+  
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
   }
 }
