@@ -1,3 +1,4 @@
+
 import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -176,7 +177,7 @@ const Payroll = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
                 <p className="text-2xl font-bold text-foreground">
-                  ${payrollData?.totals.totalRevenue?.toFixed(2) || '0.00'}
+                  ${Number(payrollData?.totals.totalRevenue || 0).toFixed(2)}
                 </p>
               </div>
             </div>
@@ -190,7 +191,7 @@ const Payroll = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Therapist Earnings</p>
                 <p className="text-2xl font-bold text-foreground">
-                  ${payrollData?.totals.totalTherapistEarnings?.toFixed(2) || '0.00'}
+                  ${Number(payrollData?.totals.totalTherapistEarnings || 0).toFixed(2)}
                 </p>
               </div>
             </div>
@@ -204,7 +205,7 @@ const Payroll = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Clinic Earnings</p>
                 <p className="text-2xl font-bold text-foreground">
-                  ${payrollData?.totals.totalClinicEarnings?.toFixed(2) || '0.00'}
+                  ${Number(payrollData?.totals.totalClinicEarnings || 0).toFixed(2)}
                 </p>
               </div>
             </div>
