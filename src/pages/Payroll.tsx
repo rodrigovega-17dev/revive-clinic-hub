@@ -9,47 +9,24 @@ import { Calendar, DollarSign, TrendingUp, Users, Download } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format, startOfMonth, endOfMonth, addDays, startOfDay, endOfDay } from 'date-fns';
+import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 
 const Payroll = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('current');
 
-  // Generate 15-day periods starting from 1st and 16th of each month
+  // Generate 15-day periods
   const periods = useMemo(() => {
     const periods = [];
-    const today = new Date();
-    
-    // Generate periods for the last 6 months
-    for (let monthOffset = 0; monthOffset < 6; monthOffset++) {
-      const baseDate = new Date(today.getFullYear(), today.getMonth() - monthOffset, 1);
-      
-      // First half of month (1st to 15th)
-      const firstHalfStart = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
-      const firstHalfEnd = new Date(baseDate.getFullYear(), baseDate.getMonth(), 15);
-      
-      // Second half of month (16th to end of month)
-      const secondHalfStart = new Date(baseDate.getFullYear(), baseDate.getMonth(), 16);
-      const secondHalfEnd = endOfMonth(baseDate);
-      
-      // Add second half first (more recent)
-      if (secondHalfStart <= today) {
-        periods.push({
-          value: `${baseDate.getFullYear()}-${baseDate.getMonth()}-2`,
-          label: `${format(secondHalfStart, 'MMM d')} - ${format(secondHalfEnd, 'MMM d, yyyy')}`,
-          startDate: secondHalfStart,
-          endDate: secondHalfEnd,
-        });
-      }
-      
-      // Add first half
+    for (let i = 0; i < 6; i++) {
+      const endDate = subDays(new Date(), i * 15);
+      const startDate = subDays(endDate, 14);
       periods.push({
-        value: `${baseDate.getFullYear()}-${baseDate.getMonth()}-1`,
-        label: `${format(firstHalfStart, 'MMM d')} - ${format(firstHalfEnd, 'MMM d, yyyy')}`,
-        startDate: firstHalfStart,
-        endDate: firstHalfEnd,
+        value: `period-${i}`,
+        label: `${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d, yyyy')}`,
+        startDate,
+        endDate,
       });
     }
-    
     return periods;
   }, []);
 
@@ -283,15 +260,15 @@ const Payroll = () => {
                       {therapist.totalAppointments}
                     </TableCell>
                     <TableCell className="text-foreground">
-                      ${Number(therapist.totalRevenue).toFixed(2)}
+                      ${therapist.totalRevenue.toFixed(2)}
                     </TableCell>
                     <TableCell>
                       <div className="font-medium text-green-600">
-                        ${Number(therapist.therapistEarnings).toFixed(2)}
+                        ${therapist.therapistEarnings.toFixed(2)}
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      ${Number(therapist.clinicEarnings).toFixed(2)}
+                      ${therapist.clinicEarnings.toFixed(2)}
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">

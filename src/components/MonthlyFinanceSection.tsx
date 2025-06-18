@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -28,12 +29,10 @@ const MonthlyFinanceSection = () => {
   console.log('MonthlyFinanceSection - Date range:', {
     selectedPeriod,
     start: currentRange.start.toISOString(),
-    end: currentRange.end.toISOString(),
-    startFormatted: format(currentRange.start, 'yyyy-MM-dd HH:mm:ss'),
-    endFormatted: format(currentRange.end, 'yyyy-MM-dd HH:mm:ss')
+    end: currentRange.end.toISOString()
   });
 
-  // Fetch financial data with improved query
+  // Fetch financial data
   const { data: payments, isLoading: paymentsLoading, error: paymentsError } = useQuery({
     queryKey: ['payments', selectedPeriod, currentRange.start.toISOString(), currentRange.end.toISOString()],
     queryFn: async () => {
@@ -42,46 +41,16 @@ const MonthlyFinanceSection = () => {
         end: currentRange.end.toISOString()
       });
 
-      // Try multiple query approaches to debug
-      const queries = [
-        // Original query
-        supabase
-          .from('payments')
-          .select(`
-            *,
-            clients (first_name, last_name),
-            appointments (start_time, therapists (first_name, last_name))
-          `)
-          .gte('payment_date', currentRange.start.toISOString())
-          .lte('payment_date', currentRange.end.toISOString())
-          .order('payment_date', { ascending: false }),
-        
-        // Query with date format
-        supabase
-          .from('payments')
-          .select('*')
-          .gte('payment_date', format(currentRange.start, 'yyyy-MM-dd'))
-          .lte('payment_date', format(currentRange.end, 'yyyy-MM-dd'))
-          .order('payment_date', { ascending: false }),
-        
-        // Query for just June 2025
-        supabase
-          .from('payments')
-          .select('*')
-          .gte('payment_date', '2025-06-01')
-          .lte('payment_date', '2025-06-30')
-          .order('payment_date', { ascending: false })
-      ];
-
-      const results = await Promise.all(queries);
-      
-      console.log('Query results comparison:', {
-        originalQuery: results[0],
-        dateFormatQuery: results[1],
-        june2025Query: results[2]
-      });
-
-      const { data, error } = results[0];
+      const { data, error } = await supabase
+        .from('payments')
+        .select(`
+          *,
+          clients (first_name, last_name),
+          appointments (start_time, therapists (first_name, last_name))
+        `)
+        .gte('payment_date', currentRange.start.toISOString())
+        .lte('payment_date', currentRange.end.toISOString())
+        .order('payment_date', { ascending: false });
       
       if (error) {
         console.error('Error fetching payments:', error);
@@ -89,8 +58,6 @@ const MonthlyFinanceSection = () => {
       }
       
       console.log('Fetched payments:', data);
-      console.log('Payment dates found:', data?.map(p => ({ id: p.id, date: p.payment_date, amount: p.amount })));
-      
       return data || [];
     },
   });
@@ -151,8 +118,7 @@ const MonthlyFinanceSection = () => {
     totalExpenses,
     cashPayments,
     paymentsCount: payments?.length || 0,
-    expensesCount: expenses?.length || 0,
-    rawPayments: payments?.map(p => ({ date: p.payment_date, amount: p.amount, method: p.method }))
+    expensesCount: expenses?.length || 0
   });
 
   const getPaymentMethodColor = (method: string) => {
@@ -188,23 +154,13 @@ const MonthlyFinanceSection = () => {
 
   return (
     <div className="space-y-6">
-      {/* Enhanced Debug Info */}
+      {/* Debug Info */}
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm">
         <p><strong>Debug Info:</strong></p>
         <p>Selected Period: {selectedPeriod}</p>
-        <p>Date Range: {format(currentRange.start, 'yyyy-MM-dd HH:mm:ss')} to {format(currentRange.end, 'yyyy-MM-dd HH:mm:ss')}</p>
-        <p>Query Start ISO: {currentRange.start.toISOString()}</p>
-        <p>Query End ISO: {currentRange.end.toISOString()}</p>
+        <p>Date Range: {format(currentRange.start, 'yyyy-MM-dd')} to {format(currentRange.end, 'yyyy-MM-dd')}</p>
         <p>Payments Found: {payments?.length || 0}</p>
         <p>Total Payments in DB: {allPayments?.length || 0}</p>
-        {payments && payments.length > 0 && (
-          <div>
-            <p><strong>Payment dates found:</strong></p>
-            {payments.slice(0, 5).map(p => (
-              <p key={p.id}>• {p.payment_date} - ${p.amount} ({p.method})</p>
-            ))}
-          </div>
-        )}
         {paymentsError && <p className="text-red-600">Error: {paymentsError.message}</p>}
       </div>
 
