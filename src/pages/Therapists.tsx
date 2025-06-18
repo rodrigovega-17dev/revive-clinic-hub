@@ -7,12 +7,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Plus, User, Phone, Mail, Calendar, Edit, Award } from 'lucide-react';
 import { useTherapists } from '@/hooks/useTherapists';
 import TherapistForm from '@/components/TherapistForm';
+import EditTherapistForm from '@/components/EditTherapistForm';
 import SearchInput from '@/components/SearchInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 
 const Therapists = () => {
   const [showForm, setShowForm] = useState(false);
+  const [editingTherapist, setEditingTherapist] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const { data: therapists, isLoading } = useTherapists();
 
@@ -229,7 +231,11 @@ const Therapists = () => {
                       {format(new Date(therapist.created_at), 'MMM d, yyyy')}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => setEditingTherapist(therapist)}
+                      >
                         <Edit className="h-4 w-4 mr-1" />
                         Edit
                       </Button>
@@ -266,6 +272,15 @@ const Therapists = () => {
         <TherapistForm 
           open={showForm} 
           onClose={() => setShowForm(false)} 
+        />
+      )}
+
+      {/* Edit Therapist Form Modal */}
+      {editingTherapist && (
+        <EditTherapistForm 
+          open={!!editingTherapist} 
+          onClose={() => setEditingTherapist(null)}
+          therapist={editingTherapist}
         />
       )}
     </div>

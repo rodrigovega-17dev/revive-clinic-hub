@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -12,6 +11,7 @@ import {
   Menu,
   ChevronLeft,
   Activity,
+  Calculator,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -21,9 +21,9 @@ const navigation = [
   { name: "Appointments", href: "/appointments", icon: Calendar },
   { name: "Clients", href: "/clients", icon: Users },
   { name: "Therapists", href: "/therapists", icon: User },
-  { name: "Treatments", href: "/treatments", icon: Activity },
   { name: "Suppliers", href: "/suppliers", icon: Package },
   { name: "Finance", href: "/finance", icon: DollarSign },
+  { name: "Payroll", href: "/payroll", icon: Calculator },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 

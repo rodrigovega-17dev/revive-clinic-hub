@@ -4,19 +4,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, User, Phone, Mail, MapPin, Calendar, Edit } from 'lucide-react';
+import { Plus, User, Phone, Mail, Calendar, Edit, MapPin, Heart } from 'lucide-react';
 import { useClients } from '@/hooks/useClients';
 import ClientForm from '@/components/ClientForm';
+import EditClientForm from '@/components/EditClientForm';
 import SearchInput from '@/components/SearchInput';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format } from 'date-fns';
+import { format, differenceInYears } from 'date-fns';
+import type { Tables } from '@/integrations/supabase/types';
+
+type Client = Tables<'clients'>;
 
 const Clients = () => {
   const [showForm, setShowForm] = useState(false);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const { data: clients, isLoading } = useClients();
 
-  // Enhanced fuzzy search function
+  // Enhanced search function for clients
   const filteredClients = useMemo(() => {
     if (!clients || !searchTerm.trim()) return clients || [];
 
@@ -29,17 +34,22 @@ const Clients = () => {
         client.email,
         client.phone,
         client.address,
+        client.emergency_contact_name,
+        client.emergency_contact_phone,
         ...(client.tags || [])
       ].filter(Boolean).join(' ').toLowerCase();
 
-      // Check if all search terms are found in the searchable text
       return searchTerms.every(term => 
         searchableText.includes(term) ||
-        // Also check for partial matches at word boundaries
         searchableText.split(/\s+/).some(word => word.startsWith(term))
       );
     });
   }, [clients, searchTerm]);
+
+  const getAge = (birthDate: string | null) => {
+    if (!birthDate) return null;
+    return differenceInYears(new Date(), new Date(birthDate));
+  };
 
   if (isLoading) {
     return (
@@ -47,7 +57,7 @@ const Clients = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Clients</h1>
-            <p className="text-muted-foreground">Manage client information and appointments</p>
+            <p className="text-muted-foreground">Manage client profiles and contact information</p>
           </div>
           <Button>
             <Plus className="h-4 w-4 mr-2" />
@@ -76,7 +86,7 @@ const Clients = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Clients</h1>
-          <p className="text-muted-foreground">Manage client information and appointments</p>
+          <p className="text-muted-foreground">Manage client profiles and contact information</p>
         </div>
         <Button onClick={() => setShowForm(true)}>
           <Plus className="h-4 w-4 mr-2" />
@@ -129,11 +139,11 @@ const Clients = () => {
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
-              <Phone className="h-4 w-4 text-orange-400" />
+              <Heart className="h-4 w-4 text-red-400" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">With Phone</p>
+                <p className="text-sm font-medium text-muted-foreground">Emergency Contact</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {clients?.filter(c => c.phone).length || 0}
+                  {clients?.filter(c => c.emergency_contact_name).length || 0}
                 </p>
               </div>
             </div>
@@ -146,7 +156,7 @@ const Clients = () => {
         <SearchInput
           value={searchTerm}
           onChange={setSearchTerm}
-          placeholder="Search clients by name, email, phone, address, or tags..."
+          placeholder="Search clients by name, email, phone, or address..."
           className="max-w-md"
         />
         <div className="text-sm text-muted-foreground">
@@ -163,10 +173,10 @@ const Clients = () => {
                 <TableRow className="border-border">
                   <TableHead className="text-foreground">Name</TableHead>
                   <TableHead className="text-foreground">Contact</TableHead>
-                  <TableHead className="text-foreground">Address</TableHead>
+                  <TableHead className="text-foreground">Age</TableHead>
+                  <TableHead className="text-foreground">Emergency Contact</TableHead>
                   <TableHead className="text-foreground">Charge</TableHead>
                   <TableHead className="text-foreground">Status</TableHead>
-                  <TableHead className="text-foreground">Joined</TableHead>
                   <TableHead className="text-right text-foreground">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -174,20 +184,15 @@ const Clients = () => {
                 {filteredClients.map((client) => (
                   <TableRow key={client.id} className="hover:bg-muted/50 border-border">
                     <TableCell>
-                      <div>
-                        <div className="font-medium text-foreground">
-                          {client.first_name} {client.last_name}
-                        </div>
-                        {client.tags && client.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {client.tags.map((tag, index) => (
-                              <Badge key={index} variant="secondary" className="text-xs">
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
+                      <div className="font-medium text-foreground">
+                        {client.first_name} {client.last_name}
                       </div>
+                      {client.address && (
+                        <div className="flex items-center text-sm text-muted-foreground mt-1">
+                          <MapPin className="h-3 w-3 mr-1" />
+                          {client.address.length > 30 ? `${client.address.substring(0, 30)}...` : client.address}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="space-y-1">
@@ -206,28 +211,46 @@ const Clients = () => {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {client.address && (
-                        <div className="flex items-center text-sm text-muted-foreground">
-                          <MapPin className="h-3 w-3 mr-1" />
-                          <span className="truncate max-w-32">{client.address}</span>
+                      {client.birth_date ? (
+                        <div className="text-sm text-foreground">
+                          {getAge(client.birth_date)} years
                         </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
                     <TableCell>
-                      <span className="font-medium text-foreground">
-                        ${client.charge_amount || 0}
-                      </span>
+                      {client.emergency_contact_name ? (
+                        <div className="text-sm">
+                          <div className="text-foreground">{client.emergency_contact_name}</div>
+                          {client.emergency_contact_phone && (
+                            <div className="text-muted-foreground">{client.emergency_contact_phone}</div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {client.charge_amount ? (
+                        <div className="text-sm font-medium text-foreground">
+                          ${client.charge_amount}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge variant={client.is_active ? 'default' : 'secondary'}>
                         {client.is_active ? 'Active' : 'Inactive'}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {format(new Date(client.created_at), 'MMM d, yyyy')}
-                    </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => setEditingClient(client)}
+                      >
                         <Edit className="h-4 w-4 mr-1" />
                         Edit
                       </Button>
@@ -264,6 +287,15 @@ const Clients = () => {
         <ClientForm 
           open={showForm} 
           onClose={() => setShowForm(false)} 
+        />
+      )}
+
+      {/* Edit Client Form Modal */}
+      {editingClient && (
+        <EditClientForm 
+          open={!!editingClient} 
+          onClose={() => setEditingClient(null)}
+          client={editingClient}
         />
       )}
     </div>
