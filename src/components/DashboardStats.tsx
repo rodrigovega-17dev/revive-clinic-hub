@@ -1,61 +1,83 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, Users, DollarSign, Activity } from "lucide-react";
+import { Users, Calendar, DollarSign, CheckCircle } from "lucide-react";
+import { useTodayStats } from "@/hooks/useAppointments";
+import { Skeleton } from "@/components/ui/skeleton";
 
-const stats = [
-  {
-    title: "Today's Appointments",
-    value: "12",
-    change: "+2 from yesterday",
-    icon: Calendar,
-    color: "text-blue-600",
-    bgColor: "bg-blue-50",
-  },
-  {
-    title: "Active Clients",
-    value: "248",
-    change: "+18 this month",
-    icon: Users,
-    color: "text-green-600",
-    bgColor: "bg-green-50",
-  },
-  {
-    title: "Today's Revenue",
-    value: "$2,340",
-    change: "+12% from yesterday",
-    icon: DollarSign,
-    color: "text-yellow-600",
-    bgColor: "bg-yellow-50",
-  },
-  {
-    title: "Treatments Completed",
-    value: "89",
-    change: "+5% this week",
-    icon: Activity,
-    color: "text-purple-600",
-    bgColor: "bg-purple-50",
-  },
-];
+const DashboardStats = () => {
+  const { data: stats, isLoading } = useTodayStats();
 
-export const DashboardStats = () => {
+  if (isLoading) {
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {[...Array(4)].map((_, i) => (
+          <Card key={i}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-4" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-7 w-16 mb-1" />
+              <Skeleton className="h-3 w-32" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-      {stats.map((stat) => (
-        <Card key={stat.title} className="hover-lift fade-in">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {stat.title}
-            </CardTitle>
-            <div className={`p-2 rounded-lg ${stat.bgColor}`}>
-              <stat.icon className={`w-4 h-4 ${stat.color}`} />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">{stat.value}</div>
-            <p className="text-xs text-muted-foreground mt-1">{stat.change}</p>
-          </CardContent>
-        </Card>
-      ))}
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
+          <Users className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{stats?.totalClients || 0}</div>
+          <p className="text-xs text-muted-foreground">
+            Active client records
+          </p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Today's Appointments</CardTitle>
+          <Calendar className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{stats?.totalAppointments || 0}</div>
+          <p className="text-xs text-muted-foreground">
+            Scheduled for today
+          </p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Completed Today</CardTitle>
+          <CheckCircle className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{stats?.completedAppointments || 0}</div>
+          <p className="text-xs text-muted-foreground">
+            Sessions completed
+          </p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Today's Revenue</CardTitle>
+          <DollarSign className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">${stats?.todayRevenue?.toFixed(2) || '0.00'}</div>
+          <p className="text-xs text-muted-foreground">
+            Total payments received
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 };
+
+export default DashboardStats;
