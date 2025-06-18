@@ -1,6 +1,6 @@
 
-import { DashboardStats } from "@/components/DashboardStats";
-import { UpcomingAppointments } from "@/components/UpcomingAppointments";
+import DashboardStats from "@/components/DashboardStats";
+import UpcomingAppointments from "@/components/UpcomingAppointments";
 import { QuickActions } from "@/components/QuickActions";
 
 const Dashboard = () => {
