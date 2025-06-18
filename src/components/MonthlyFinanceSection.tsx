@@ -26,21 +26,10 @@ const MonthlyFinanceSection = () => {
 
   const currentRange = periodRanges[selectedPeriod as keyof typeof periodRanges];
 
-  console.log('MonthlyFinanceSection - Date range:', {
-    selectedPeriod,
-    start: currentRange.start.toISOString(),
-    end: currentRange.end.toISOString()
-  });
-
   // Fetch financial data
-  const { data: payments, isLoading: paymentsLoading, error: paymentsError } = useQuery({
-    queryKey: ['payments', selectedPeriod, currentRange.start.toISOString(), currentRange.end.toISOString()],
+  const { data: payments, isLoading: paymentsLoading } = useQuery({
+    queryKey: ['payments', selectedPeriod],
     queryFn: async () => {
-      console.log('Fetching payments for range:', {
-        start: currentRange.start.toISOString(),
-        end: currentRange.end.toISOString()
-      });
-
       const { data, error } = await supabase
         .from('payments')
         .select(`
@@ -52,19 +41,14 @@ const MonthlyFinanceSection = () => {
         .lte('payment_date', currentRange.end.toISOString())
         .order('payment_date', { ascending: false });
       
-      if (error) {
-        console.error('Error fetching payments:', error);
-        throw error;
-      }
-      
-      console.log('Fetched payments:', data);
-      return data || [];
+      if (error) throw error;
+      return data;
     },
   });
 
   // Fetch expenses
   const { data: expenses, isLoading: expensesLoading } = useQuery({
-    queryKey: ['expenses', selectedPeriod, currentRange.start.toISOString()],
+    queryKey: ['expenses', selectedPeriod],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('expenses')
@@ -74,22 +58,7 @@ const MonthlyFinanceSection = () => {
         .order('date', { ascending: false });
       
       if (error) throw error;
-      return data || [];
-    },
-  });
-
-  // Also fetch all payments to debug
-  const { data: allPayments } = useQuery({
-    queryKey: ['all-payments-debug'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('payments')
-        .select('*')
-        .order('payment_date', { ascending: false });
-      
-      if (error) throw error;
-      console.log('All payments in database:', data);
-      return data || [];
+      return data;
     },
   });
 
@@ -109,17 +78,9 @@ const MonthlyFinanceSection = () => {
   }) || [];
 
   // Calculate monthly totals
-  const totalPayments = payments?.reduce((sum, payment) => sum + Number(payment.amount || 0), 0) || 0;
-  const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount || 0), 0) || 0;
-  const cashPayments = payments?.filter(p => p.method === 'cash').reduce((sum, payment) => sum + Number(payment.amount || 0), 0) || 0;
-
-  console.log('Monthly totals:', {
-    totalPayments,
-    totalExpenses,
-    cashPayments,
-    paymentsCount: payments?.length || 0,
-    expensesCount: expenses?.length || 0
-  });
+  const totalPayments = payments?.reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
+  const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
+  const cashPayments = payments?.filter(p => p.method === 'cash').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
 
   const getPaymentMethodColor = (method: string) => {
     switch (method) {
@@ -148,22 +109,8 @@ const MonthlyFinanceSection = () => {
     );
   }
 
-  if (paymentsError) {
-    console.error('Payments error:', paymentsError);
-  }
-
   return (
     <div className="space-y-6">
-      {/* Debug Info */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm">
-        <p><strong>Debug Info:</strong></p>
-        <p>Selected Period: {selectedPeriod}</p>
-        <p>Date Range: {format(currentRange.start, 'yyyy-MM-dd')} to {format(currentRange.end, 'yyyy-MM-dd')}</p>
-        <p>Payments Found: {payments?.length || 0}</p>
-        <p>Total Payments in DB: {allPayments?.length || 0}</p>
-        {paymentsError && <p className="text-red-600">Error: {paymentsError.message}</p>}
-      </div>
-
       {/* Period Selector */}
       <Tabs value={selectedPeriod} onValueChange={setSelectedPeriod}>
         <TabsList className="bg-muted">
