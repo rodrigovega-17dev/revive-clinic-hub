@@ -69,12 +69,12 @@ export const Sidebar = () => {
           return (
             <Button
               key={item.name}
-              variant={isActive ? "default" : "ghost"}
+              variant="ghost"
               className={cn(
                 "w-full justify-start transition-all duration-200 text-sm font-medium",
                 collapsed ? "px-2" : "px-3",
                 isActive
-                  ? "bg-primary text-primary-foreground shadow-md border border-primary/20"
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
                   : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-sidebar-foreground hover:shadow-sm"
               )}
               onClick={() => navigate(item.href)}
