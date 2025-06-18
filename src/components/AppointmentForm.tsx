@@ -13,6 +13,9 @@ import { useTreatments } from '@/hooks/useTreatments';
 import { useCreateAppointment } from '@/hooks/useAppointments';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Clock, DollarSign } from 'lucide-react';
+import DatePicker from '@/components/ui/date-picker';
+import TimePicker from '@/components/ui/time-picker';
+import { format } from 'date-fns';
 
 interface AppointmentFormProps {
   open: boolean;
@@ -24,7 +27,8 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
     client_id: '',
     therapist_id: '',
     duration: '60',
-    start_time: '',
+    date: format(new Date(), 'yyyy-MM-dd'),
+    time: '09:00',
     charge_amount: 0,
     notes: '',
   });
@@ -48,7 +52,7 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.client_id || !formData.therapist_id || !formData.start_time || !formData.duration) {
+    if (!formData.client_id || !formData.therapist_id || !formData.date || !formData.time || !formData.duration) {
       toast({
         title: 'Error',
         description: 'Please fill in all required fields.',
@@ -60,17 +64,18 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
     // Find the treatment based on duration
     const selectedTreatment = treatments?.find(t => t.duration_minutes === parseInt(formData.duration));
     
-    const startTime = new Date(formData.start_time);
+    // Create proper UTC datetime from date and time
+    const startDateTime = new Date(`${formData.date}T${formData.time}:00`);
     const durationMinutes = parseInt(formData.duration);
-    const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
+    const endDateTime = new Date(startDateTime.getTime() + durationMinutes * 60000);
 
     try {
       await createAppointment.mutateAsync({
         client_id: formData.client_id,
         therapist_id: formData.therapist_id,
         treatment_id: selectedTreatment?.id || null,
-        start_time: startTime.toISOString(),
-        end_time: endTime.toISOString(),
+        start_time: startDateTime.toISOString(),
+        end_time: endDateTime.toISOString(),
         notes: formData.notes,
         status: 'scheduled' as const,
         payment_amount: formData.charge_amount,
@@ -87,7 +92,8 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
         client_id: '',
         therapist_id: '',
         duration: '60',
-        start_time: '',
+        date: format(new Date(), 'yyyy-MM-dd'),
+        time: '09:00',
         charge_amount: 0,
         notes: '',
       });
@@ -192,14 +198,17 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="start_time" className="text-foreground">Date & Time *</Label>
-                <Input
-                  id="start_time"
-                  type="datetime-local"
-                  value={formData.start_time}
-                  onChange={(e) => setFormData(prev => ({ ...prev, start_time: e.target.value }))}
-                  className="bg-input border-border text-foreground"
+              <div className="grid grid-cols-2 gap-4">
+                <DatePicker
+                  label="Date"
+                  value={formData.date}
+                  onChange={(value) => setFormData(prev => ({ ...prev, date: value }))}
+                  required
+                />
+                <TimePicker
+                  label="Time"
+                  value={formData.time}
+                  onChange={(value) => setFormData(prev => ({ ...prev, time: value }))}
                   required
                 />
               </div>
