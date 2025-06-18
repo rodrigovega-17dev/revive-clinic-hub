@@ -17,7 +17,7 @@ const Therapists = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Therapists</h1>
+            <h1 className="text-3xl font-bold text-foreground">Therapists</h1>
             <p className="text-muted-foreground">Manage therapist profiles and schedules</p>
           </div>
           <Button>
@@ -28,7 +28,7 @@ const Therapists = () => {
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[...Array(6)].map((_, i) => (
-            <Card key={i}>
+            <Card key={i} className="bg-card border-border">
               <CardContent className="pt-6">
                 <Skeleton className="h-4 w-full mb-2" />
                 <Skeleton className="h-4 w-3/4 mb-2" />
@@ -46,7 +46,7 @@ const Therapists = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Therapists</h1>
+          <h1 className="text-3xl font-bold text-foreground">Therapists</h1>
           <p className="text-muted-foreground">Manage therapist profiles and schedules</p>
         </div>
         <Button onClick={() => setShowForm(true)}>
@@ -57,25 +57,25 @@ const Therapists = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
+        <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
-              <User className="h-4 w-4 text-blue-600" />
+              <User className="h-4 w-4 text-blue-400" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Therapists</p>
-                <p className="text-2xl font-bold">{therapists?.length || 0}</p>
+                <p className="text-2xl font-bold text-foreground">{therapists?.length || 0}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
-              <Calendar className="h-4 w-4 text-green-600" />
+              <Calendar className="h-4 w-4 text-green-400" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Active Today</p>
-                <p className="text-2xl font-bold">
+                <p className="text-2xl font-bold text-foreground">
                   {therapists?.filter(t => t.is_active).length || 0}
                 </p>
               </div>
@@ -83,13 +83,13 @@ const Therapists = () => {
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
-              <Phone className="h-4 w-4 text-purple-600" />
+              <Phone className="h-4 w-4 text-purple-400" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Licensed</p>
-                <p className="text-2xl font-bold">
+                <p className="text-2xl font-bold text-foreground">
                   {therapists?.filter(t => t.license_number).length || 0}
                 </p>
               </div>
@@ -101,19 +101,19 @@ const Therapists = () => {
       {/* Therapists Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {therapists?.map((therapist) => (
-          <Card key={therapist.id} className="hover:shadow-lg transition-shadow">
+          <Card key={therapist.id} className="hover:shadow-lg transition-shadow bg-card border-border">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">
-                  {therapist.profiles?.first_name} {therapist.profiles?.last_name}
+                <CardTitle className="text-lg text-foreground">
+                  {therapist.first_name} {therapist.last_name}
                 </CardTitle>
                 <Badge variant={therapist.is_active ? 'default' : 'secondary'}>
                   {therapist.is_active ? 'Active' : 'Inactive'}
                 </Badge>
               </div>
-              <CardDescription>
+              <CardDescription className="text-muted-foreground">
                 {therapist.license_number && (
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-sm">
                     License: {therapist.license_number}
                   </span>
                 )}
@@ -124,27 +124,14 @@ const Therapists = () => {
                 {therapist.profiles?.email && (
                   <div className="flex items-center space-x-2">
                     <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{therapist.profiles.email}</span>
+                    <span className="text-sm text-foreground">{therapist.profiles.email}</span>
                   </div>
                 )}
                 
                 {therapist.profiles?.phone && (
                   <div className="flex items-center space-x-2">
                     <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{therapist.profiles.phone}</span>
-                  </div>
-                )}
-
-                {therapist.specialties && therapist.specialties.length > 0 && (
-                  <div>
-                    <p className="text-sm font-medium mb-2">Specialties:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {therapist.specialties.map((specialty, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
-                          {specialty}
-                        </Badge>
-                      ))}
-                    </div>
+                    <span className="text-sm text-foreground">{therapist.profiles.phone}</span>
                   </div>
                 )}
               </div>
@@ -154,12 +141,12 @@ const Therapists = () => {
       </div>
 
       {(!therapists || therapists.length === 0) && (
-        <Card>
+        <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="text-center py-8">
-              <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No therapists found</h3>
-              <p className="text-gray-500 mb-4">Get started by adding your first therapist.</p>
+              <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">No therapists found</h3>
+              <p className="text-muted-foreground mb-4">Get started by adding your first therapist.</p>
               <Button onClick={() => setShowForm(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Therapist

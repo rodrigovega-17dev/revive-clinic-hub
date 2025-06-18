@@ -18,6 +18,10 @@ export type Database = {
           google_calendar_event_id: string | null
           id: string
           notes: string | null
+          payment_amount: number | null
+          payment_date: string | null
+          payment_method: string | null
+          payment_status: string | null
           start_time: string
           status: Database["public"]["Enums"]["appointment_status"]
           therapist_id: string
@@ -32,6 +36,10 @@ export type Database = {
           google_calendar_event_id?: string | null
           id?: string
           notes?: string | null
+          payment_amount?: number | null
+          payment_date?: string | null
+          payment_method?: string | null
+          payment_status?: string | null
           start_time: string
           status?: Database["public"]["Enums"]["appointment_status"]
           therapist_id: string
@@ -46,6 +54,10 @@ export type Database = {
           google_calendar_event_id?: string | null
           id?: string
           notes?: string | null
+          payment_amount?: number | null
+          payment_date?: string | null
+          payment_method?: string | null
+          payment_status?: string | null
           start_time?: string
           status?: Database["public"]["Enums"]["appointment_status"]
           therapist_id?: string
@@ -87,6 +99,7 @@ export type Database = {
         Row: {
           address: string | null
           birth_date: string | null
+          charge_amount: number | null
           created_at: string
           email: string | null
           emergency_contact_name: string | null
@@ -104,6 +117,7 @@ export type Database = {
         Insert: {
           address?: string | null
           birth_date?: string | null
+          charge_amount?: number | null
           created_at?: string
           email?: string | null
           emergency_contact_name?: string | null
@@ -121,6 +135,7 @@ export type Database = {
         Update: {
           address?: string | null
           birth_date?: string | null
+          charge_amount?: number | null
           created_at?: string
           email?: string | null
           emergency_contact_name?: string | null
@@ -333,9 +348,11 @@ export type Database = {
       therapists: {
         Row: {
           created_at: string
+          first_name: string | null
           google_calendar_id: string | null
           id: string
           is_active: boolean
+          last_name: string | null
           license_number: string | null
           specialties: string[] | null
           updated_at: string
@@ -343,9 +360,11 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          first_name?: string | null
           google_calendar_id?: string | null
           id?: string
           is_active?: boolean
+          last_name?: string | null
           license_number?: string | null
           specialties?: string[] | null
           updated_at?: string
@@ -353,9 +372,11 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          first_name?: string | null
           google_calendar_id?: string | null
           id?: string
           is_active?: boolean
+          last_name?: string | null
           license_number?: string | null
           specialties?: string[] | null
           updated_at?: string

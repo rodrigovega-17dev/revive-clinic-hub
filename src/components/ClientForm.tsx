@@ -30,6 +30,7 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
     emergency_contact_name: '',
     emergency_contact_phone: '',
     medical_notes: '',
+    charge_amount: '',
   });
   
   const createClient = useCreateClient();
@@ -59,6 +60,7 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
         emergency_contact_name: formData.emergency_contact_name.trim() || null,
         emergency_contact_phone: formData.emergency_contact_phone.trim() || null,
         medical_notes: formData.medical_notes.trim() || null,
+        charge_amount: formData.charge_amount ? parseFloat(formData.charge_amount) : 0,
         is_active: true,
       });
 
@@ -79,6 +81,7 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
         emergency_contact_name: '',
         emergency_contact_phone: '',
         medical_notes: '',
+        charge_amount: '',
       });
     } catch (error) {
       toast({
@@ -91,10 +94,10 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="text-xl font-semibold">Add New Client</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-xl font-semibold text-foreground">Add New Client</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
             Create a new client profile with their personal and medical information
           </DialogDescription>
         </DialogHeader>
@@ -102,23 +105,25 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="first_name" className="text-sm font-medium">First Name *</Label>
+              <Label htmlFor="first_name" className="text-sm font-medium text-foreground">First Name *</Label>
               <Input
                 id="first_name"
                 placeholder="Enter first name"
                 value={formData.first_name}
                 onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
+                className="bg-input border-border text-foreground"
                 required
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="last_name" className="text-sm font-medium">Last Name *</Label>
+              <Label htmlFor="last_name" className="text-sm font-medium text-foreground">Last Name *</Label>
               <Input
                 id="last_name"
                 placeholder="Enter last name"
                 value={formData.last_name}
                 onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
+                className="bg-input border-border text-foreground"
                 required
               />
             </div>
@@ -126,99 +131,119 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+              <Label htmlFor="email" className="text-sm font-medium text-foreground">Email</Label>
               <Input
                 id="email"
                 type="email"
                 placeholder="Enter email address"
                 value={formData.email}
                 onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                className="bg-input border-border text-foreground"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phone" className="text-sm font-medium">Phone</Label>
+              <Label htmlFor="phone" className="text-sm font-medium text-foreground">Phone</Label>
               <Input
                 id="phone"
                 placeholder="Enter phone number"
                 value={formData.phone}
                 onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                className="bg-input border-border text-foreground"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="birth_date" className="text-sm font-medium">Birth Date</Label>
+              <Label htmlFor="birth_date" className="text-sm font-medium text-foreground">Birth Date</Label>
               <Input
                 id="birth_date"
                 type="date"
                 value={formData.birth_date}
                 onChange={(e) => setFormData(prev => ({ ...prev, birth_date: e.target.value }))}
+                className="bg-input border-border text-foreground"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="gender" className="text-sm font-medium">Gender</Label>
+              <Label htmlFor="gender" className="text-sm font-medium text-foreground">Gender</Label>
               <Select value={formData.gender} onValueChange={(value: Gender) => setFormData(prev => ({ ...prev, gender: value }))}>
-                <SelectTrigger>
+                <SelectTrigger className="bg-input border-border text-foreground">
                   <SelectValue placeholder="Select gender" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="male">Male</SelectItem>
-                  <SelectItem value="female">Female</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                  <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
+                <SelectContent className="bg-popover border-border">
+                  <SelectItem value="male" className="text-foreground">Male</SelectItem>
+                  <SelectItem value="female" className="text-foreground">Female</SelectItem>
+                  <SelectItem value="other" className="text-foreground">Other</SelectItem>
+                  <SelectItem value="prefer_not_to_say" className="text-foreground">Prefer not to say</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="charge_amount" className="text-sm font-medium text-foreground">Charge Amount</Label>
+              <Input
+                id="charge_amount"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={formData.charge_amount}
+                onChange={(e) => setFormData(prev => ({ ...prev, charge_amount: e.target.value }))}
+                className="bg-input border-border text-foreground"
+              />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="address" className="text-sm font-medium">Address</Label>
+            <Label htmlFor="address" className="text-sm font-medium text-foreground">Address</Label>
             <Textarea
               id="address"
               placeholder="Enter full address"
               value={formData.address}
               onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+              className="bg-input border-border text-foreground"
               rows={2}
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="emergency_contact_name" className="text-sm font-medium">Emergency Contact Name</Label>
+              <Label htmlFor="emergency_contact_name" className="text-sm font-medium text-foreground">Emergency Contact Name</Label>
               <Input
                 id="emergency_contact_name"
                 placeholder="Enter emergency contact name"
                 value={formData.emergency_contact_name}
                 onChange={(e) => setFormData(prev => ({ ...prev, emergency_contact_name: e.target.value }))}
+                className="bg-input border-border text-foreground"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="emergency_contact_phone" className="text-sm font-medium">Emergency Contact Phone</Label>
+              <Label htmlFor="emergency_contact_phone" className="text-sm font-medium text-foreground">Emergency Contact Phone</Label>
               <Input
                 id="emergency_contact_phone"
                 placeholder="Enter emergency contact phone"
                 value={formData.emergency_contact_phone}
                 onChange={(e) => setFormData(prev => ({ ...prev, emergency_contact_phone: e.target.value }))}
+                className="bg-input border-border text-foreground"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="medical_notes" className="text-sm font-medium">Medical Notes</Label>
+            <Label htmlFor="medical_notes" className="text-sm font-medium text-foreground">Medical Notes</Label>
             <Textarea
               id="medical_notes"
               placeholder="Enter any relevant medical notes or conditions"
               value={formData.medical_notes}
               onChange={(e) => setFormData(prev => ({ ...prev, medical_notes: e.target.value }))}
+              className="bg-input border-border text-foreground"
               rows={3}
             />
           </div>
 
-          <div className="flex justify-end space-x-3 pt-4 border-t">
+          <div className="flex justify-end space-x-3 pt-4 border-t border-border">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
