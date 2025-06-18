@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -43,16 +42,46 @@ const MonthlyFinanceSection = () => {
         end: currentRange.end.toISOString()
       });
 
-      const { data, error } = await supabase
-        .from('payments')
-        .select(`
-          *,
-          clients (first_name, last_name),
-          appointments (start_time, therapists (first_name, last_name))
-        `)
-        .gte('payment_date', currentRange.start.toISOString())
-        .lte('payment_date', currentRange.end.toISOString())
-        .order('payment_date', { ascending: false });
+      // Try multiple query approaches to debug
+      const queries = [
+        // Original query
+        supabase
+          .from('payments')
+          .select(`
+            *,
+            clients (first_name, last_name),
+            appointments (start_time, therapists (first_name, last_name))
+          `)
+          .gte('payment_date', currentRange.start.toISOString())
+          .lte('payment_date', currentRange.end.toISOString())
+          .order('payment_date', { ascending: false }),
+        
+        // Query with date format
+        supabase
+          .from('payments')
+          .select('*')
+          .gte('payment_date', format(currentRange.start, 'yyyy-MM-dd'))
+          .lte('payment_date', format(currentRange.end, 'yyyy-MM-dd'))
+          .order('payment_date', { ascending: false }),
+        
+        // Query for just June 2025
+        supabase
+          .from('payments')
+          .select('*')
+          .gte('payment_date', '2025-06-01')
+          .lte('payment_date', '2025-06-30')
+          .order('payment_date', { ascending: false })
+      ];
+
+      const results = await Promise.all(queries);
+      
+      console.log('Query results comparison:', {
+        originalQuery: results[0],
+        dateFormatQuery: results[1],
+        june2025Query: results[2]
+      });
+
+      const { data, error } = results[0];
       
       if (error) {
         console.error('Error fetching payments:', error);
@@ -88,11 +117,7 @@ const MonthlyFinanceSection = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('payments')
-        .select(`
-          *,
-          clients (first_name, last_name),
-          appointments (start_time, therapists (first_name, last_name))
-        `)
+        .select('*')
         .order('payment_date', { ascending: false });
       
       if (error) throw error;
