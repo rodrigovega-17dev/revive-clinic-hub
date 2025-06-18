@@ -9,6 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useCreateClient } from '@/hooks/useClients';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import type { Database } from '@/integrations/supabase/types';
+
+type Gender = Database['public']['Enums']['gender'];
 
 interface ClientFormProps {
   open: boolean;
@@ -22,7 +25,7 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
     email: '',
     phone: '',
     birth_date: '',
-    gender: '',
+    gender: '' as Gender | '',
     address: '',
     emergency_contact_name: '',
     emergency_contact_phone: '',
@@ -51,7 +54,7 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
         email: formData.email.trim() || null,
         phone: formData.phone.trim() || null,
         birth_date: formData.birth_date || null,
-        gender: formData.gender || null,
+        gender: (formData.gender as Gender) || null,
         address: formData.address.trim() || null,
         emergency_contact_name: formData.emergency_contact_name.trim() || null,
         emergency_contact_phone: formData.emergency_contact_phone.trim() || null,
@@ -157,7 +160,7 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
 
             <div className="space-y-2">
               <Label htmlFor="gender" className="text-sm font-medium">Gender</Label>
-              <Select value={formData.gender} onValueChange={(value) => setFormData(prev => ({ ...prev, gender: value }))}>
+              <Select value={formData.gender} onValueChange={(value: Gender) => setFormData(prev => ({ ...prev, gender: value }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select gender" />
                 </SelectTrigger>
