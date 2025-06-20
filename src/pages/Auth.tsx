@@ -1,6 +1,6 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 
 const Auth = () => {
+  const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const [signInData, setSignInData] = useState({ email: '', password: '' });
   const [signUpData, setSignUpData] = useState({ 
@@ -32,14 +33,14 @@ const Auth = () => {
     
     if (error) {
       toast({
-        title: 'Error',
+        title: t('notifications.error'),
         description: error.message,
         variant: 'destructive',
       });
     } else {
       toast({
-        title: 'Success',
-        description: 'Welcome back!',
+        title: t('notifications.success'),
+        description: t('auth.loginSuccess'),
       });
       navigate('/');
     }
@@ -60,13 +61,13 @@ const Auth = () => {
     
     if (error) {
       toast({
-        title: 'Error',
+        title: t('notifications.error'),
         description: error.message,
         variant: 'destructive',
       });
     } else {
       toast({
-        title: 'Success',
+        title: t('notifications.success'),
         description: 'Account created successfully! Please check your email for verification.',
       });
     }
@@ -75,16 +76,16 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-gray-900">Cliniker</h2>
-          <p className="text-gray-600">Physiotherapy Clinic Management</p>
+          <h2 className="text-3xl font-bold text-foreground">Revive Clinic Hub</h2>
+          <p className="text-muted-foreground">Physiotherapy Clinic Management</p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Access Your Account</CardTitle>
+            <CardTitle>{t('auth.login')}</CardTitle>
             <CardDescription>
               Sign in to your existing account or create a new one
             </CardDescription>
@@ -92,14 +93,14 @@ const Auth = () => {
           <CardContent>
             <Tabs defaultValue="signin" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="signin">Sign In</TabsTrigger>
+                <TabsTrigger value="signin">{t('auth.signIn')}</TabsTrigger>
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
               </TabsList>
               
               <TabsContent value="signin">
                 <form onSubmit={handleSignIn} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="signin-email">Email</Label>
+                    <Label htmlFor="signin-email">{t('auth.email')}</Label>
                     <Input
                       id="signin-email"
                       type="email"
@@ -110,7 +111,7 @@ const Auth = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signin-password">Password</Label>
+                    <Label htmlFor="signin-password">{t('auth.password')}</Label>
                     <Input
                       id="signin-password"
                       type="password"
@@ -122,7 +123,7 @@ const Auth = () => {
                   </div>
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Sign In
+                    {t('auth.signIn')}
                   </Button>
                 </form>
               </TabsContent>
@@ -154,7 +155,7 @@ const Auth = () => {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signup-email">Email</Label>
+                    <Label htmlFor="signup-email">{t('auth.email')}</Label>
                     <Input
                       id="signup-email"
                       type="email"
@@ -165,7 +166,7 @@ const Auth = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signup-password">Password</Label>
+                    <Label htmlFor="signup-password">{t('auth.password')}</Label>
                     <Input
                       id="signup-password"
                       type="password"

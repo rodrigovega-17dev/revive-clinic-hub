@@ -1,4 +1,4 @@
-
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Construction } from "lucide-react";
@@ -10,6 +10,7 @@ interface ComingSoonProps {
 }
 
 const ComingSoon = ({ title, description }: ComingSoonProps) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   return (
@@ -17,21 +18,20 @@ const ComingSoon = ({ title, description }: ComingSoonProps) => {
       <div className="fade-in">
         <h1 className="text-3xl font-bold text-foreground mb-2">{title}</h1>
         <p className="text-muted-foreground">
-          {description || "This feature is coming soon!"}
+          {description || t('comingSoon.comingSoon')}
         </p>
       </div>
 
       <Card className="fade-in">
         <CardContent className="text-center py-16">
           <Construction className="w-16 h-16 text-muted-foreground mx-auto mb-6" />
-          <h3 className="text-xl font-semibold text-foreground mb-4">Under Construction</h3>
+          <h3 className="text-xl font-semibold text-foreground mb-4">{t('comingSoon.underConstruction')}</h3>
           <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-            We're working hard to bring you this feature. It will include comprehensive functionality 
-            for managing {title.toLowerCase()} with full CRUD operations and advanced features.
+            {t('comingSoon.workingHard')} {title.toLowerCase()} {t('comingSoon.withFullCrud')}
           </p>
           <Button onClick={() => navigate("/")} variant="outline">
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Dashboard
+            {t('comingSoon.backToDashboard')}
           </Button>
         </CardContent>
       </Card>

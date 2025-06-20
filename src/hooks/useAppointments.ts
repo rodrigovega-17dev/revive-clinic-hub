@@ -32,10 +32,10 @@ export const useAppointmentsByDate = (selectedDate: string) => {
   return useQuery({
     queryKey: ['appointments', 'by-date', selectedDate],
     queryFn: async () => {
-      const startOfDay = new Date(selectedDate);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(selectedDate);
-      endOfDay.setHours(23, 59, 59, 999);
+      // Parse the date properly to avoid timezone issues
+      const [year, month, day] = selectedDate.split('-').map(Number);
+      const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
+      const endOfDay = new Date(year, month - 1, day, 23, 59, 59, 999);
 
       const { data, error } = await supabase
         .from('appointments')

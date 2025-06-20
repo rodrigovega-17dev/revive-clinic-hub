@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -8,10 +7,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useUpdateAppointment } from '@/hooks/useAppointments';
+import { useTherapists } from '@/hooks/useTherapists';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import { Loader2, Calendar, User, Clock, DollarSign, CreditCard, CalendarDays } from 'lucide-react';
 import { format } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { formatCurrency } from '@/lib/utils';
 
 interface AppointmentDetailsProps {
   appointment: any;
@@ -20,32 +25,71 @@ interface AppointmentDetailsProps {
 }
 
 const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsProps) => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('details');
   const [paymentData, setPaymentData] = useState({
     amount: appointment?.payment_amount || 0,
     method: appointment?.payment_method || '',
+    facturado: false,
   });
   const [rescheduleData, setRescheduleData] = useState({
     start_time: appointment ? format(new Date(appointment.start_time), "yyyy-MM-dd'T'HH:mm") : '',
     duration: appointment ? 
       Math.round((new Date(appointment.end_time).getTime() - new Date(appointment.start_time).getTime()) / 60000).toString() : 
-      '60'
+      '60',
+    therapist_id: appointment?.therapist_id || '',
   });
   
   const updateAppointment = useUpdateAppointment();
+  const { data: therapists } = useTherapists();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Calculate IVA amount (16%)
+  const ivaAmount = paymentData.facturado ? paymentData.amount * 0.16 : 0;
+  const totalWithIva = paymentData.amount + ivaAmount;
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'scheduled': return t('appointments.scheduled');
+      case 'completed': return t('appointments.completed');
+      case 'cancelled': return t('appointments.cancelled');
+      case 'no_show': return t('appointments.noShow');
+      default: return status;
+    }
+  };
+
+  const getPaymentStatusText = (status: string) => {
+    switch (status) {
+      case 'paid': return t('appointments.paid');
+      case 'pending': return t('appointments.pending');
+      case 'overdue': return t('appointments.overdue');
+      default: return t('appointments.pending');
+    }
+  };
+
+  const getPaymentMethodText = (method: string) => {
+    switch (method) {
+      case 'cash': return t('appointments.cash');
+      case 'card': return t('appointments.card');
+      case 'transfer': return t('appointments.transfer');
+      case 'insurance': return t('appointments.insurance');
+      default: return method;
+    }
+  };
 
   const handleMarkAsPaid = async () => {
     if (!paymentData.method) {
       toast({
-        title: 'Error',
-        description: 'Please select a payment method.',
+        title: t('appointments.error'),
+        description: t('appointments.pleaseSelectPaymentMethod'),
         variant: 'destructive',
       });
       return;
     }
 
     try {
+      // Update appointment with payment information
       await updateAppointment.mutateAsync({
         id: appointment.id,
         payment_status: 'paid',
@@ -54,17 +98,46 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
         payment_date: new Date().toISOString(),
       });
 
-      toast({
-        title: 'Success',
-        description: 'Payment recorded successfully!',
-      });
+      // Create payment record in payments table
+      const { error: paymentError } = await supabase
+        .from('payments')
+        .insert({
+          appointment_id: appointment.id,
+          client_id: appointment.client_id,
+          amount: paymentData.facturado ? totalWithIva : paymentData.amount,
+          method: paymentData.method,
+          payment_date: new Date().toISOString(),
+          description: `Payment for ${appointment.treatments?.name || 'appointment'} session${paymentData.facturado ? ' (Facturado + IVA 16%)' : ''}`,
+          facturado: paymentData.facturado,
+          iva_amount: paymentData.facturado ? ivaAmount : 0,
+        });
+
+      if (paymentError) {
+        console.error('Error creating payment record:', paymentError);
+        // Don't throw error here as appointment was already updated
+        toast({
+          title: t('appointments.warning'),
+          description: t('appointments.paymentRecordedWarning'),
+          variant: 'destructive',
+        });
+      } else {
+        // Invalidate payments queries to refresh Finance page
+        queryClient.invalidateQueries({ queryKey: ['daily-payments'] });
+        queryClient.invalidateQueries({ queryKey: ['monthly-payments'] });
+        queryClient.invalidateQueries({ queryKey: ['stats'] });
+        
+        toast({
+          title: t('appointments.success'),
+          description: t('appointments.paymentRecorded'),
+        });
+      }
       
       onClose();
     } catch (error) {
       console.error('Error recording payment:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to record payment. Please try again.',
+        title: t('appointments.error'),
+        description: t('appointments.failedToRecordPayment'),
         variant: 'destructive',
       });
     }
@@ -73,8 +146,8 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const handleReschedule = async () => {
     if (!rescheduleData.start_time) {
       toast({
-        title: 'Error',
-        description: 'Please select a new date and time.',
+        title: t('appointments.error'),
+        description: t('appointments.pleaseSelectNewDateTime'),
         variant: 'destructive',
       });
       return;
@@ -89,19 +162,20 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
         id: appointment.id,
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
+        therapist_id: rescheduleData.therapist_id || appointment.therapist_id,
       });
 
       toast({
-        title: 'Success',
-        description: 'Appointment rescheduled successfully!',
+        title: t('appointments.success'),
+        description: t('appointments.appointmentRescheduled'),
       });
       
       onClose();
     } catch (error) {
       console.error('Error rescheduling appointment:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to reschedule appointment. Please try again.',
+        title: t('appointments.error'),
+        description: t('appointments.failedToReschedule'),
         variant: 'destructive',
       });
     }
@@ -115,16 +189,16 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       });
 
       toast({
-        title: 'Success',
-        description: 'Appointment cancelled successfully!',
+        title: t('appointments.success'),
+        description: t('appointments.appointmentCancelled'),
       });
       
       onClose();
     } catch (error) {
       console.error('Error cancelling appointment:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to cancel appointment. Please try again.',
+        title: t('appointments.error'),
+        description: t('appointments.failedToCancel'),
         variant: 'destructive',
       });
     }
@@ -134,25 +208,25 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl bg-card border-border max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="text-foreground">Appointment Details</DialogTitle>
+          <DialogTitle className="text-xl font-semibold text-foreground">{t('appointments.appointmentDetails')}</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Manage appointment status, payment, and scheduling
+            {t('appointments.manageAppointmentStatus')}
           </DialogDescription>
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="details">Details</TabsTrigger>
-            <TabsTrigger value="payment">Payment</TabsTrigger>
-            <TabsTrigger value="reschedule">Reschedule</TabsTrigger>
+            <TabsTrigger value="details">{t('appointments.details')}</TabsTrigger>
+            <TabsTrigger value="payment">{t('appointments.payment')}</TabsTrigger>
+            <TabsTrigger value="reschedule">{t('appointments.reschedule')}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="details" className="space-y-4">
             <Card className="bg-muted/20 border-border">
               <CardHeader>
-                <CardTitle className="text-lg text-foreground">Appointment Information</CardTitle>
+                <CardTitle className="text-lg text-foreground">{t('appointments.appointmentInformation')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -177,31 +251,31 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   <div className="flex items-center space-x-2">
                     <DollarSign className="h-4 w-4 text-muted-foreground" />
                     <span className="text-foreground">
-                      ${appointment.payment_amount || 0}
+                      {formatCurrency(appointment.payment_amount || 0)}
                     </span>
                   </div>
                 </div>
                 
                 <div className="flex items-center space-x-4">
                   <div className="flex items-center space-x-2">
-                    <span className="text-muted-foreground">Status:</span>
+                    <span className="text-muted-foreground">{t('appointments.status')}:</span>
                     <Badge variant={appointment.status === 'completed' ? 'default' : 
                                    appointment.status === 'cancelled' ? 'destructive' : 'secondary'}>
-                      {appointment.status}
+                      {getStatusText(appointment.status)}
                     </Badge>
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <span className="text-muted-foreground">Payment:</span>
+                    <span className="text-muted-foreground">{t('appointments.payment')}:</span>
                     <Badge variant={appointment.payment_status === 'paid' ? 'default' : 'secondary'}>
-                      {appointment.payment_status || 'pending'}
+                      {getPaymentStatusText(appointment.payment_status || 'pending')}
                     </Badge>
                   </div>
                 </div>
 
                 {appointment.notes && (
                   <div>
-                    <span className="text-muted-foreground">Notes:</span>
+                    <span className="text-muted-foreground">{t('appointments.notes')}:</span>
                     <p className="text-foreground mt-1 p-2 bg-muted/50 rounded">{appointment.notes}</p>
                   </div>
                 )}
@@ -214,11 +288,11 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                 onClick={handleCancelAppointment}
                 disabled={updateAppointment.isPending || appointment.status === 'cancelled'}
               >
-                Cancel Appointment
+                {t('appointments.cancelAppointment')}
               </Button>
               
               <Button variant="outline" onClick={onClose}>
-                Close
+                {t('appointments.close')}
               </Button>
             </div>
           </TabsContent>
@@ -227,12 +301,12 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
             {appointment.payment_status !== 'paid' && appointment.status !== 'cancelled' ? (
               <Card className="bg-muted/20 border-border">
                 <CardHeader>
-                  <CardTitle className="text-lg text-foreground">Record Payment</CardTitle>
+                  <CardTitle className="text-lg text-foreground">{t('appointments.recordPayment')}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="amount" className="text-foreground">Amount</Label>
+                      <Label htmlFor="amount" className="text-foreground">{t('appointments.amount')}</Label>
                       <Input
                         id="amount"
                         type="number"
@@ -244,22 +318,50 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="method" className="text-foreground">Payment Method</Label>
+                      <Label htmlFor="method" className="text-foreground">{t('appointments.paymentMethod')}</Label>
                       <Select value={paymentData.method} onValueChange={(value) => 
                         setPaymentData(prev => ({ ...prev, method: value }))
                       }>
                         <SelectTrigger className="bg-input border-border text-foreground">
-                          <SelectValue placeholder="Select method" />
+                          <SelectValue placeholder={t('appointments.selectMethod')} />
                         </SelectTrigger>
                         <SelectContent className="bg-popover border-border">
-                          <SelectItem value="cash" className="text-foreground">Cash</SelectItem>
-                          <SelectItem value="card" className="text-foreground">Card</SelectItem>
-                          <SelectItem value="transfer" className="text-foreground">Transfer</SelectItem>
-                          <SelectItem value="insurance" className="text-foreground">Insurance</SelectItem>
+                          <SelectItem value="cash" className="text-foreground">{t('appointments.cash')}</SelectItem>
+                          <SelectItem value="card" className="text-foreground">{t('appointments.card')}</SelectItem>
+                          <SelectItem value="transfer" className="text-foreground">{t('appointments.transfer')}</SelectItem>
+                          <SelectItem value="insurance" className="text-foreground">{t('appointments.insurance')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="facturado"
+                      checked={paymentData.facturado}
+                      onCheckedChange={(checked) => 
+                        setPaymentData(prev => ({ ...prev, facturado: checked as boolean }))
+                      }
+                    />
+                    <Label htmlFor="facturado" className="text-foreground">{t('appointments.facturado')}</Label>
+                  </div>
+
+                  {paymentData.facturado && (
+                    <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-foreground">{t('appointments.baseAmount')}:</span>
+                        <span className="text-foreground">{formatCurrency(paymentData.amount)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-foreground">{t('appointments.ivaAmount')}:</span>
+                        <span className="text-foreground">{formatCurrency(ivaAmount)}</span>
+                      </div>
+                      <div className="flex justify-between font-semibold border-t pt-2">
+                        <span className="text-foreground">{t('appointments.total')}:</span>
+                        <span className="text-foreground">{formatCurrency(totalWithIva)}</span>
+                      </div>
+                    </div>
+                  )}
 
                   <Button 
                     onClick={handleMarkAsPaid} 
@@ -268,7 +370,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   >
                     {updateAppointment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     <CreditCard className="mr-2 h-4 w-4" />
-                    Mark as Paid
+                    {t('appointments.markAsPaid')} {paymentData.facturado && `(${formatCurrency(totalWithIva)})`}
                   </Button>
                 </CardContent>
               </Card>
@@ -276,12 +378,12 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
               <Card className="bg-muted/20 border-border">
                 <CardContent className="pt-6 text-center">
                   <div className="text-lg font-medium text-foreground mb-2">
-                    {appointment.payment_status === 'paid' ? 'Payment Completed' : 'Payment Not Available'}
+                    {appointment.payment_status === 'paid' ? t('appointments.paymentCompleted') : t('appointments.paymentNotAvailable')}
                   </div>
                   <div className="text-muted-foreground">
                     {appointment.payment_status === 'paid' 
-                      ? `Paid via ${appointment.payment_method} on ${format(new Date(appointment.payment_date), 'PPP')}`
-                      : 'Payment cannot be processed for cancelled appointments'
+                      ? `${t('appointments.paidVia')} ${getPaymentMethodText(appointment.payment_method)} ${t('appointments.on')} ${format(new Date(appointment.payment_date), 'PPP')}`
+                      : t('appointments.paymentCannotBeProcessed')
                     }
                   </div>
                 </CardContent>
@@ -293,12 +395,12 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
             {appointment.status !== 'cancelled' && appointment.status !== 'completed' ? (
               <Card className="bg-muted/20 border-border">
                 <CardHeader>
-                  <CardTitle className="text-lg text-foreground">Reschedule Appointment</CardTitle>
+                  <CardTitle className="text-lg text-foreground">{t('appointments.rescheduleAppointment')}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="new_datetime" className="text-foreground">New Date & Time</Label>
+                      <Label htmlFor="new_datetime" className="text-foreground">{t('appointments.newDateTime')}</Label>
                       <Input
                         id="new_datetime"
                         type="datetime-local"
@@ -309,7 +411,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="duration" className="text-foreground">Duration</Label>
+                      <Label htmlFor="duration" className="text-foreground">{t('appointments.duration')}</Label>
                       <Select value={rescheduleData.duration} onValueChange={(value) => 
                         setRescheduleData(prev => ({ ...prev, duration: value }))
                       }>
@@ -317,8 +419,26 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-popover border-border">
-                          <SelectItem value="60" className="text-foreground">60 minutes</SelectItem>
-                          <SelectItem value="120" className="text-foreground">120 minutes</SelectItem>
+                          <SelectItem value="60" className="text-foreground">60 {t('appointments.minutes')}</SelectItem>
+                          <SelectItem value="120" className="text-foreground">120 {t('appointments.minutes')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="therapist" className="text-foreground">{t('appointments.therapist')}</Label>
+                      <Select value={rescheduleData.therapist_id} onValueChange={(value) => 
+                        setRescheduleData(prev => ({ ...prev, therapist_id: value }))
+                      }>
+                        <SelectTrigger className="bg-input border-border text-foreground">
+                          <SelectValue placeholder={t('appointments.selectTherapist')} />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover border-border">
+                          {therapists?.map((therapist) => (
+                            <SelectItem key={therapist.id} value={therapist.id}>
+                              {therapist.first_name} {therapist.last_name}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -331,7 +451,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   >
                     {updateAppointment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     <CalendarDays className="mr-2 h-4 w-4" />
-                    Reschedule Appointment
+                    {t('appointments.rescheduleAppointment')}
                   </Button>
                 </CardContent>
               </Card>
@@ -339,12 +459,12 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
               <Card className="bg-muted/20 border-border">
                 <CardContent className="pt-6 text-center">
                   <div className="text-lg font-medium text-foreground mb-2">
-                    Rescheduling Not Available
+                    {t('appointments.reschedulingNotAvailable')}
                   </div>
                   <div className="text-muted-foreground">
                     {appointment.status === 'completed' 
-                      ? 'Completed appointments cannot be rescheduled'
-                      : 'Cancelled appointments cannot be rescheduled'
+                      ? t('appointments.completedCannotReschedule')
+                      : t('appointments.cancelledCannotReschedule')
                     }
                   </div>
                 </CardContent>

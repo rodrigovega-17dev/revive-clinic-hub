@@ -1,15 +1,16 @@
-
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard } from 'lucide-react';
+import { Calendar, DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Eye, ArrowLeftRight, Shield } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import DateSelector from '@/components/DateSelector';
+import { formatCurrency } from '@/lib/utils';
 
 interface DailyFinanceSectionProps {
   selectedDate: Date;
@@ -17,15 +18,14 @@ interface DailyFinanceSectionProps {
 }
 
 const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSectionProps) => {
+  const { t } = useTranslation();
+  const [showAllPayments, setShowAllPayments] = useState(false);
+
   // Fetch daily payments
   const { data: payments, isLoading: paymentsLoading } = useQuery({
-    queryKey: ['daily-payments', selectedDate],
+    queryKey: ['daily-payments', selectedDate, showAllPayments],
     queryFn: async () => {
-      console.log('Fetching payments for date:', selectedDate);
-      const startDate = startOfDay(selectedDate);
-      const endDate = endOfDay(selectedDate);
-      
-      const { data, error } = await supabase
+      let query = supabase
         .from('payments')
         .select(`
           *,
@@ -41,16 +41,24 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
             )
           )
         `)
-        .gte('payment_date', startDate.toISOString())
-        .lte('payment_date', endDate.toISOString())
         .order('payment_date', { ascending: false });
+
+      if (!showAllPayments) {
+        const startDate = startOfDay(selectedDate);
+        const endDate = endOfDay(selectedDate);
+        
+        query = query
+          .gte('payment_date', startDate.toISOString())
+          .lte('payment_date', endDate.toISOString());
+      }
+      
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching payments:', error);
         throw error;
       }
 
-      console.log('Fetched payments:', data);
       return data || [];
     },
   });
@@ -73,15 +81,34 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
   const totalRevenue = payments?.reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
   const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
   const netProfit = totalRevenue - totalExpenses;
+  
+  // Calculate specific financial metrics
+  const totalCash = payments?.filter(p => p.method === 'cash').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+  const totalIntangible = payments?.filter(p => p.method !== 'cash').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+  const amountInCashier = totalCash - totalExpenses;
 
   const getPaymentMethodIcon = (method: string) => {
     switch (method) {
       case 'cash':
-        return <DollarSign className="h-4 w-4" />;
+        return <DollarSign className="h-4 w-4 text-green-600" />;
       case 'card':
-        return <CreditCard className="h-4 w-4" />;
+        return <CreditCard className="h-4 w-4 text-blue-600" />;
+      case 'transfer':
+        return <ArrowLeftRight className="h-4 w-4 text-purple-600" />;
+      case 'insurance':
+        return <Shield className="h-4 w-4 text-orange-600" />;
       default:
-        return <Receipt className="h-4 w-4" />;
+        return <DollarSign className="h-4 w-4 text-gray-600" />;
+    }
+  };
+
+  const getPaymentMethodText = (method: string) => {
+    switch (method) {
+      case 'cash': return t('finance.cash');
+      case 'card': return t('finance.card');
+      case 'transfer': return t('finance.transfer');
+      case 'insurance': return t('finance.insurance');
+      default: return method;
     }
   };
 
@@ -102,7 +129,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
           <div className="flex items-center space-x-4">
             <Calendar className="h-5 w-5 text-muted-foreground" />
             <div className="space-y-1">
-              <p className="text-sm font-medium text-foreground">Selected Date</p>
+              <p className="text-sm font-medium text-foreground">{t('finance.selectedDate')}</p>
               <DateSelector selectedDate={selectedDate} onDateChange={onDateChange} />
             </div>
           </div>
@@ -110,14 +137,42 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
       </Card>
 
       {/* Daily Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
               <TrendingUp className="h-4 w-4 text-green-400" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Revenue</p>
-                <p className="text-2xl font-bold text-foreground">${totalRevenue.toFixed(2)}</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('finance.totalEarnings')}</p>
+                <p className="text-2xl font-bold text-foreground">{formatCurrency(totalRevenue)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-card border-border">
+          <CardContent className="pt-6">
+            <div className="flex items-center space-x-2">
+              <CreditCard className="h-4 w-4 text-blue-400" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">{t('finance.totalIntangible')}</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {formatCurrency(totalIntangible)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-card border-border">
+          <CardContent className="pt-6">
+            <div className="flex items-center space-x-2">
+              <DollarSign className="h-4 w-4 text-green-600" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">{t('finance.totalCash')}</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {formatCurrency(totalCash)}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -128,8 +183,8 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
             <div className="flex items-center space-x-2">
               <TrendingDown className="h-4 w-4 text-red-400" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Expenses</p>
-                <p className="text-2xl font-bold text-foreground">${totalExpenses.toFixed(2)}</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('finance.expensesCash')}</p>
+                <p className="text-2xl font-bold text-foreground">{formatCurrency(totalExpenses)}</p>
               </div>
             </div>
           </CardContent>
@@ -138,11 +193,11 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
-              <DollarSign className={`h-4 w-4 ${netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`} />
+              <DollarSign className="h-4 w-4 text-yellow-500" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Net Profit</p>
-                <p className={`text-2xl font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ${netProfit.toFixed(2)}
+                <p className="text-sm font-medium text-muted-foreground">{t('finance.amountInCashier')}</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {formatCurrency(amountInCashier)}
                 </p>
               </div>
             </div>
@@ -153,22 +208,34 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
       {/* Payments Table */}
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="text-foreground">Daily Payments</CardTitle>
-          <CardDescription className="text-muted-foreground">
-            All payments received on {format(selectedDate, 'MMMM d, yyyy')}
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-foreground">{t('finance.dailyPayments')}</CardTitle>
+              <CardDescription className="text-muted-foreground">
+                {showAllPayments ? t('finance.allPayments') : t('finance.paymentsReceivedOn', { date: format(selectedDate, 'MMMM d, yyyy') })}
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAllPayments(!showAllPayments)}
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              {showAllPayments ? t('finance.showDaily') : t('finance.showAll')}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {payments && payments.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow className="border-border">
-                  <TableHead className="text-foreground">Time</TableHead>
-                  <TableHead className="text-foreground">Client</TableHead>
-                  <TableHead className="text-foreground">Therapist</TableHead>
-                  <TableHead className="text-foreground">Amount</TableHead>
-                  <TableHead className="text-foreground">Method</TableHead>
-                  <TableHead className="text-foreground">Description</TableHead>
+                  <TableHead className="text-foreground">{t('finance.time')}</TableHead>
+                  <TableHead className="text-foreground">{t('finance.client')}</TableHead>
+                  <TableHead className="text-foreground">{t('finance.therapist')}</TableHead>
+                  <TableHead className="text-foreground">{t('finance.amount')}</TableHead>
+                  <TableHead className="text-foreground">{t('finance.method')}</TableHead>
+                  <TableHead className="text-foreground">{t('finance.description')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -191,19 +258,19 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                     </TableCell>
                     <TableCell>
                       <span className="font-medium text-green-600">
-                        ${Number(payment.amount).toFixed(2)}
+                        {formatCurrency(payment.amount)}
                       </span>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-2">
                         {getPaymentMethodIcon(payment.method)}
                         <Badge variant="outline" className="capitalize">
-                          {payment.method}
+                          {getPaymentMethodText(payment.method)}
                         </Badge>
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {payment.description || 'Payment received'}
+                      {payment.description || t('finance.paymentReceived')}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -212,9 +279,14 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
           ) : (
             <div className="text-center py-12">
               <Receipt className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">No payments today</h3>
+              <h3 className="text-lg font-medium text-foreground mb-2">
+                {showAllPayments ? t('finance.noPaymentsFound') : t('finance.noPaymentsToday')}
+              </h3>
               <p className="text-muted-foreground">
-                No payments were received on {format(selectedDate, 'MMMM d, yyyy')}
+                {showAllPayments 
+                  ? t('finance.noPaymentsRecorded')
+                  : t('finance.noPaymentsOnDate', { date: format(selectedDate, 'MMMM d, yyyy') })
+                }
               </p>
             </div>
           )}
@@ -224,9 +296,9 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
       {/* Expenses Table */}
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="text-foreground">Daily Expenses</CardTitle>
+          <CardTitle className="text-foreground">{t('finance.dailyExpenses')}</CardTitle>
           <CardDescription className="text-muted-foreground">
-            All expenses recorded on {format(selectedDate, 'MMMM d, yyyy')}
+            {t('finance.expensesRecordedOn', { date: format(selectedDate, 'MMMM d, yyyy') })}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -234,10 +306,10 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
             <Table>
               <TableHeader>
                 <TableRow className="border-border">
-                  <TableHead className="text-foreground">Description</TableHead>
-                  <TableHead className="text-foreground">Category</TableHead>
-                  <TableHead className="text-foreground">Amount</TableHead>
-                  <TableHead className="text-foreground">Time</TableHead>
+                  <TableHead className="text-foreground">{t('finance.description')}</TableHead>
+                  <TableHead className="text-foreground">{t('finance.category')}</TableHead>
+                  <TableHead className="text-foreground">{t('finance.amount')}</TableHead>
+                  <TableHead className="text-foreground">{t('finance.time')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -251,7 +323,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                     </TableCell>
                     <TableCell>
                       <span className="font-medium text-red-600">
-                        -${Number(expense.amount).toFixed(2)}
+                        -{formatCurrency(expense.amount)}
                       </span>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
@@ -264,9 +336,9 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
           ) : (
             <div className="text-center py-12">
               <Receipt className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">No expenses today</h3>
+              <h3 className="text-lg font-medium text-foreground mb-2">{t('finance.noExpensesToday')}</h3>
               <p className="text-muted-foreground">
-                No expenses were recorded on {format(selectedDate, 'MMMM d, yyyy')}
+                {t('finance.noExpensesOnDate', { date: format(selectedDate, 'MMMM d, yyyy') })}
               </p>
             </div>
           )}

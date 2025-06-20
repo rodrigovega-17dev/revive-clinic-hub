@@ -1,5 +1,5 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Calendar, Clock, User, Phone, Plus } from 'lucide-react';
@@ -11,14 +11,28 @@ import AppointmentDetails from '@/components/AppointmentDetails';
 import DateFilter from '@/components/DateFilter';
 import AppointmentTable from '@/components/AppointmentTable';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useSearchParams } from 'react-router-dom';
 
 const Appointments = () => {
+  const { t } = useTranslation();
   const [showForm, setShowForm] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [searchParams] = useSearchParams();
   
   const { data: groupedAppointments, isLoading: appointmentsLoading } = useAppointmentsByDate(selectedDate);
   const { data: clients } = useClients();
+
+  // Check URL parameters to auto-open form
+  useEffect(() => {
+    if (searchParams.get('showForm') === 'true') {
+      setShowForm(true);
+      // Clean up the URL parameter
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('showForm');
+      window.history.replaceState({}, '', newUrl.toString());
+    }
+  }, [searchParams]);
 
   const handleAppointmentClick = (appointment: any) => {
     setSelectedAppointment(appointment);
@@ -29,12 +43,12 @@ const Appointments = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Appointments</h1>
-            <p className="text-muted-foreground">Manage client appointments and scheduling</p>
+            <h1 className="text-3xl font-bold">{t('appointments.title')}</h1>
+            <p className="text-muted-foreground">{t('common.manageAppointments')}</p>
           </div>
           <Button>
             <Plus className="h-4 w-4 mr-2" />
-            New Appointment
+            {t('appointments.newAppointment')}
           </Button>
         </div>
         
@@ -70,12 +84,12 @@ const Appointments = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Appointments</h1>
-          <p className="text-muted-foreground">Manage client appointments and scheduling</p>
+          <h1 className="text-3xl font-bold">{t('appointments.title')}</h1>
+          <p className="text-muted-foreground">{t('common.manageAppointments')}</p>
         </div>
         <Button onClick={() => setShowForm(true)}>
           <Plus className="h-4 w-4 mr-2" />
-          New Appointment
+          {t('appointments.newAppointment')}
         </Button>
       </div>
 
@@ -90,15 +104,15 @@ const Appointments = () => {
         <div className="flex gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">{totalAppointments}</div>
-            <div className="text-sm text-muted-foreground">Total</div>
+            <div className="text-sm text-muted-foreground">{t('common.total')}</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-green-600">{completedToday}</div>
-            <div className="text-sm text-muted-foreground">Completed</div>
+            <div className="text-sm text-muted-foreground">{t('appointments.completed')}</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-orange-600">{pendingToday}</div>
-            <div className="text-sm text-muted-foreground">Pending</div>
+            <div className="text-sm text-muted-foreground">{t('appointments.scheduled')}</div>
           </div>
         </div>
       </div>
@@ -112,16 +126,22 @@ const Appointments = () => {
       ) : (
         <Card>
           <CardContent className="text-center py-12">
-            <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              No appointments for {format(new Date(selectedDate), 'MMMM d, yyyy')}
+            <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-foreground mb-2">
+              {t('common.noAppointmentsForDate', { 
+                date: (() => {
+                  const [year, month, day] = selectedDate.split('-').map(Number);
+                  const date = new Date(year, month - 1, day);
+                  return format(date, 'MMMM d, yyyy');
+                })()
+              })}
             </h3>
-            <p className="text-gray-500 mb-4">
-              Select a different date or create a new appointment.
+            <p className="text-muted-foreground mb-4">
+              {t('common.selectDifferentDate')}
             </p>
             <Button onClick={() => setShowForm(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Schedule Appointment
+              {t('common.scheduleNewAppointment')}
             </Button>
           </CardContent>
         </Card>

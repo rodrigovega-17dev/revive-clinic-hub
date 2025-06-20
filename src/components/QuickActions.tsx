@@ -1,33 +1,34 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Calendar, Users, DollarSign } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 export const QuickActions = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const actions = [
     {
-      title: "New Appointment",
-      description: "Schedule a new client appointment",
+      title: t('dashboard.newAppointment'),
+      description: t('dashboard.scheduleNewClientAppointment'),
       icon: Calendar,
       color: "bg-blue-500 hover:bg-blue-600",
-      onClick: () => navigate("/appointments/new"),
+      onClick: () => navigate("/appointments?showForm=true"),
     },
     {
-      title: "Add Client",
-      description: "Register a new client",
+      title: t('dashboard.addClient'),
+      description: t('dashboard.registerNewClient'),
       icon: Users,
       color: "bg-green-500 hover:bg-green-600",
-      onClick: () => navigate("/clients/new"),
+      onClick: () => navigate("/clients?showForm=true"),
     },
     {
-      title: "Record Payment",
-      description: "Log a new payment",
+      title: t('dashboard.recordPayment'),
+      description: t('dashboard.logNewPayment'),
       icon: DollarSign,
       color: "bg-yellow-500 hover:bg-yellow-600",
-      onClick: () => navigate("/finance/new"),
+      onClick: () => navigate("/finance?showPaymentForm=true"),
     },
   ];
 
@@ -36,7 +37,7 @@ export const QuickActions = () => {
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
           <Plus className="w-5 h-5 text-primary" />
-          <span>Quick Actions</span>
+          <span>{t('dashboard.quickActions')}</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">

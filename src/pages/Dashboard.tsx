@@ -1,15 +1,17 @@
-
+import { useTranslation } from "react-i18next";
 import DashboardStats from "@/components/DashboardStats";
 import UpcomingAppointments from "@/components/UpcomingAppointments";
 import { QuickActions } from "@/components/QuickActions";
 
 const Dashboard = () => {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="fade-in">
-        <h1 className="text-3xl font-bold text-foreground mb-2">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back! Here's what's happening at your clinic today.</p>
+        <h1 className="text-3xl font-bold text-foreground mb-2">{t('dashboard.title')}</h1>
+        <p className="text-muted-foreground">{t('dashboard.welcome')}</p>
       </div>
 
       {/* Stats */}

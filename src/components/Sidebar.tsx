@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   Calendar,
   Users,
@@ -15,22 +16,23 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { LanguageSelector } from "./LanguageSelector";
 
 const navigation = [
-  { name: "Dashboard", href: "/", icon: BarChart3 },
-  { name: "Appointments", href: "/appointments", icon: Calendar },
-  { name: "Clients", href: "/clients", icon: Users },
-  { name: "Therapists", href: "/therapists", icon: User },
-  { name: "Suppliers", href: "/suppliers", icon: Package },
-  { name: "Finance", href: "/finance", icon: DollarSign },
-  { name: "Payroll", href: "/payroll", icon: Calculator },
-  { name: "Settings", href: "/settings", icon: Settings },
+  { name: "navigation.dashboard", href: "/", icon: BarChart3 },
+  { name: "navigation.appointments", href: "/appointments", icon: Calendar },
+  { name: "navigation.clients", href: "/clients", icon: Users },
+  { name: "navigation.therapists", href: "/therapists", icon: User },
+  { name: "navigation.finance", href: "/finance", icon: DollarSign },
+  { name: "navigation.payroll", href: "/payroll", icon: Calculator },
+  { name: "navigation.settings", href: "/settings", icon: Settings },
 ];
 
 export const Sidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   return (
     <div
@@ -80,11 +82,18 @@ export const Sidebar = () => {
               onClick={() => navigate(item.href)}
             >
               <item.icon className={cn("w-5 h-5", collapsed ? "" : "mr-3", isActive ? "text-sidebar-primary-foreground" : "")} />
-              {!collapsed && <span>{item.name}</span>}
+              {!collapsed && <span>{t(item.name)}</span>}
             </Button>
           );
         })}
       </nav>
+
+      {/* Language Selector */}
+      {!collapsed && (
+        <div className="px-4 py-2 border-t border-sidebar-border">
+          <LanguageSelector />
+        </div>
+      )}
 
       {/* Footer */}
       {!collapsed && (

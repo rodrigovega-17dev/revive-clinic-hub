@@ -1,19 +1,31 @@
-
-import { Sidebar } from "./Sidebar";
+import { ReactNode } from 'react'
+import { Sidebar } from './Sidebar'
+import { ThemeToggle } from './ThemeToggle'
 
 interface LayoutProps {
-  children: React.ReactNode;
+  children: ReactNode
 }
 
-export const Layout = ({ children }: LayoutProps) => {
+export function Layout({ children }: LayoutProps) {
   return (
-    <div className="min-h-screen flex w-full bg-background">
+    <div className="flex h-screen bg-background">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="p-8 min-h-full">
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <header className="h-16 border-b border-border bg-background flex items-center justify-between px-6">
+          <div className="flex items-center space-x-4">
+            <h1 className="text-xl font-semibold text-foreground">Revive Clinic Hub</h1>
+          </div>
+          <div className="flex items-center space-x-4">
+            <ThemeToggle />
+          </div>
+        </header>
+        
+        {/* Main Content */}
+        <main className="flex-1 overflow-auto p-6">
           {children}
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
-  );
-};
+  )
+}

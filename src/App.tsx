@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -15,6 +14,7 @@ import Clients from "./pages/Clients";
 import Therapists from "./pages/Therapists";
 import Finance from "./pages/Finance";
 import Payroll from "./pages/Payroll";
+import Settings from "./pages/Settings";
 import ComingSoon from "./pages/ComingSoon";
 import NotFound from "./pages/NotFound";
 
@@ -36,8 +36,8 @@ const App = () => (
             <Route path="/therapists" element={<ProtectedRoute><Layout><Therapists /></Layout></ProtectedRoute>} />
             <Route path="/finance" element={<ProtectedRoute><Layout><Finance /></Layout></ProtectedRoute>} />
             <Route path="/payroll" element={<ProtectedRoute><Layout><Payroll /></Layout></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Layout><ComingSoon title="Reports" description="Comprehensive reporting and analytics for your clinic" /></Layout></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute><Layout><ComingSoon title="Settings" description="Configure your clinic settings and preferences" /></Layout></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

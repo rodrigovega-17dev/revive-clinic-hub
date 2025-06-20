@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -10,9 +9,12 @@ import { supabase } from '@/integrations/supabase/client';
 import SearchInput from '@/components/SearchInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { formatCurrency } from '@/lib/utils';
 
 const MonthlyFinanceSection = () => {
-  const [selectedPeriod, setSelectedPeriod] = useState('current');
+  const { t } = useTranslation();
+  const [selectedPeriod, setSelectedPeriod] = useState<'current' | 'previous'>('current');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Get current month range
@@ -92,6 +94,16 @@ const MonthlyFinanceSection = () => {
     }
   };
 
+  const getPaymentMethodText = (method: string) => {
+    switch (method) {
+      case 'cash': return t('finance.cash');
+      case 'card': return t('finance.card');
+      case 'transfer': return t('finance.transfer');
+      case 'insurance': return t('finance.insurance');
+      default: return method;
+    }
+  };
+
   if (paymentsLoading || expensesLoading) {
     return (
       <div className="space-y-6">
@@ -112,10 +124,10 @@ const MonthlyFinanceSection = () => {
   return (
     <div className="space-y-6">
       {/* Period Selector */}
-      <Tabs value={selectedPeriod} onValueChange={setSelectedPeriod}>
+      <Tabs value={selectedPeriod} onValueChange={(value) => setSelectedPeriod(value as 'current' | 'previous')}>
         <TabsList className="bg-muted">
-          <TabsTrigger value="current">Current Month</TabsTrigger>
-          <TabsTrigger value="previous">Previous Month</TabsTrigger>
+          <TabsTrigger value="current">{t('finance.currentMonth')}</TabsTrigger>
+          <TabsTrigger value="previous">{t('finance.previousMonth')}</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -126,9 +138,9 @@ const MonthlyFinanceSection = () => {
             <div className="flex items-center space-x-2">
               <DollarSign className="h-4 w-4 text-green-400" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('finance.totalRevenue')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  ${totalPayments.toFixed(2)}
+                  {formatCurrency(totalPayments)}
                 </p>
               </div>
             </div>
@@ -140,9 +152,9 @@ const MonthlyFinanceSection = () => {
             <div className="flex items-center space-x-2">
               <Minus className="h-4 w-4 text-red-400" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Expenses</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('finance.totalExpenses')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  ${totalExpenses.toFixed(2)}
+                  {formatCurrency(totalExpenses)}
                 </p>
               </div>
             </div>
@@ -154,9 +166,9 @@ const MonthlyFinanceSection = () => {
             <div className="flex items-center space-x-2">
               <CreditCard className="h-4 w-4 text-green-400" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Cash Revenue</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('finance.cashRevenue')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  ${cashPayments.toFixed(2)}
+                  {formatCurrency(cashPayments)}
                 </p>
               </div>
             </div>
@@ -168,9 +180,9 @@ const MonthlyFinanceSection = () => {
             <div className="flex items-center space-x-2">
               <TrendingUp className="h-4 w-4 text-blue-400" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Net Total</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('finance.netTotal')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  ${(totalPayments - totalExpenses).toFixed(2)}
+                  {formatCurrency(totalPayments - totalExpenses)}
                 </p>
               </div>
             </div>
@@ -183,20 +195,20 @@ const MonthlyFinanceSection = () => {
         <SearchInput
           value={searchTerm}
           onChange={setSearchTerm}
-          placeholder="Search payments by client, therapist, or method..."
+          placeholder={t('finance.searchPayments')}
           className="max-w-md"
         />
         <div className="text-sm text-muted-foreground">
-          {filteredPayments.length} of {payments?.length || 0} payments
+          {filteredPayments.length} {t('finance.ofPayments')} {payments?.length || 0}
         </div>
       </div>
 
       {/* Payments Table */}
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="text-foreground">Payment History</CardTitle>
+          <CardTitle className="text-foreground">{t('finance.paymentHistory')}</CardTitle>
           <CardDescription className="text-muted-foreground">
-            All payments for {format(currentRange.start, 'MMMM yyyy')}
+            {t('finance.allPaymentsFor', { period: format(currentRange.start, 'MMMM yyyy') })}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -204,11 +216,11 @@ const MonthlyFinanceSection = () => {
             <Table>
               <TableHeader>
                 <TableRow className="border-border">
-                  <TableHead className="text-foreground">Date</TableHead>
-                  <TableHead className="text-foreground">Client</TableHead>
-                  <TableHead className="text-foreground">Amount</TableHead>
-                  <TableHead className="text-foreground">Method</TableHead>
-                  <TableHead className="text-foreground">Description</TableHead>
+                  <TableHead className="text-foreground">{t('finance.date')}</TableHead>
+                  <TableHead className="text-foreground">{t('finance.client')}</TableHead>
+                  <TableHead className="text-foreground">{t('finance.amount')}</TableHead>
+                  <TableHead className="text-foreground">{t('finance.method')}</TableHead>
+                  <TableHead className="text-foreground">{t('finance.description')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -224,11 +236,11 @@ const MonthlyFinanceSection = () => {
                       }
                     </TableCell>
                     <TableCell className="font-medium text-foreground">
-                      ${Number(payment.amount).toFixed(2)}
+                      {formatCurrency(payment.amount)}
                     </TableCell>
                     <TableCell>
                       <Badge className={getPaymentMethodColor(payment.method)}>
-                        {payment.method.replace('_', ' ')}
+                        {getPaymentMethodText(payment.method)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
@@ -242,12 +254,12 @@ const MonthlyFinanceSection = () => {
             <div className="text-center py-12">
               <Receipt className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium text-foreground mb-2">
-                {searchTerm ? 'No payments found' : 'No payments yet'}
+                {searchTerm ? t('finance.noPaymentsFound') : t('finance.noPaymentsYet')}
               </h3>
               <p className="text-muted-foreground">
                 {searchTerm 
-                  ? 'Try adjusting your search terms.'
-                  : 'Payments will appear here once appointments are completed.'
+                  ? t('finance.tryAdjustingSearch')
+                  : t('finance.paymentsWillAppear')
                 }
               </p>
             </div>
@@ -258,9 +270,9 @@ const MonthlyFinanceSection = () => {
       {/* Expenses Table */}
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="text-foreground">Expenses</CardTitle>
+          <CardTitle className="text-foreground">{t('finance.expenses')}</CardTitle>
           <CardDescription className="text-muted-foreground">
-            All expenses for {format(currentRange.start, 'MMMM yyyy')}
+            {t('finance.allExpensesFor', { period: format(currentRange.start, 'MMMM yyyy') })}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -268,10 +280,10 @@ const MonthlyFinanceSection = () => {
             <Table>
               <TableHeader>
                 <TableRow className="border-border">
-                  <TableHead className="text-foreground">Date</TableHead>
-                  <TableHead className="text-foreground">Description</TableHead>
-                  <TableHead className="text-foreground">Category</TableHead>
-                  <TableHead className="text-foreground">Amount</TableHead>
+                  <TableHead className="text-foreground">{t('finance.date')}</TableHead>
+                  <TableHead className="text-foreground">{t('finance.description')}</TableHead>
+                  <TableHead className="text-foreground">{t('finance.category')}</TableHead>
+                  <TableHead className="text-foreground">{t('finance.amount')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -289,7 +301,7 @@ const MonthlyFinanceSection = () => {
                       </Badge>
                     </TableCell>
                     <TableCell className="font-medium text-red-600">
-                      ${Number(expense.amount).toFixed(2)}
+                      {formatCurrency(expense.amount)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -298,9 +310,9 @@ const MonthlyFinanceSection = () => {
           ) : (
             <div className="text-center py-12">
               <Minus className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">No expenses yet</h3>
+              <h3 className="text-lg font-medium text-foreground mb-2">{t('finance.noExpensesYet')}</h3>
               <p className="text-muted-foreground">
-                Expenses will appear here once they are recorded.
+                {t('finance.expensesWillAppear')}
               </p>
             </div>
           )}

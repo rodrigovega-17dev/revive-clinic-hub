@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -11,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 
 interface ExpenseFormProps {
   open: boolean;
@@ -18,6 +18,7 @@ interface ExpenseFormProps {
 }
 
 const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
+  const { t } = useTranslation();
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
@@ -26,15 +27,15 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
   const { toast } = useToast();
 
   const expenseCategories = [
-    'supplies',
-    'office',
-    'maintenance',
-    'utilities',
-    'equipment',
-    'marketing',
-    'travel',
-    'food',
-    'general'
+    { value: 'supplies', label: t('finance.supplies') },
+    { value: 'office', label: t('finance.office') },
+    { value: 'maintenance', label: t('finance.maintenance') },
+    { value: 'utilities', label: t('finance.utilities') },
+    { value: 'equipment', label: t('finance.equipment') },
+    { value: 'marketing', label: t('finance.marketing') },
+    { value: 'travel', label: t('finance.travel') },
+    { value: 'food', label: t('finance.food') },
+    { value: 'general', label: t('finance.general') }
   ];
 
   const createExpenseMutation = useMutation({
@@ -52,16 +53,16 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       queryClient.invalidateQueries({ queryKey: ['todays-expenses'] });
       toast({
-        title: "Success",
-        description: "Expense added successfully",
+        title: t('common.success'),
+        description: t('finance.expenseAdded'),
       });
       handleClose();
     },
     onError: (error) => {
       console.error('Error creating expense:', error);
       toast({
-        title: "Error",
-        description: "Failed to add expense",
+        title: t('common.error'),
+        description: t('finance.failedToAddExpense'),
         variant: "destructive",
       });
     },
@@ -72,8 +73,8 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
     
     if (!amount || !description || !category) {
       toast({
-        title: "Error",
-        description: "Please fill in all required fields",
+        title: t('common.error'),
+        description: t('finance.fillRequiredFields'),
         variant: "destructive",
       });
       return;
@@ -99,11 +100,11 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Expense</DialogTitle>
+          <DialogTitle>{t('finance.addExpenseTitle')}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor="amount">Amount *</Label>
+            <Label htmlFor="amount">{t('finance.amount')} *</Label>
             <Input
               id="amount"
               type="number"
@@ -112,31 +113,33 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
+              className="bg-input border-border text-foreground"
               required
             />
           </div>
 
           <div>
-            <Label htmlFor="description">Description *</Label>
+            <Label htmlFor="description">{t('finance.description')} *</Label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe the expense..."
+              placeholder={t('finance.describeExpense')}
+              className="bg-input border-border text-foreground"
               required
             />
           </div>
 
           <div>
-            <Label htmlFor="category">Category *</Label>
+            <Label htmlFor="category">{t('finance.category')} *</Label>
             <Select value={category} onValueChange={setCategory} required>
-              <SelectTrigger>
-                <SelectValue placeholder="Select category" />
+              <SelectTrigger className="bg-input border-border text-foreground">
+                <SelectValue placeholder={t('finance.selectCategory')} />
               </SelectTrigger>
               <SelectContent>
                 {expenseCategories.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                  <SelectItem key={cat.value} value={cat.value}>
+                    {cat.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -144,7 +147,7 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
           </div>
 
           <DatePicker
-            label="Date"
+            label={t('finance.date')}
             value={date}
             onChange={setDate}
             required
@@ -152,13 +155,13 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
 
           <div className="flex justify-end space-x-2 pt-4">
             <Button type="button" variant="outline" onClick={handleClose}>
-              Cancel
+              {t('finance.cancel')}
             </Button>
             <Button 
               type="submit" 
               disabled={createExpenseMutation.isPending}
             >
-              {createExpenseMutation.isPending ? 'Adding...' : 'Add Expense'}
+              {createExpenseMutation.isPending ? t('finance.adding') : t('finance.addExpense')}
             </Button>
           </div>
         </form>

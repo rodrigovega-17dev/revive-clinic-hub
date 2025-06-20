@@ -1,4 +1,3 @@
-
 -- Insert dummy clients
 INSERT INTO public.clients (first_name, last_name, email, phone, charge_amount, is_active) VALUES
 ('Maria', 'Rodriguez', 'maria.rodriguez@email.com', '+1-555-0101', 80.00, true),
@@ -125,3 +124,20 @@ SELECT
   END
 FROM date_series
 CROSS JOIN generate_series(1, floor(random() * 3 + 1)::int);
+
+-- Fix RLS policies for payments to allow proper access
+-- Drop existing restrictive policies
+DROP POLICY IF EXISTS "Admins can view all payments" ON public.payments;
+DROP POLICY IF EXISTS "Users can view payments they received" ON public.payments;
+DROP POLICY IF EXISTS "Authenticated users can create payments" ON public.payments;
+DROP POLICY IF EXISTS "Admins can manage all payments" ON public.payments;
+
+-- Create new, more permissive policies
+CREATE POLICY "Authenticated users can view all payments" ON public.payments
+  FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Authenticated users can create payments" ON public.payments
+  FOR INSERT TO authenticated WITH CHECK (true);
+
+CREATE POLICY "Admins and reception can manage payments" ON public.payments
+  FOR ALL USING (public.get_user_role() IN ('admin', 'reception'));

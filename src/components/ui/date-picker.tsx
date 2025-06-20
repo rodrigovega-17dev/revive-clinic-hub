@@ -1,7 +1,9 @@
-
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface DatePickerProps {
   value: string;
@@ -13,25 +15,41 @@ interface DatePickerProps {
 }
 
 const DatePicker = ({ value, onChange, label, id, required, min }: DatePickerProps) => {
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const minDate = min || today;
+  // Parse the date string properly to avoid timezone issues
+  const selectedDate = value ? new Date(value + 'T00:00:00') : undefined;
+  const today = new Date();
+  const minDate = min ? new Date(min + 'T00:00:00') : today;
 
   return (
-    <div className="space-y-2">
+    <div>
       {label && (
-        <Label htmlFor={id} className="text-foreground">
+        <label className="text-sm font-medium text-foreground">
           {label} {required && '*'}
-        </Label>
+        </label>
       )}
-      <Input
-        id={id}
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="bg-input border-border text-foreground"
-        min={minDate}
-        required={required}
-      />
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className={cn(
+              "w-full justify-start text-left font-normal",
+              !selectedDate && "text-muted-foreground"
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={(date) => date && onChange(format(date, 'yyyy-MM-dd'))}
+            disabled={(date) => date < minDate}
+            initialFocus
+          />
+        </PopoverContent>
+      </Popover>
     </div>
   );
 };

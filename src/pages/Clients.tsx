@@ -1,25 +1,33 @@
-
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, User, Phone, Mail, Calendar, Edit, MapPin, Heart } from 'lucide-react';
+import { Plus, User, Phone, Mail, Calendar, Edit, MapPin, Heart, DollarSign, Eye } from 'lucide-react';
 import { useClients } from '@/hooks/useClients';
+import { useAllClientBalances } from '@/hooks/useClientBalance';
 import ClientForm from '@/components/ClientForm';
 import EditClientForm from '@/components/EditClientForm';
+import ClientDetails from '@/components/ClientDetails';
 import SearchInput from '@/components/SearchInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, differenceInYears } from 'date-fns';
+import { useSearchParams } from 'react-router-dom';
 import type { Tables } from '@/integrations/supabase/types';
+import { formatCurrency } from '@/lib/utils';
 
 type Client = Tables<'clients'>;
 
 const Clients = () => {
+  const { t } = useTranslation();
   const [showForm, setShowForm] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const { data: clients, isLoading } = useClients();
+  const { data: clientBalances } = useAllClientBalances();
+  const [searchParams] = useSearchParams();
 
   // Enhanced search function for clients
   const filteredClients = useMemo(() => {
@@ -46,22 +54,42 @@ const Clients = () => {
     });
   }, [clients, searchTerm]);
 
+  // Create a map of client balances for quick lookup
+  const balanceMap = useMemo(() => {
+    const map = new Map();
+    clientBalances?.forEach(balance => {
+      map.set(balance.clientId, balance);
+    });
+    return map;
+  }, [clientBalances]);
+
   const getAge = (birthDate: string | null) => {
     if (!birthDate) return null;
     return differenceInYears(new Date(), new Date(birthDate));
   };
+
+  // Check URL parameters to auto-open form
+  useEffect(() => {
+    if (searchParams.get('showForm') === 'true') {
+      setShowForm(true);
+      // Clean up the URL parameter
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('showForm');
+      window.history.replaceState({}, '', newUrl.toString());
+    }
+  }, [searchParams]);
 
   if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Clients</h1>
-            <p className="text-muted-foreground">Manage client profiles and contact information</p>
+            <h1 className="text-3xl font-bold text-foreground">{t('clients.title')}</h1>
+            <p className="text-muted-foreground">{t('clients.manageClients')}</p>
           </div>
           <Button>
             <Plus className="h-4 w-4 mr-2" />
-            Add Client
+            {t('clients.newClient')}
           </Button>
         </div>
         
@@ -85,23 +113,23 @@ const Clients = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Clients</h1>
-          <p className="text-muted-foreground">Manage client profiles and contact information</p>
+          <h1 className="text-3xl font-bold text-foreground">{t('clients.title')}</h1>
+          <p className="text-muted-foreground">{t('clients.manageClients')}</p>
         </div>
         <Button onClick={() => setShowForm(true)}>
           <Plus className="h-4 w-4 mr-2" />
-          Add Client
+          {t('clients.newClient')}
         </Button>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
               <User className="h-4 w-4 text-blue-400" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Clients</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('clients.totalClients')}</p>
                 <p className="text-2xl font-bold text-foreground">{clients?.length || 0}</p>
               </div>
             </div>
@@ -113,7 +141,7 @@ const Clients = () => {
             <div className="flex items-center space-x-2">
               <Calendar className="h-4 w-4 text-green-400" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Active Clients</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('clients.activeClients')}</p>
                 <p className="text-2xl font-bold text-foreground">
                   {clients?.filter(c => c.is_active).length || 0}
                 </p>
@@ -127,7 +155,7 @@ const Clients = () => {
             <div className="flex items-center space-x-2">
               <Mail className="h-4 w-4 text-purple-400" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">With Email</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('clients.withEmail')}</p>
                 <p className="text-2xl font-bold text-foreground">
                   {clients?.filter(c => c.email).length || 0}
                 </p>
@@ -141,9 +169,31 @@ const Clients = () => {
             <div className="flex items-center space-x-2">
               <Heart className="h-4 w-4 text-red-400" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Emergency Contact</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('clients.emergencyContact')}</p>
                 <p className="text-2xl font-bold text-foreground">
                   {clients?.filter(c => c.emergency_contact_name).length || 0}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border">
+          <CardContent className="pt-6">
+            <div className="flex items-center space-x-2">
+              <DollarSign className="h-4 w-4 text-yellow-400" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">{t('clients.balance')}</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {(() => {
+                    const totalBalance = clientBalances?.reduce((sum, balance) => sum + balance.balance, 0) || 0;
+                    const isPositive = totalBalance >= 0;
+                    return (
+                      <span className={isPositive ? 'text-green-600' : 'text-red-600'}>
+                        {isPositive ? '+' : ''}{formatCurrency(totalBalance)}
+                      </span>
+                    );
+                  })()}
                 </p>
               </div>
             </div>
@@ -156,11 +206,11 @@ const Clients = () => {
         <SearchInput
           value={searchTerm}
           onChange={setSearchTerm}
-          placeholder="Search clients by name, email, phone, or address..."
+          placeholder={t('clients.searchClients')}
           className="max-w-md"
         />
         <div className="text-sm text-muted-foreground">
-          {filteredClients.length} of {clients?.length || 0} clients
+          {filteredClients.length} {t('common.of')} {clients?.length || 0} {t('clients.title').toLowerCase()}
         </div>
       </div>
 
@@ -171,13 +221,14 @@ const Clients = () => {
             <Table>
               <TableHeader>
                 <TableRow className="border-border">
-                  <TableHead className="text-foreground">Name</TableHead>
-                  <TableHead className="text-foreground">Contact</TableHead>
-                  <TableHead className="text-foreground">Age</TableHead>
-                  <TableHead className="text-foreground">Emergency Contact</TableHead>
-                  <TableHead className="text-foreground">Charge</TableHead>
-                  <TableHead className="text-foreground">Status</TableHead>
-                  <TableHead className="text-right text-foreground">Actions</TableHead>
+                  <TableHead className="text-foreground">{t('common.name')}</TableHead>
+                  <TableHead className="text-foreground">{t('clients.contact')}</TableHead>
+                  <TableHead className="text-foreground">{t('clients.age')}</TableHead>
+                  <TableHead className="text-foreground">{t('clients.emergencyContact')}</TableHead>
+                  <TableHead className="text-foreground">{t('clients.charge')}</TableHead>
+                  <TableHead className="text-foreground">{t('common.status')}</TableHead>
+                  <TableHead className="text-foreground">{t('clients.balance')}</TableHead>
+                  <TableHead className="text-right text-foreground">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -213,7 +264,7 @@ const Clients = () => {
                     <TableCell>
                       {client.birth_date ? (
                         <div className="text-sm text-foreground">
-                          {getAge(client.birth_date)} years
+                          {getAge(client.birth_date)} {t('clients.years')}
                         </div>
                       ) : (
                         <span className="text-muted-foreground">-</span>
@@ -234,7 +285,7 @@ const Clients = () => {
                     <TableCell>
                       {client.charge_amount ? (
                         <div className="text-sm font-medium text-foreground">
-                          ${client.charge_amount}
+                          {formatCurrency(client.charge_amount)}
                         </div>
                       ) : (
                         <span className="text-muted-foreground">-</span>
@@ -242,18 +293,44 @@ const Clients = () => {
                     </TableCell>
                     <TableCell>
                       <Badge variant={client.is_active ? 'default' : 'secondary'}>
-                        {client.is_active ? 'Active' : 'Inactive'}
+                        {client.is_active ? t('common.active') : t('common.inactive')}
                       </Badge>
                     </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const balance = balanceMap.get(client.id);
+                        if (balance) {
+                          const isPositive = balance.balance >= 0;
+                          return (
+                            <div className="text-sm font-medium">
+                              <span className={isPositive ? 'text-green-600' : 'text-red-600'}>
+                                {isPositive ? '+' : ''}{formatCurrency(balance.balance)}
+                              </span>
+                            </div>
+                          );
+                        }
+                        return <span className="text-muted-foreground">{formatCurrency(0)}</span>;
+                      })()}
+                    </TableCell>
                     <TableCell className="text-right">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => setEditingClient(client)}
-                      >
-                        <Edit className="h-4 w-4 mr-1" />
-                        Edit
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => setSelectedClient(client)}
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          {t('common.details')}
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => setEditingClient(client)}
+                        >
+                          <Edit className="h-4 w-4 mr-1" />
+                          {t('common.edit')}
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -266,17 +343,17 @@ const Clients = () => {
           <CardContent className="text-center py-12">
             <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-medium text-foreground mb-2">
-              {searchTerm ? 'No clients found' : 'No clients yet'}
+              {searchTerm ? t('clients.noClients') : t('clients.noClientsYet')}
             </h3>
             <p className="text-muted-foreground mb-4">
               {searchTerm 
-                ? 'Try adjusting your search terms or add a new client.'
-                : 'Get started by adding your first client.'
+                ? t('clients.tryAdjustingSearch')
+                : t('clients.getStartedAdding')
               }
             </p>
             <Button onClick={() => setShowForm(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Add Client
+              {t('clients.newClient')}
             </Button>
           </CardContent>
         </Card>
@@ -296,6 +373,15 @@ const Clients = () => {
           open={!!editingClient} 
           onClose={() => setEditingClient(null)}
           client={editingClient}
+        />
+      )}
+
+      {/* Client Details Modal */}
+      {selectedClient && (
+        <ClientDetails
+          client={selectedClient}
+          open={!!selectedClient}
+          onClose={() => setSelectedClient(null)}
         />
       )}
     </div>

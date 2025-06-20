@@ -1,20 +1,31 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Clock, User } from "lucide-react";
 import { format } from "date-fns";
 import { useUpcomingAppointments } from "@/hooks/useAppointments";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTranslation } from "react-i18next";
 
 const UpcomingAppointments = () => {
+  const { t } = useTranslation();
   const { data: appointments, isLoading } = useUpcomingAppointments();
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'scheduled': return t('appointments.scheduled');
+      case 'completed': return t('appointments.completed');
+      case 'cancelled': return t('appointments.cancelled');
+      case 'no_show': return t('appointments.noShow');
+      default: return status;
+    }
+  };
 
   if (isLoading) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Upcoming Appointments</CardTitle>
-          <CardDescription>Next scheduled sessions</CardDescription>
+          <CardTitle>{t('dashboard.upcomingAppointmentsTitle')}</CardTitle>
+          <CardDescription>{t('dashboard.nextScheduledSessions')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -40,13 +51,13 @@ const UpcomingAppointments = () => {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Upcoming Appointments</CardTitle>
-          <CardDescription>Next scheduled sessions</CardDescription>
+          <CardTitle>{t('dashboard.upcomingAppointmentsTitle')}</CardTitle>
+          <CardDescription>{t('dashboard.nextScheduledSessions')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center text-muted-foreground py-8">
             <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
-            <p>No upcoming appointments</p>
+            <p>{t('dashboard.noUpcomingAppointments')}</p>
           </div>
         </CardContent>
       </Card>
@@ -56,8 +67,8 @@ const UpcomingAppointments = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Upcoming Appointments</CardTitle>
-        <CardDescription>Next scheduled sessions</CardDescription>
+        <CardTitle>{t('dashboard.upcomingAppointmentsTitle')}</CardTitle>
+        <CardDescription>{t('dashboard.nextScheduledSessions')}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
@@ -69,22 +80,24 @@ const UpcomingAppointments = () => {
                 </div>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900">
+                <p className="text-sm font-medium text-foreground">
                   {appointment.clients?.first_name} {appointment.clients?.last_name}
                 </p>
-                <p className="text-sm text-gray-500">
-                  {appointment.treatments?.name}
-                </p>
+                <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                  <span>{appointment.treatments?.name}</span>
+                  <span>•</span>
+                  <span>Dr. {appointment.therapists?.first_name} {appointment.therapists?.last_name}</span>
+                </div>
                 <div className="flex items-center space-x-2 mt-1">
-                  <Clock className="h-3 w-3 text-gray-400" />
-                  <span className="text-xs text-gray-500">
+                  <Clock className="h-3 w-3 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">
                     {format(new Date(appointment.start_time), 'MMM d, h:mm a')}
                   </span>
                 </div>
               </div>
               <div className="flex-shrink-0">
                 <Badge variant={appointment.status === 'scheduled' ? 'default' : 'secondary'}>
-                  {appointment.status}
+                  {getStatusText(appointment.status)}
                 </Badge>
               </div>
             </div>

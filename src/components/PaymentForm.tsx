@@ -1,0 +1,203 @@
+import { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useClients } from '@/hooks/useClients';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { useQueryClient } from '@tanstack/react-query';
+import { format } from 'date-fns';
+import { formatCurrency } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
+
+interface PaymentFormProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+export default function PaymentForm({ open, onClose }: PaymentFormProps) {
+  const { t } = useTranslation();
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [clientId, setClientId] = useState<string>('none');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'insurance'>('cash');
+  const [paymentDate, setPaymentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const { data: clients } = useClients();
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!amount || !description) {
+      toast({
+        title: t('finance.validationError'),
+        description: t('finance.fillRequiredFields'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      toast({
+        title: t('finance.invalidAmount'),
+        description: t('finance.enterValidAmount'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const paymentData = {
+        amount: numAmount,
+        description,
+        client_id: clientId === 'none' ? null : clientId,
+        method: paymentMethod,
+        payment_date: paymentDate,
+        received_by: user?.id || null,
+      };
+
+      const { error } = await supabase
+        .from('payments')
+        .insert(paymentData);
+
+      if (error) throw error;
+
+      toast({
+        title: t('finance.paymentRecorded'),
+        description: t('finance.paymentRecordedSuccess', { amount: formatCurrency(numAmount) }),
+      });
+
+      // Reset form
+      setAmount('');
+      setDescription('');
+      setClientId('none');
+      setPaymentMethod('cash');
+      setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
+      
+      onClose();
+
+      // Invalidate queries related to balance data
+      queryClient.invalidateQueries({ queryKey: ['client-balance'] });
+      queryClient.invalidateQueries({ queryKey: ['all-client-balances'] });
+      queryClient.invalidateQueries({ queryKey: ['daily-payments'] });
+      queryClient.invalidateQueries({ queryKey: ['monthly-payments'] });
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      toast({
+        title: t('common.error'),
+        description: t('finance.failedToRecordPayment'),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t('finance.recordPaymentTitle')}</DialogTitle>
+        </DialogHeader>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Amount */}
+          <div className="space-y-2">
+            <Label htmlFor="amount">{t('finance.amount')} *</Label>
+            <Input
+              id="amount"
+              type="number"
+              step="0.01"
+              min="0"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.00"
+              className="bg-input border-border text-foreground"
+              required
+            />
+          </div>
+
+          {/* Description */}
+          <div className="space-y-2">
+            <Label htmlFor="description">{t('finance.concept')} *</Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder={t('finance.paymentDescription')}
+              className="bg-input border-border text-foreground"
+              required
+            />
+          </div>
+
+          {/* Client (Optional) */}
+          <div className="space-y-2">
+            <Label htmlFor="client">{t('finance.clientOptional')}</Label>
+            <Select value={clientId} onValueChange={setClientId}>
+              <SelectTrigger className="bg-input border-border text-foreground">
+                <SelectValue placeholder={t('finance.selectClient')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{t('finance.noClient')}</SelectItem>
+                {clients?.map((client) => (
+                  <SelectItem key={client.id} value={client.id}>
+                    {client.first_name} {client.last_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Payment Method */}
+          <div className="space-y-2">
+            <Label htmlFor="method">{t('finance.paymentMethod')}</Label>
+            <Select value={paymentMethod} onValueChange={(value: any) => setPaymentMethod(value)}>
+              <SelectTrigger className="bg-input border-border text-foreground">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cash">{t('finance.cash')}</SelectItem>
+                <SelectItem value="card">{t('finance.card')}</SelectItem>
+                <SelectItem value="transfer">{t('finance.transfer')}</SelectItem>
+                <SelectItem value="insurance">{t('finance.insurance')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Payment Date */}
+          <div className="space-y-2">
+            <Label htmlFor="date">{t('finance.paymentDate')}</Label>
+            <Input
+              id="date"
+              type="date"
+              value={paymentDate}
+              onChange={(e) => setPaymentDate(e.target.value)}
+              className="bg-input border-border text-foreground"
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              {t('finance.cancel')}
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? t('finance.recording') : t('finance.recordPayment')}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+} 

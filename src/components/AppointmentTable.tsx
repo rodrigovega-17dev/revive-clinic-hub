@@ -1,10 +1,11 @@
-
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format } from 'date-fns';
 import { User, Eye } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 interface AppointmentTableProps {
   groupedAppointments: Record<string, { therapist: any; appointments: any[] }>;
@@ -12,6 +13,8 @@ interface AppointmentTableProps {
 }
 
 const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: AppointmentTableProps) => {
+  const { t } = useTranslation();
+  
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'scheduled': return 'bg-blue-100 text-blue-800';
@@ -31,6 +34,25 @@ const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: Appointme
     }
   };
 
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'scheduled': return t('appointments.scheduled');
+      case 'completed': return t('appointments.completed');
+      case 'cancelled': return t('appointments.cancelled');
+      case 'no_show': return t('appointments.noShow');
+      default: return status;
+    }
+  };
+
+  const getPaymentStatusText = (status: string) => {
+    switch (status) {
+      case 'paid': return t('appointments.paid');
+      case 'pending': return t('appointments.pending');
+      case 'overdue': return t('appointments.overdue');
+      default: return t('appointments.pending');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {Object.entries(groupedAppointments).map(([therapistId, { therapist, appointments }]) => (
@@ -42,7 +64,7 @@ const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: Appointme
               </div>
               {therapist?.first_name} {therapist?.last_name}
               <Badge variant="secondary" className="ml-auto">
-                {appointments.length} appointment{appointments.length !== 1 ? 's' : ''}
+                {appointments.length} {appointments.length !== 1 ? t('appointments.appointments') : t('appointments.appointment')}
               </Badge>
             </CardTitle>
           </CardHeader>
@@ -50,13 +72,13 @@ const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: Appointme
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Payment</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t('appointments.time')}</TableHead>
+                  <TableHead>{t('appointments.client')}</TableHead>
+                  <TableHead>{t('appointments.duration')}</TableHead>
+                  <TableHead>{t('appointments.amount')}</TableHead>
+                  <TableHead>{t('appointments.status')}</TableHead>
+                  <TableHead>{t('appointments.payment')}</TableHead>
+                  <TableHead className="text-right">{t('appointments.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -80,19 +102,21 @@ const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: Appointme
                     </TableCell>
                     <TableCell>
                       {appointment.treatments?.duration_minutes || 
-                       (new Date(appointment.end_time).getTime() - new Date(appointment.start_time).getTime()) / 60000} min
+                       (new Date(appointment.end_time).getTime() - new Date(appointment.start_time).getTime()) / 60000} {t('appointments.min')}
                     </TableCell>
                     <TableCell>
-                      ${appointment.payment_amount || 0}
+                      <p className="text-sm font-medium text-foreground">
+                        {formatCurrency(appointment.payment_amount || 0)}
+                      </p>
                     </TableCell>
                     <TableCell>
                       <Badge className={getStatusColor(appointment.status)}>
-                        {appointment.status}
+                        {getStatusText(appointment.status)}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge className={getPaymentStatusColor(appointment.payment_status)}>
-                        {appointment.payment_status || 'pending'}
+                        {getPaymentStatusText(appointment.payment_status)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -102,7 +126,7 @@ const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: Appointme
                         onClick={() => onAppointmentClick(appointment)}
                       >
                         <Eye className="h-4 w-4 mr-1" />
-                        View
+                        {t('appointments.view')}
                       </Button>
                     </TableCell>
                   </TableRow>

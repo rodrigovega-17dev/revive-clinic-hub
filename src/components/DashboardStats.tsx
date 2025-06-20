@@ -1,10 +1,12 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Calendar, DollarSign, CheckCircle } from "lucide-react";
 import { useTodayStats } from "@/hooks/useAppointments";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTranslation } from "react-i18next";
+import { formatCurrency } from "@/lib/utils";
 
 const DashboardStats = () => {
+  const { t } = useTranslation();
   const { data: stats, isLoading } = useTodayStats();
 
   if (isLoading) {
@@ -30,49 +32,49 @@ const DashboardStats = () => {
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
+          <CardTitle className="text-sm font-medium">{t('dashboard.totalClientsTitle')}</CardTitle>
           <Users className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{stats?.totalClients || 0}</div>
           <p className="text-xs text-muted-foreground">
-            Active client records
+            {t('dashboard.activeClientRecords')}
           </p>
         </CardContent>
       </Card>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Today's Appointments</CardTitle>
+          <CardTitle className="text-sm font-medium">{t('dashboard.todaysAppointments')}</CardTitle>
           <Calendar className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{stats?.totalAppointments || 0}</div>
           <p className="text-xs text-muted-foreground">
-            Scheduled for today
+            {t('dashboard.scheduledForToday')}
           </p>
         </CardContent>
       </Card>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Completed Today</CardTitle>
+          <CardTitle className="text-sm font-medium">{t('dashboard.completedToday')}</CardTitle>
           <CheckCircle className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{stats?.completedAppointments || 0}</div>
           <p className="text-xs text-muted-foreground">
-            Sessions completed
+            {t('dashboard.sessionsCompleted')}
           </p>
         </CardContent>
       </Card>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Today's Revenue</CardTitle>
+          <CardTitle className="text-sm font-medium">{t('dashboard.todaysRevenue')}</CardTitle>
           <DollarSign className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">${stats?.todayRevenue?.toFixed(2) || '0.00'}</div>
+          <div className="text-2xl font-bold">{formatCurrency(stats?.todayRevenue)}</div>
           <p className="text-xs text-muted-foreground">
-            Total payments received
+            {t('dashboard.totalPaymentsReceived')}
           </p>
         </CardContent>
       </Card>

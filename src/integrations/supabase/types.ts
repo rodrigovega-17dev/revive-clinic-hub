@@ -27,6 +27,8 @@ export type Database = {
           therapist_id: string
           treatment_id: string | null
           updated_at: string
+          facturado: boolean | null
+          iva_amount: number | null
         }
         Insert: {
           client_id: string
@@ -45,6 +47,8 @@ export type Database = {
           therapist_id: string
           treatment_id?: string | null
           updated_at?: string
+          facturado?: boolean | null
+          iva_amount?: number | null
         }
         Update: {
           client_id?: string
@@ -63,6 +67,8 @@ export type Database = {
           therapist_id?: string
           treatment_id?: string | null
           updated_at?: string
+          facturado?: boolean | null
+          iva_amount?: number | null
         }
         Relationships: [
           {
@@ -426,6 +432,7 @@ export type Database = {
           specialties: string[] | null
           updated_at: string
           user_id: string | null
+          commission_percentage: number | null
         }
         Insert: {
           created_at?: string
@@ -438,6 +445,7 @@ export type Database = {
           specialties?: string[] | null
           updated_at?: string
           user_id?: string | null
+          commission_percentage?: number | null
         }
         Update: {
           created_at?: string
@@ -450,6 +458,7 @@ export type Database = {
           specialties?: string[] | null
           updated_at?: string
           user_id?: string | null
+          commission_percentage?: number | null
         }
         Relationships: [
           {
