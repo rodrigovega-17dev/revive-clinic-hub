@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useCreateTherapist } from '@/hooks/useTherapists';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import CalendarColorPicker from './CalendarColorPicker';
 
 interface TherapistFormProps {
   open: boolean;
@@ -17,8 +18,10 @@ const TherapistForm = ({ open, onClose }: TherapistFormProps) => {
   const { t } = useTranslation();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
   const [commissionPercentage, setCommissionPercentage] = useState('0');
+  const [calendarColorId, setCalendarColorId] = useState('1');
   const [specialties, setSpecialties] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -28,7 +31,7 @@ const TherapistForm = ({ open, onClose }: TherapistFormProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!firstName.trim() || !lastName.trim()) {
+    if (!firstName.trim() || !lastName.trim() || !email.trim()) {
       toast({
         title: t('common.validationError'),
         description: t('common.firstNameRequired'),
@@ -41,9 +44,11 @@ const TherapistForm = ({ open, onClose }: TherapistFormProps) => {
       await createTherapist.mutateAsync({
         first_name: firstName.trim(),
         last_name: lastName.trim(),
+        email: email.trim(),
         license_number: licenseNumber.trim() || null,
         commission_percentage: parseFloat(commissionPercentage) || 0,
-        specialties: specialties.length > 0 ? specialties : null,
+        calendar_color_id: calendarColorId,
+        specialties: null,
         user_id: null,
       });
 
@@ -55,9 +60,10 @@ const TherapistForm = ({ open, onClose }: TherapistFormProps) => {
       onClose();
       setFirstName('');
       setLastName('');
+      setEmail('');
       setLicenseNumber('');
       setCommissionPercentage('0');
-      setSpecialties([]);
+      setCalendarColorId('1');
     } catch (error) {
       toast({
         title: t('common.error'),
@@ -67,86 +73,112 @@ const TherapistForm = ({ open, onClose }: TherapistFormProps) => {
     }
   };
 
+  const handleClose = () => {
+    if (!isSubmitting) {
+      onClose();
+      setFirstName('');
+      setLastName('');
+      setEmail('');
+      setLicenseNumber('');
+      setCommissionPercentage('0');
+      setCalendarColorId('1');
+    }
+  };
+
+  const addSpecialty = () => {
+    const specialty = prompt(t('therapists.enterSpecialty'));
+    if (specialty && specialty.trim()) {
+      setSpecialties([...specialties, specialty.trim()]);
+    }
+  };
+
+  const removeSpecialty = (index: number) => {
+    setSpecialties(specialties.filter((_, i) => i !== index));
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md bg-card border-border">
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle className="text-foreground">{t('therapists.addNewTherapist')}</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogTitle>{t('therapists.createTherapist')}</DialogTitle>
+          <DialogDescription>
             {t('therapists.createTherapistProfile')}
           </DialogDescription>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="first_name" className="text-foreground">
-              {t('common.firstName')} *
-            </Label>
+              <Label htmlFor="firstName">{t('common.firstName')}</Label>
             <Input
-              id="first_name"
-              placeholder={t('common.enterFirstName')}
+                id="firstName"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
-              className="bg-input border-border text-foreground"
+                placeholder={t('common.firstName')}
               required
+              className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
             />
           </div>
-
           <div className="space-y-2">
-            <Label htmlFor="last_name" className="text-foreground">
-              {t('common.lastName')} *
-            </Label>
+              <Label htmlFor="lastName">{t('common.lastName')}</Label>
             <Input
-              id="last_name"
-              placeholder={t('common.enterLastName')}
+                id="lastName"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
-              className="bg-input border-border text-foreground"
+                placeholder={t('common.lastName')}
               required
+              className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
+            />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="email">{t('common.email')}</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder={t('common.email')}
+              required
+              className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="license_number" className="text-foreground">
-              {t('common.licenseNumber')}
-            </Label>
+            <Label htmlFor="licenseNumber">{t('common.license')}</Label>
             <Input
-              id="license_number"
-              placeholder={t('common.enterLicenseNumber')}
+              id="licenseNumber"
               value={licenseNumber}
               onChange={(e) => setLicenseNumber(e.target.value)}
-              className="bg-input border-border text-foreground"
+              placeholder={t('common.license')}
+              className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="commission_percentage" className="text-foreground">
-              {t('common.commissionPercentage')}
-            </Label>
+            <Label htmlFor="commissionPercentage">{t('therapists.commissionPercentage')}</Label>
             <Input
-              id="commission_percentage"
-              placeholder={t('common.enterCommissionPercentage')}
+              id="commissionPercentage"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
               value={commissionPercentage}
               onChange={(e) => setCommissionPercentage(e.target.value)}
-              className="bg-input border-border text-foreground"
+              placeholder="0"
+              className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="specialties" className="text-foreground">
-              {t('common.specialties')}
-            </Label>
-            <Input
-              id="specialties"
-              placeholder={t('common.enterSpecialties')}
-              value={specialties.join(', ')}
-              onChange={(e) => setSpecialties(e.target.value.split(',').map(s => s.trim()))}
-              className="bg-input border-border text-foreground"
-            />
-          </div>
+          <CalendarColorPicker
+            value={calendarColorId}
+            onChange={setCalendarColorId}
+            label={t('therapists.calendarColor')}
+          />
 
-          <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={onClose}>
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button type="button" variant="outline" onClick={handleClose}>
               {t('common.cancel')}
             </Button>
             <Button type="submit" disabled={createTherapist.isPending}>

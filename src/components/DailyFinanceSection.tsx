@@ -37,7 +37,9 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
             start_time,
             therapists (
               first_name,
-              last_name
+              last_name,
+              calendar_color_id,
+              email
             )
           )
         `)

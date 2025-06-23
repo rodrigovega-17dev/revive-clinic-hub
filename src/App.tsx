@@ -17,6 +17,7 @@ import Payroll from "./pages/Payroll";
 import Settings from "./pages/Settings";
 import ComingSoon from "./pages/ComingSoon";
 import NotFound from "./pages/NotFound";
+import GoogleAuthCallback from "./pages/GoogleAuthCallback";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/payroll" element={<ProtectedRoute><Layout><Payroll /></Layout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Layout><ComingSoon title="Reports" description="Comprehensive reporting and analytics for your clinic" /></Layout></ProtectedRoute>} />
+            <Route path="/google-auth-callback" element={<GoogleAuthCallback />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

@@ -6,15 +6,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import DatePicker from '@/components/ui/date-picker';
 import { supabase } from '@/integrations/supabase/client';
 import { useClients } from '@/hooks/useClients';
 import { useTherapists } from '@/hooks/useTherapists';
 import { useTreatments } from '@/hooks/useTreatments';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTherapistAvailability, useCreateAppointment } from '@/hooks/useAppointments';
+import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/utils';
+import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
+import { AlertTriangle, Clock, User } from 'lucide-react';
 
 interface AppointmentFormProps {
   open: boolean;
@@ -31,11 +37,33 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
   const [sessionDuration, setSessionDuration] = useState('60');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [notes, setNotes] = useState('');
+  const [showConflictResolution, setShowConflictResolution] = useState(false);
+  
   const { data: clients } = useClients();
   const { data: therapists } = useTherapists();
   const { data: treatments } = useTreatments();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { autoSyncAppointment } = useGoogleCalendar();
+  const createAppointmentMutation = useCreateAppointment();
+
+  // Check for therapist availability
+  const { data: availability, isLoading: checkingAvailability } = useTherapistAvailability(
+    therapistId,
+    startDate,
+    startHour,
+    parseInt(sessionDuration)
+  );
+
+  // Debug logging
+  console.log('AppointmentForm: Availability check', {
+    therapistId,
+    startDate,
+    startHour,
+    sessionDuration,
+    availability,
+    checkingAvailability
+  });
 
   const treatmentPrice = treatments?.find(treatment => treatment.id === treatmentId)?.price || 0;
   const selectedClient = clients?.find(client => client.id === clientId);
@@ -66,6 +94,32 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
     }
   };
 
+  const handleTherapistChange = (newTherapistId: string) => {
+    setTherapistId(newTherapistId);
+    // Reset conflict resolution when therapist changes
+    setShowConflictResolution(false);
+  };
+
+  const handleDateChange = (newDate: string) => {
+    setStartDate(newDate);
+    // Reset conflict resolution when date changes
+    setShowConflictResolution(false);
+  };
+
+  const handleTimeChange = (newTime: string) => {
+    setStartHour(newTime);
+    // Reset conflict resolution when time changes
+    setShowConflictResolution(false);
+  };
+
+  // Handle alternative time slot selection
+  const handleAlternativeTimeSelect = (timeSlot: { time: string; label: string }) => {
+    const selectedTime = new Date(timeSlot.time);
+    setStartDate(format(selectedTime, 'yyyy-MM-dd'));
+    setStartHour(selectedTime.getHours().toString().padStart(2, '0'));
+    setShowConflictResolution(false);
+  };
+
   // Calculate end time based on start hour and duration
   const calculateEndTime = (hour: string, duration: string) => {
     const startHourNum = parseInt(hour);
@@ -84,6 +138,16 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
       toast({
         title: t('common.error'),
         description: t('common.fillRequiredFields'),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check for conflicts before submitting
+    if (availability?.hasConflict) {
+      toast({
+        title: t('common.error'),
+        description: t('appointments.conflictDetected'),
         variant: "destructive",
       });
       return;
@@ -122,26 +186,9 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
 
       console.log('Creating appointment with data:', appointmentData);
 
-      const { data, error } = await supabase
-        .from('appointments')
-        .insert([appointmentData])
-        .select(`
-          *,
-          clients (first_name, last_name),
-          therapists (first_name, last_name),
-          treatments (name, price)
-        `)
-        .single();
-
-      if (error) {
-        console.error('Error creating appointment:', error);
-        throw error;
-      }
+      const data = await createAppointmentMutation.mutateAsync(appointmentData);
 
       console.log('Appointment created:', data);
-
-      queryClient.invalidateQueries({ queryKey: ['appointments'] });
-      queryClient.invalidateQueries({ queryKey: ['appointments-by-date'] });
       
       toast({
         title: t('common.success'),
@@ -157,8 +204,11 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
       setSessionDuration('60');
       setPaymentAmount('');
       setNotes('');
+      setShowConflictResolution(false);
       
       onClose();
+
+      autoSyncAppointment(data);
     } catch (error: any) {
       console.error('Error creating appointment:', error);
       toast({
@@ -175,14 +225,110 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold text-foreground">{t('common.scheduleAppointment')}</DialogTitle>
         </DialogHeader>
+        
+        {/* Conflict Resolution Section */}
+        {availability?.hasConflict && (
+          <Card className="mb-4 border-orange-200 bg-orange-50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-orange-800">
+                <AlertTriangle className="h-5 w-5" />
+                {t('appointments.schedulingConflict')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <p className="text-orange-700 mb-2">{t('appointments.therapistUnavailable')}</p>
+                <div className="space-y-2">
+                  {availability.conflicts.map((conflict: any) => (
+                    <div key={conflict.id} className="flex items-center gap-2 text-sm">
+                      <Clock className="h-4 w-4 text-orange-600" />
+                      <span>
+                        {format(new Date(conflict.start_time), 'h:mm a')} - {format(new Date(conflict.end_time), 'h:mm a')}
+                      </span>
+                      <span className="text-muted-foreground">
+                        ({conflict.clients?.first_name} {conflict.clients?.last_name})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {availability.availableSlots.length > 0 && (
+                <div>
+                  <p className="text-orange-700 mb-2 font-medium">
+                    {t('appointments.alternativeTimes')} ({availability.availableSlots.length} {t('appointments.available')})
+                  </p>
+                  
+                  {/* Show next available time prominently */}
+                  {availability.availableSlots[0] && (
+                    <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-green-800 text-sm font-medium mb-1">
+                        {t('appointments.nextAvailable')}:
+                      </p>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleAlternativeTimeSelect(availability.availableSlots[0])}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        {availability.availableSlots[0].label}
+                      </Button>
+                    </div>
+                  )}
+                  
+                  <div className="grid grid-cols-3 gap-2">
+                    {availability.availableSlots.slice(1).map((slot, index) => (
+                      <Button
+                        key={index}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleAlternativeTimeSelect(slot)}
+                        className="text-xs"
+                      >
+                        {slot.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2 border-t border-orange-200">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowConflictResolution(false)}
+                  className="text-orange-700 border-orange-300"
+                >
+                  {t('appointments.chooseDifferentTime')}
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => setShowConflictResolution(false)}
+                >
+                  {t('common.cancel')}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Availability Check Indicator */}
+        {therapistId && startDate && startHour && checkingAvailability && (
+          <Alert className="mb-4">
+            <Clock className="h-4 w-4" />
+            <AlertDescription>
+              {t('appointments.checkingAvailability')}
+            </AlertDescription>
+          </Alert>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label htmlFor="client">{t('appointments.client')} *</Label>
             <Select value={clientId} onValueChange={handleClientChange} required>
-              <SelectTrigger className="bg-input border-border text-foreground">
+              <SelectTrigger className="!bg-input !border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:!border-primary">
                 <SelectValue placeholder={t('common.selectClient')} />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-popover border-border">
                 {clients?.map((client) => (
                   <SelectItem key={client.id} value={client.id}>
                     {client.first_name} {client.last_name}
@@ -194,11 +340,11 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
 
           <div>
             <Label htmlFor="therapist">{t('appointments.therapist')} *</Label>
-            <Select value={therapistId} onValueChange={setTherapistId} required>
-              <SelectTrigger className="bg-input border-border text-foreground">
+            <Select value={therapistId} onValueChange={handleTherapistChange} required>
+              <SelectTrigger className="!bg-input !border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:!border-primary">
                 <SelectValue placeholder={t('common.selectTherapist')} />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-popover border-border">
                 {therapists?.map((therapist) => (
                   <SelectItem key={therapist.id} value={therapist.id}>
                     {therapist.first_name} {therapist.last_name}
@@ -211,10 +357,10 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
           <div>
             <Label htmlFor="treatment">{t('appointments.treatment')}</Label>
             <Select value={treatmentId} onValueChange={handleTreatmentChange}>
-              <SelectTrigger className="bg-input border-border text-foreground">
+              <SelectTrigger className="!bg-input !border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:!border-primary">
                 <SelectValue placeholder={t('common.selectTreatment')} />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-popover border-border">
                 {treatments?.map((treatment) => (
                   <SelectItem key={treatment.id} value={treatment.id}>
                     {treatment.name} - {formatCurrency(treatment.price)}
@@ -225,25 +371,25 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
+          <div>
               <Label htmlFor="startDate">{t('common.startDate')} *</Label>
-              <Input
+            <Input
                 id="startDate"
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="bg-input border-border text-foreground"
-                required
-              />
-            </div>
-
-            <div>
+                onChange={(e) => handleDateChange(e.target.value)}
+              className="bg-input border-border text-foreground"
+                  required
+                />
+              </div>
+              
+              <div>
               <Label htmlFor="startHour">{t('common.startTime')} *</Label>
-              <Select value={startHour} onValueChange={setStartHour} required>
-                <SelectTrigger className="bg-input border-border text-foreground">
+                <Select value={startHour} onValueChange={handleTimeChange} required>
+                  <SelectTrigger className="!bg-input !border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:!border-primary">
                   <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border-border">
                   {Array.from({ length: 12 }, (_, i) => {
                     const hour = (i + 8).toString().padStart(2, '0');
                     return (
@@ -252,26 +398,24 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
                       </SelectItem>
                     );
                   })}
-                </SelectContent>
-              </Select>
-            </div>
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <div>
+              <div>
               <Label htmlFor="sessionDuration">{t('common.sessionDuration')} *</Label>
-              <Select value={sessionDuration} onValueChange={setSessionDuration} required>
-                <SelectTrigger className="bg-input border-border text-foreground">
+                <Select value={sessionDuration} onValueChange={setSessionDuration} required>
+                  <SelectTrigger className="!bg-input !border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:!border-primary">
                   <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="30">30 {t('common.duration')}</SelectItem>
-                  <SelectItem value="60">60 {t('common.duration')}</SelectItem>
-                  <SelectItem value="90">90 {t('common.duration')}</SelectItem>
-                  <SelectItem value="120">120 {t('common.duration')}</SelectItem>
-                </SelectContent>
-              </Select>
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border-border">
+                  <SelectItem value="60">60 {t('appointments.minutes')}</SelectItem>
+                  <SelectItem value="120">120 {t('appointments.minutes')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          </div>
-
+            
           <div>
             <Label htmlFor="paymentAmount">{t('common.paymentAmount')} *</Label>
             <Input
@@ -293,7 +437,7 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
               placeholder={t('common.enterDescription')}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="bg-input border-border text-foreground min-h-[80px]"
+              className="bg-input border-border text-foreground min-h-[80px] focus:!ring-2 focus:!ring-primary focus:!ring-offset-2 focus:!border-primary"
             />
           </div>
 
@@ -301,7 +445,10 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
             <Button type="button" variant="outline" onClick={onClose}>
               {t('common.cancel')}
             </Button>
-            <Button type="submit">
+            <Button 
+              type="submit"
+              disabled={availability?.hasConflict && !showConflictResolution}
+            >
               {t('common.scheduleAppointment')}
             </Button>
           </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,15 +8,20 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useUpdateAppointment } from '@/hooks/useAppointments';
+import { useUpdateAppointment, useTherapistAvailability } from '@/hooks/useAppointments';
 import { useTherapists } from '@/hooks/useTherapists';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Calendar, User, Clock, DollarSign, CreditCard, CalendarDays } from 'lucide-react';
+import { Loader2, Calendar, User, Clock, DollarSign, CreditCard, CalendarDays, ExternalLink, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
+import { es, enUS } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatCurrency } from '@/lib/utils';
+import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
+import { useDeleteAppointment } from '@/hooks/useAppointments';
+import { useLanguage } from '@/hooks/useLanguage';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface AppointmentDetailsProps {
   appointment: any;
@@ -26,6 +31,8 @@ interface AppointmentDetailsProps {
 
 const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsProps) => {
   const { t } = useTranslation();
+  const { currentLanguage } = useLanguage();
+  const locale = currentLanguage === 'es' ? es : enUS;
   const [activeTab, setActiveTab] = useState('details');
   const [paymentData, setPaymentData] = useState({
     amount: appointment?.payment_amount || 0,
@@ -40,10 +47,24 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
     therapist_id: appointment?.therapist_id || '',
   });
   
+  // Extract date and time for availability check
+  const [rescheduleDate, rescheduleTime] = rescheduleData.start_time.split('T');
+  const rescheduleHour = rescheduleTime ? rescheduleTime.split(':')[0] : '';
+  
+  // Check for therapist availability when rescheduling
+  const { data: availability, isLoading: checkingAvailability } = useTherapistAvailability(
+    rescheduleData.therapist_id || appointment?.therapist_id,
+    rescheduleDate,
+    rescheduleHour,
+    parseInt(rescheduleData.duration)
+  );
+  
   const updateAppointment = useUpdateAppointment();
   const { data: therapists } = useTherapists();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isAuthenticated, syncAppointment, deleteAppointment } = useGoogleCalendar();
+  const deleteAppointmentMutation = useDeleteAppointment();
 
   // Calculate IVA amount (16%)
   const ivaAmount = paymentData.facturado ? paymentData.amount * 0.16 : 0;
@@ -153,6 +174,16 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       return;
     }
 
+    // Check for conflicts before submitting
+    if (availability?.hasConflict) {
+      toast({
+        title: t('appointments.error'),
+        description: t('appointments.conflictDetected'),
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const startTime = new Date(rescheduleData.start_time);
       const durationMinutes = parseInt(rescheduleData.duration);
@@ -199,6 +230,66 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       toast({
         title: t('appointments.error'),
         description: t('appointments.failedToCancel'),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleManualSync = async () => {
+    try {
+      await syncAppointment({ 
+        appointment,
+        options: {
+          sendInvites: true,
+          reminderMinutes: 15,
+        }
+      });
+      
+      toast({
+        title: t('appointments.success'),
+        description: t('appointments.syncedToGoogleCalendar'),
+      });
+    } catch (error) {
+      console.error('Manual sync failed:', error);
+      toast({
+        title: t('appointments.error'),
+        description: t('appointments.failedToSync'),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDeleteAppointment = async () => {
+    try {
+      // If appointment has a Google Calendar event ID, delete it first
+      if (appointment.google_calendar_event_id) {
+        try {
+          await deleteAppointment({ googleEventId: appointment.google_calendar_event_id });
+        } catch (error) {
+          console.warn('Failed to delete from Google Calendar, but continuing with local deletion:', error);
+          // Continue with local deletion even if Google Calendar fails
+        }
+      }
+      
+      // Delete from database
+      const { error } = await supabase
+        .from('appointments')
+        .delete()
+        .eq('id', appointment.id);
+      
+      if (error) throw error;
+
+      toast({
+        title: t('appointments.success'),
+        description: t('appointments.appointmentDeleted'),
+      });
+      
+      onClose();
+    } catch (error) {
+      console.error('Error deleting appointment:', error);
+      toast({
+        title: t('appointments.error'),
+        description: t('appointments.failedToDelete'),
         variant: 'destructive',
       });
     }
@@ -254,6 +345,18 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                       {formatCurrency(appointment.payment_amount || 0)}
                     </span>
                   </div>
+                  <div className="flex items-center space-x-2">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-foreground">
+                      {t('appointments.therapist')}: {appointment.therapists?.first_name} {appointment.therapists?.last_name}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-foreground">
+                      {t('appointments.treatment')}: {appointment.treatments?.name}
+                    </span>
+                  </div>
                 </div>
                 
                 <div className="flex items-center space-x-4">
@@ -273,23 +376,65 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   </div>
                 </div>
 
+                {/* Google Calendar Sync Status */}
+                {isAuthenticated && (
+                  <div className="flex items-center justify-between pt-2 border-t border-border">
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">
+                        {appointment.google_calendar_event_id ? (
+                          <span className="flex items-center space-x-1">
+                            <span className="text-green-600">✓</span>
+                            <span>{t('appointments.syncedWithGoogleCalendar')}</span>
+                            <ExternalLink className="h-3 w-3" />
+                          </span>
+                        ) : (
+                          <span className="text-orange-600">{t('appointments.notSyncedWithGoogleCalendar')}</span>
+                        )}
+                      </span>
+                    </div>
+                    
+                    {!appointment.google_calendar_event_id && (
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={handleManualSync}
+                        className="text-xs"
+                      >
+                        <Calendar className="h-3 w-3 mr-1" />
+                        {t('appointments.syncToGoogleCalendar')}
+                      </Button>
+                    )}
+                  </div>
+                )}
+
                 {appointment.notes && (
-                  <div>
-                    <span className="text-muted-foreground">{t('appointments.notes')}:</span>
-                    <p className="text-foreground mt-1 p-2 bg-muted/50 rounded">{appointment.notes}</p>
+                  <div className="pt-4 border-t border-border">
+                    <h4 className="font-medium text-foreground mb-2">{t('appointments.notes')}</h4>
+                    <p className="text-muted-foreground">{appointment.notes}</p>
                   </div>
                 )}
               </CardContent>
             </Card>
 
             <div className="flex justify-between space-x-3">
-              <Button 
-                variant="destructive" 
-                onClick={handleCancelAppointment}
-                disabled={updateAppointment.isPending || appointment.status === 'cancelled'}
-              >
-                {t('appointments.cancelAppointment')}
-              </Button>
+              {appointment.status === 'cancelled' ? (
+                <Button 
+                  variant="destructive" 
+                  onClick={handleDeleteAppointment}
+                  disabled={updateAppointment.isPending}
+                >
+                  {t('appointments.deleteAppointment')}
+                </Button>
+              ) : (
+                <Button 
+                  variant="destructive" 
+                  onClick={handleCancelAppointment}
+                  disabled={updateAppointment.isPending || appointment.status === 'cancelled'}
+                >
+                  {t('appointments.cancelAppointment')}
+                </Button>
+              )}
               
               <Button variant="outline" onClick={onClose}>
                 {t('appointments.close')}
@@ -443,6 +588,94 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                       </Select>
                     </div>
                   </div>
+
+                  {/* Availability Check Indicator */}
+                  {rescheduleDate && rescheduleHour && checkingAvailability && (
+                    <Alert className="mb-4">
+                      <Clock className="h-4 w-4" />
+                      <AlertDescription>
+                        {t('appointments.checkingAvailability')}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* Conflict Warning */}
+                  {availability?.hasConflict && (
+                    <div className="space-y-3">
+                      <Alert className="border-orange-200 bg-orange-50">
+                        <AlertTriangle className="h-4 w-4 text-orange-600" />
+                        <AlertDescription className="text-orange-700">
+                          {t('appointments.therapistUnavailable')}
+                        </AlertDescription>
+                      </Alert>
+                      
+                      <div className="space-y-2 text-sm">
+                        <p className="font-medium text-orange-700">{t('appointments.conflictingAppointments')}:</p>
+                        {availability.conflicts.map((conflict: any) => (
+                          <div key={conflict.id} className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-orange-600" />
+                            <span>
+                              {format(new Date(conflict.start_time), 'h:mm a', { locale })} - {format(new Date(conflict.end_time), 'h:mm a', { locale })}
+                            </span>
+                            <span className="text-muted-foreground">
+                              ({conflict.clients?.first_name} {conflict.clients?.last_name})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {availability.availableSlots.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="font-medium text-orange-700">
+                            {t('appointments.alternativeTimes')} ({availability.availableSlots.length} {t('appointments.available')})
+                          </p>
+                          
+                          {/* Show next available time prominently */}
+                          {availability.availableSlots[0] && (
+                            <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                              <p className="text-green-800 text-sm font-medium mb-1">
+                                {t('appointments.nextAvailable')}:
+                              </p>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => {
+                                  const selectedTime = new Date(availability.availableSlots[0].time);
+                                  setRescheduleData(prev => ({
+                                    ...prev,
+                                    start_time: format(selectedTime, "yyyy-MM-dd'T'HH:mm")
+                                  }));
+                                }}
+                                className="bg-green-600 hover:bg-green-700"
+                              >
+                                {availability.availableSlots[0].label}
+                              </Button>
+                            </div>
+                          )}
+                          
+                          <div className="grid grid-cols-3 gap-2">
+                            {availability.availableSlots.slice(1).map((slot: any, index: number) => (
+                              <Button
+                                key={index}
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const selectedTime = new Date(slot.time);
+                                  setRescheduleData(prev => ({
+                                    ...prev,
+                                    start_time: format(selectedTime, "yyyy-MM-dd'T'HH:mm")
+                                  }));
+                                }}
+                                className="text-xs"
+                              >
+                                {slot.label}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <Button 
                     onClick={handleReschedule} 

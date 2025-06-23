@@ -433,6 +433,8 @@ export type Database = {
           updated_at: string
           user_id: string | null
           commission_percentage: number | null
+          calendar_color_id: string | null
+          email: string | null
         }
         Insert: {
           created_at?: string
@@ -446,6 +448,8 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
           commission_percentage?: number | null
+          calendar_color_id?: string | null
+          email?: string | null
         }
         Update: {
           created_at?: string
@@ -459,6 +463,8 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
           commission_percentage?: number | null
+          calendar_color_id?: string | null
+          email?: string | null
         }
         Relationships: [
           {

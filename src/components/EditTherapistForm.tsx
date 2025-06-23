@@ -8,65 +8,48 @@ import { Badge } from '@/components/ui/badge';
 import { useUpdateTherapist } from '@/hooks/useTherapists';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, X } from 'lucide-react';
+import CalendarColorPicker from './CalendarColorPicker';
 import type { Tables } from '@/integrations/supabase/types';
 
 type Therapist = Tables<'therapists'>;
 
 interface EditTherapistFormProps {
+  therapist: Therapist | null;
   open: boolean;
   onClose: () => void;
-  therapist: Therapist;
 }
 
-const EditTherapistForm = ({ open, onClose, therapist }: EditTherapistFormProps) => {
+const EditTherapistForm = ({ therapist, open, onClose }: EditTherapistFormProps) => {
   const { t } = useTranslation();
-  const [formData, setFormData] = useState({
-    first_name: '',
-    last_name: '',
-    license_number: '',
-    commission_percentage: 0,
-    specialties: [] as string[],
-    newSpecialty: '',
-  });
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [licenseNumber, setLicenseNumber] = useState('');
+  const [commissionPercentage, setCommissionPercentage] = useState('0');
+  const [calendarColorId, setCalendarColorId] = useState('1');
+  const [specialties, setSpecialties] = useState<string[]>([]);
   
   const updateTherapist = useUpdateTherapist();
   const { toast } = useToast();
 
-  // Populate form with therapist data when modal opens
   useEffect(() => {
-    if (therapist && open) {
-      setFormData({
-        first_name: therapist.first_name || '',
-        last_name: therapist.last_name || '',
-        license_number: therapist.license_number || '',
-        commission_percentage: therapist.commission_percentage || 0,
-        specialties: therapist.specialties || [],
-        newSpecialty: '',
-      });
+    if (therapist) {
+      setFirstName(therapist.first_name || '');
+      setLastName(therapist.last_name || '');
+      setEmail(therapist.email || '');
+      setLicenseNumber(therapist.license_number || '');
+      setCommissionPercentage(therapist.commission_percentage?.toString() || '0');
+      setCalendarColorId(therapist.calendar_color_id || '1');
+      setSpecialties(therapist.specialties || []);
     }
-  }, [therapist, open]);
-
-  const handleAddSpecialty = () => {
-    if (formData.newSpecialty.trim() && !formData.specialties.includes(formData.newSpecialty.trim())) {
-      setFormData(prev => ({
-        ...prev,
-        specialties: [...prev.specialties, prev.newSpecialty.trim()],
-        newSpecialty: '',
-      }));
-    }
-  };
-
-  const handleRemoveSpecialty = (specialty: string) => {
-    setFormData(prev => ({
-      ...prev,
-      specialties: prev.specialties.filter(s => s !== specialty),
-    }));
-  };
+  }, [therapist]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.first_name.trim() || !formData.last_name.trim()) {
+    if (!therapist) return;
+    
+    if (!firstName.trim() || !lastName.trim() || !email.trim()) {
       toast({
         title: t('common.validationError'),
         description: t('common.firstNameRequired'),
@@ -78,11 +61,13 @@ const EditTherapistForm = ({ open, onClose, therapist }: EditTherapistFormProps)
     try {
       await updateTherapist.mutateAsync({
         id: therapist.id,
-        first_name: formData.first_name.trim(),
-        last_name: formData.last_name.trim(),
-        license_number: formData.license_number.trim() || null,
-        commission_percentage: formData.commission_percentage,
-        specialties: formData.specialties.length > 0 ? formData.specialties : null,
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        email: email.trim(),
+        license_number: licenseNumber.trim() || null,
+        commission_percentage: parseFloat(commissionPercentage) || 0,
+        calendar_color_id: calendarColorId,
+        specialties: null,
       });
 
       toast({
@@ -100,114 +85,113 @@ const EditTherapistForm = ({ open, onClose, therapist }: EditTherapistFormProps)
     }
   };
 
+  const handleClose = () => {
+    if (!updateTherapist.isPending) {
+      onClose();
+    }
+  };
+
+  const addSpecialty = () => {
+    const specialty = prompt(t('therapists.enterSpecialty'));
+    if (specialty && specialty.trim()) {
+      setSpecialties([...specialties, specialty.trim()]);
+    }
+  };
+
+  const removeSpecialty = (index: number) => {
+    setSpecialties(specialties.filter((_, i) => i !== index));
+  };
+
+  if (!therapist) return null;
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md bg-card border-border">
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle className="text-foreground">{t('common.editTherapist')}</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            {t('common.updateTherapistProfile')}
+          <DialogTitle>{t('therapists.updateTherapist')}</DialogTitle>
+          <DialogDescription>
+            {t('therapists.updateTherapistProfile')}
           </DialogDescription>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="first_name" className="text-foreground">
-              {t('common.firstName')} *
-            </Label>
+              <Label htmlFor="firstName">{t('common.firstName')}</Label>
             <Input
-              id="first_name"
-              placeholder={t('common.enterFirstName')}
-              value={formData.first_name}
-              onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
-              className="bg-input border-border text-foreground"
+                id="firstName"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder={t('common.firstName')}
               required
+              className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
             />
           </div>
-
           <div className="space-y-2">
-            <Label htmlFor="last_name" className="text-foreground">
-              {t('common.lastName')} *
-            </Label>
+              <Label htmlFor="lastName">{t('common.lastName')}</Label>
             <Input
-              id="last_name"
-              placeholder={t('common.enterLastName')}
-              value={formData.last_name}
-              onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
-              className="bg-input border-border text-foreground"
+                id="lastName"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder={t('common.lastName')}
               required
+              className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
+            />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="email">{t('common.email')}</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder={t('common.email')}
+              required
+              className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="license_number" className="text-foreground">
-              {t('common.licenseNumber')}
-            </Label>
+            <Label htmlFor="licenseNumber">{t('common.license')}</Label>
             <Input
-              id="license_number"
-              placeholder={t('common.enterLicenseNumber')}
-              value={formData.license_number}
-              onChange={(e) => setFormData(prev => ({ ...prev, license_number: e.target.value }))}
-              className="bg-input border-border text-foreground"
+              id="licenseNumber"
+              value={licenseNumber}
+              onChange={(e) => setLicenseNumber(e.target.value)}
+              placeholder={t('common.license')}
+              className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="commission_percentage" className="text-foreground">
-              {t('common.commissionPercentage')}
-            </Label>
+            <Label htmlFor="commissionPercentage">{t('therapists.commissionPercentage')}</Label>
             <Input
-              id="commission_percentage"
+              id="commissionPercentage"
               type="number"
               min="0"
               max="100"
               step="0.01"
-              placeholder={t('common.enterCommissionPercentage')}
-              value={formData.commission_percentage}
-              onChange={(e) => setFormData(prev => ({ ...prev, commission_percentage: parseFloat(e.target.value) || 0 }))}
-              className="bg-input border-border text-foreground"
+              value={commissionPercentage}
+              onChange={(e) => setCommissionPercentage(e.target.value)}
+              placeholder="0"
+              className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
             />
-            <p className="text-xs text-muted-foreground">
-              {t('common.commissionDescription')}
-            </p>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-foreground">{t('common.specialties')}</Label>
-            <div className="flex space-x-2">
-              <Input
-                placeholder={t('common.addSpecialty')}
-                value={formData.newSpecialty}
-                onChange={(e) => setFormData(prev => ({ ...prev, newSpecialty: e.target.value }))}
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSpecialty())}
-                className="bg-input border-border text-foreground"
-              />
-              <Button type="button" onClick={handleAddSpecialty} variant="outline" size="sm">
-                {t('common.add')}
-              </Button>
-            </div>
-            {formData.specialties.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {formData.specialties.map((specialty) => (
-                  <Badge key={specialty} variant="secondary" className="flex items-center gap-1">
-                    {specialty}
-                    <X 
-                      className="h-3 w-3 cursor-pointer" 
-                      onClick={() => handleRemoveSpecialty(specialty)}
-                    />
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </div>
+          <CalendarColorPicker
+            value={calendarColorId}
+            onChange={setCalendarColorId}
+            label={t('therapists.calendarColor')}
+          />
 
-          <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={onClose}>
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button type="button" variant="outline" onClick={handleClose}>
               {t('common.cancel')}
             </Button>
             <Button type="submit" disabled={updateTherapist.isPending}>
               {updateTherapist.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {t('common.updateTherapist')}
+              {t('therapists.updateTherapist')}
             </Button>
           </div>
         </form>

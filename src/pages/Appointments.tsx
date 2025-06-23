@@ -2,25 +2,33 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar, Clock, User, Phone, Plus } from 'lucide-react';
 import { useAppointmentsByDate } from '@/hooks/useAppointments';
 import { useClients } from '@/hooks/useClients';
 import { format } from 'date-fns';
+import { es, enUS } from 'date-fns/locale';
 import AppointmentForm from '@/components/AppointmentForm';
 import AppointmentDetails from '@/components/AppointmentDetails';
 import DateFilter from '@/components/DateFilter';
 import AppointmentTable from '@/components/AppointmentTable';
+import MonthlyAppointmentsView from '@/components/MonthlyAppointmentsView';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSearchParams } from 'react-router-dom';
+import { useLanguage } from '@/hooks/useLanguage';
 
 const Appointments = () => {
   const { t } = useTranslation();
+  const { currentLanguage } = useLanguage();
   const [showForm, setShowForm] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedView, setSelectedView] = useState<'daily' | 'monthly'>('daily');
   const [searchParams] = useSearchParams();
   
-  const { data: groupedAppointments, isLoading: appointmentsLoading } = useAppointmentsByDate(selectedDate);
+  const locale = currentLanguage === 'es' ? es : enUS;
+  
+  const { data: groupedAppointments, isLoading: appointmentsLoading } = useAppointmentsByDate(format(selectedDate, 'yyyy-MM-dd'));
   const { data: clients } = useClients();
 
   // Check URL parameters to auto-open form
@@ -36,6 +44,16 @@ const Appointments = () => {
 
   const handleAppointmentClick = (appointment: any) => {
     setSelectedAppointment(appointment);
+  };
+
+  const handleDateChange = (dateStr: string) => {
+    // Create date with time set to midnight to avoid timezone issues
+    const date = new Date(dateStr + 'T00:00:00');
+    setSelectedDate(date);
+  };
+
+  const handleMonthlyDateSelect = (date: Date) => {
+    setSelectedDate(date);
   };
 
   if (appointmentsLoading) {
@@ -93,26 +111,34 @@ const Appointments = () => {
         </Button>
       </div>
 
+      {/* View Selector */}
+      <Tabs value={selectedView} onValueChange={(value) => setSelectedView(value as 'daily' | 'monthly')}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="daily">{t('appointments.dailyView')}</TabsTrigger>
+          <TabsTrigger value="monthly">{t('appointments.monthlyView')}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="daily" className="space-y-6">
       {/* Date Filter */}
       <div className="flex items-center justify-between">
         <DateFilter 
-          selectedDate={selectedDate} 
-          onDateChange={setSelectedDate} 
+              selectedDate={format(selectedDate, 'yyyy-MM-dd')} 
+              onDateChange={handleDateChange} 
         />
         
         {/* Quick Stats for selected date */}
         <div className="flex gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">{totalAppointments}</div>
-            <div className="text-sm text-muted-foreground">{t('common.total')}</div>
+                <div className="text-sm text-muted-foreground">{t('common.total')}</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-green-600">{completedToday}</div>
-            <div className="text-sm text-muted-foreground">{t('appointments.completed')}</div>
+                <div className="text-sm text-muted-foreground">{t('appointments.completed')}</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-orange-600">{pendingToday}</div>
-            <div className="text-sm text-muted-foreground">{t('appointments.scheduled')}</div>
+                <div className="text-sm text-muted-foreground">{t('appointments.scheduled')}</div>
           </div>
         </div>
       </div>
@@ -128,24 +154,29 @@ const Appointments = () => {
           <CardContent className="text-center py-12">
             <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-medium text-foreground mb-2">
-              {t('common.noAppointmentsForDate', { 
-                date: (() => {
-                  const [year, month, day] = selectedDate.split('-').map(Number);
-                  const date = new Date(year, month - 1, day);
-                  return format(date, 'MMMM d, yyyy');
-                })()
-              })}
+                  {t('appointments.noAppointmentsForDate', { 
+                    date: format(selectedDate, 'MMMM d, yyyy', { locale })
+                  })}
             </h3>
             <p className="text-muted-foreground mb-4">
-              {t('common.selectDifferentDate')}
+                  {t('appointments.selectDifferentDate')}
             </p>
             <Button onClick={() => setShowForm(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              {t('common.scheduleNewAppointment')}
+                  {t('appointments.scheduleNewAppointment')}
             </Button>
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+
+        <TabsContent value="monthly" className="space-y-6">
+          <MonthlyAppointmentsView
+            currentDate={selectedDate}
+            onDateSelect={handleMonthlyDateSelect}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Appointment Form Modal */}
       {showForm && (

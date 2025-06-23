@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, User, Phone, Mail, Calendar, Edit, Award, DollarSign } from 'lucide-react';
+import { Plus, User, Phone, Mail, Calendar, Edit, Award, DollarSign, Palette } from 'lucide-react';
 import { useTherapists } from '@/hooks/useTherapists';
 import TherapistForm from '@/components/TherapistForm';
 import EditTherapistForm from '@/components/EditTherapistForm';
@@ -12,72 +12,89 @@ import SearchInput from '@/components/SearchInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 
+// Google Calendar default colors for display
+const GOOGLE_CALENDAR_COLORS = [
+  { id: '1', name: 'Lavender', background: '#7986cb' },
+  { id: '2', name: 'Sage', background: '#33b679' },
+  { id: '3', name: 'Grape', background: '#8e63ce' },
+  { id: '4', name: 'Flamingo', background: '#e67c73' },
+  { id: '5', name: 'Banana', background: '#f6c026' },
+  { id: '6', name: 'Tangerine', background: '#f4791f' },
+  { id: '7', name: 'Peacock', background: '#039be5' },
+  { id: '8', name: 'Graphite', background: '#616161' },
+  { id: '9', name: 'Blueberry', background: '#3f51b5' },
+  { id: '10', name: 'Basil', background: '#0b8043' },
+  { id: '11', name: 'Tomato', background: '#d60000' },
+];
+
 const Therapists = () => {
   const { t } = useTranslation();
-  const [showForm, setShowForm] = useState(false);
-  const [editingTherapist, setEditingTherapist] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const { data: therapists, isLoading } = useTherapists();
+  const [showForm, setShowForm] = useState(false);
+  const [editingTherapist, setEditingTherapist] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
-  // Enhanced search function for therapists
   const filteredTherapists = useMemo(() => {
-    if (!therapists || !searchTerm.trim()) return therapists || [];
-
-    const searchTerms = searchTerm.toLowerCase().trim().split(/\s+/);
+    if (!therapists) return [];
     
     return therapists.filter(therapist => {
-      const searchableText = [
-        therapist.first_name,
-        therapist.last_name,
-        therapist.profiles?.email,
-        therapist.profiles?.phone,
-        therapist.license_number,
-        ...(therapist.specialties || [])
-      ].filter(Boolean).join(' ').toLowerCase();
+      const fullName = `${therapist.first_name || ''} ${therapist.last_name || ''}`.toLowerCase();
+      const license = (therapist.license_number || '').toLowerCase();
+      const specialties = (therapist.specialties || []).join(' ').toLowerCase();
 
-      return searchTerms.every(term => 
-        searchableText.includes(term) ||
-        searchableText.split(/\s+/).some(word => word.startsWith(term))
-      );
+      return fullName.includes(searchTerm.toLowerCase()) ||
+             license.includes(searchTerm.toLowerCase()) ||
+             specialties.includes(searchTerm.toLowerCase());
     });
   }, [therapists, searchTerm]);
+
+  const getCalendarColor = (colorId: string) => {
+    return GOOGLE_CALENDAR_COLORS.find(color => color.id === colorId) || GOOGLE_CALENDAR_COLORS[0];
+  };
 
   if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">{t('therapists.title')}</h1>
-            <p className="text-muted-foreground">{t('therapists.manageTherapists')}</p>
+            <h1 className="text-3xl font-bold tracking-tight">{t('therapists.title')}</h1>
+            <p className="text-muted-foreground">{t('therapists.description')}</p>
           </div>
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            {t('therapists.addTherapist')}
-          </Button>
+          <Skeleton className="h-10 w-32" />
         </div>
         
-        <div className="grid gap-4">
-          {[...Array(5)].map((_, i) => (
-            <Card key={i} className="bg-card border-border">
-              <CardContent className="pt-6">
-                <Skeleton className="h-4 w-full mb-2" />
-                <Skeleton className="h-4 w-3/4 mb-2" />
-                <Skeleton className="h-4 w-1/2" />
-              </CardContent>
-            </Card>
-          ))}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
         </div>
+        
+        <Card>
+          <CardContent className="p-0">
+            <div className="space-y-4 p-6">
+              <Skeleton className="h-4 w-48" />
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-4 w-64" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
+  const activeTherapists = therapists?.filter(t => t.is_active) || [];
+  const totalTherapists = therapists?.length || 0;
+  const averageCommission = activeTherapists.length > 0 
+    ? activeTherapists.reduce((sum, t) => sum + (t.commission_percentage || 0), 0) / activeTherapists.length 
+    : 0;
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">{t('therapists.title')}</h1>
-          <p className="text-muted-foreground">{t('therapists.manageTherapists')}</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t('therapists.title')}</h1>
+          <p className="text-muted-foreground">{t('therapists.description')}</p>
         </div>
         <Button onClick={() => setShowForm(true)}>
           <Plus className="h-4 w-4 mr-2" />
@@ -85,74 +102,72 @@ const Therapists = () => {
         </Button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-card border-border">
-          <CardContent className="pt-6">
-            <div className="flex items-center space-x-2">
-              <User className="h-4 w-4 text-blue-400" />
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">{t('therapists.totalTherapists')}</p>
-                <p className="text-2xl font-bold text-foreground">{therapists?.length || 0}</p>
-              </div>
-            </div>
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{t('therapists.totalTherapists')}</CardTitle>
+            <User className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalTherapists}</div>
+            <p className="text-xs text-muted-foreground">
+              {activeTherapists.length} {t('common.active')}
+            </p>
           </CardContent>
         </Card>
         
-        <Card className="bg-card border-border">
-          <CardContent className="pt-6">
-            <div className="flex items-center space-x-2">
-              <Calendar className="h-4 w-4 text-green-400" />
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">{t('therapists.activeToday')}</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {therapists?.filter(t => t.is_active).length || 0}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{t('therapists.averageCommission')}</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{averageCommission.toFixed(1)}%</div>
+            <p className="text-xs text-muted-foreground">
+              {t('therapists.perAppointment')}
                 </p>
-              </div>
-            </div>
           </CardContent>
         </Card>
         
-        <Card className="bg-card border-border">
-          <CardContent className="pt-6">
-            <div className="flex items-center space-x-2">
-              <Award className="h-4 w-4 text-purple-400" />
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">{t('therapists.licensed')}</p>
-                <p className="text-2xl font-bold text-foreground">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{t('therapists.licensedTherapists')}</CardTitle>
+            <Award className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
                   {therapists?.filter(t => t.license_number).length || 0}
-                </p>
-              </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              {t('therapists.withLicense')}
+            </p>
           </CardContent>
         </Card>
         
-        <Card className="bg-card border-border">
-          <CardContent className="pt-6">
-            <div className="flex items-center space-x-2">
-              <Phone className="h-4 w-4 text-orange-400" />
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">{t('therapists.withContact')}</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {therapists?.filter(t => t.profiles?.phone || t.profiles?.email).length || 0}
-                </p>
-              </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{t('therapists.calendarIntegration')}</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {therapists?.filter(t => t.calendar_color_id && t.calendar_color_id !== '1').length || 0}
             </div>
+            <p className="text-xs text-muted-foreground">
+              {t('therapists.withCustomColors')}
+            </p>
           </CardContent>
         </Card>
       </div>
 
       {/* Search */}
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-2">
         <SearchInput
+          placeholder={t('therapists.searchTherapists')}
           value={searchTerm}
           onChange={setSearchTerm}
-          placeholder={t('therapists.searchTherapists')}
-          className="max-w-md"
         />
-        <div className="text-sm text-muted-foreground">
-          {filteredTherapists.length} {t('common.of')} {therapists?.length || 0} {t('therapists.title').toLowerCase()}
-        </div>
       </div>
 
       {/* Therapists Table */}
@@ -163,20 +178,30 @@ const Therapists = () => {
               <TableHeader>
                 <TableRow className="border-border">
                   <TableHead className="text-foreground">{t('common.name')}</TableHead>
+                  <TableHead className="text-foreground">{t('common.email')}</TableHead>
                   <TableHead className="text-foreground">{t('common.license')}</TableHead>
-                  <TableHead className="text-foreground">{t('common.specialties')}</TableHead>
+                  <TableHead className="text-foreground">{t('therapists.calendarColor')}</TableHead>
                   <TableHead className="text-foreground">{t('common.status')}</TableHead>
                   <TableHead className="text-foreground">{t('common.joined')}</TableHead>
                   <TableHead className="text-right text-foreground">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredTherapists.map((therapist) => (
+                {filteredTherapists.map((therapist) => {
+                  const calendarColor = getCalendarColor(therapist.calendar_color_id || '1');
+                  return (
                   <TableRow key={therapist.id} className="hover:bg-muted/50 border-border">
                     <TableCell>
                       <div className="font-medium text-foreground">
                         {therapist.first_name} {therapist.last_name}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {therapist.email ? (
+                        <span className="text-sm text-foreground">{therapist.email}</span>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {therapist.license_number ? (
@@ -188,27 +213,20 @@ const Therapists = () => {
                         <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
-                    <TableCell>
-                      {therapist.specialties && therapist.specialties.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {therapist.specialties.slice(0, 2).map((specialty, index) => (
-                            <Badge key={index} variant="secondary" className="text-xs">
-                              {specialty}
-                            </Badge>
-                          ))}
-                          {therapist.specialties.length > 2 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{therapist.specialties.length - 2}
-                            </Badge>
-                          )}
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          <div
+                            className="w-4 h-4 rounded-full border border-border"
+                            style={{ backgroundColor: calendarColor.background }}
+                          />
+                          <span className="text-sm text-muted-foreground">
+                            {calendarColor.name}
+                          </span>
                         </div>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
+                      </TableCell>
                     <TableCell>
                       <Badge variant={therapist.is_active ? 'default' : 'secondary'}>
-                        {therapist.is_active ? t('common.active') : t('common.inactive')}
+                          {therapist.is_active ? t('common.active') : t('common.inactive')}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
@@ -221,11 +239,12 @@ const Therapists = () => {
                         onClick={() => setEditingTherapist(therapist)}
                       >
                         <Edit className="h-4 w-4 mr-1" />
-                        {t('common.edit')}
+                          {t('common.edit')}
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>
@@ -262,9 +281,9 @@ const Therapists = () => {
       {/* Edit Therapist Form Modal */}
       {editingTherapist && (
         <EditTherapistForm 
+          therapist={editingTherapist}
           open={!!editingTherapist} 
           onClose={() => setEditingTherapist(null)}
-          therapist={editingTherapist}
         />
       )}
     </div>

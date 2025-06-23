@@ -59,7 +59,7 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
           payment_status,
           status,
           treatments (name),
-          therapists (first_name, last_name)
+          therapists (first_name, last_name, calendar_color_id, email)
         `)
         .eq('client_id', client.id)
         .eq('status', 'completed')

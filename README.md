@@ -1,73 +1,139 @@
-# Welcome to your Lovable project
+# Revive Clinic Hub
 
-## Project info
+A comprehensive clinic management system built with React, TypeScript, and Supabase.
 
-**URL**: https://lovable.dev/projects/ec13ede2-df80-4870-a51b-520e45b66983
+## Features
 
-## How can I edit this code?
+### Core Features
+- **Appointment Management**: Schedule, reschedule, and manage appointments
+- **Client Management**: Complete client profiles with medical history
+- **Therapist Management**: Manage therapist profiles and schedules
+- **Financial Tracking**: Payment processing and expense management
+- **Multi-language Support**: English and Spanish interfaces
 
-There are several ways of editing your application.
+### Google Calendar Integration
+- **OAuth2 Authentication**: Secure connection to Google Calendar
+- **Automatic Sync**: Appointments are automatically synced when created
+- **Real-time Updates**: Changes to appointments are immediately reflected in Google Calendar
+- **Manual Sync**: Option to manually sync appointments that weren't automatically synced
+- **Event Management**: Create, update, and delete Google Calendar events
+- **Color Coding**: Therapist-specific colors for easy identification
+- **Meeting Links**: Optional Google Meet integration
 
-**Use Lovable**
+## Google Calendar Sync Features
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/ec13ede2-df80-4870-a51b-520e45b66983) and start prompting.
+### Automatic Sync
+- ✅ **Create**: New appointments are automatically created in Google Calendar
+- ✅ **Update**: Modified appointments are automatically updated in Google Calendar
+- ✅ **Delete**: Cancelled appointments are automatically removed from Google Calendar
+- ✅ **Event ID Tracking**: Google Calendar event IDs are stored for seamless sync
 
-Changes made via Lovable will be committed automatically to this repo.
+### Manual Sync
+- ✅ **Sync Status Indicator**: Visual indicator showing sync status
+- ✅ **Manual Sync Button**: Sync appointments that weren't automatically synced
+- ✅ **Error Handling**: Graceful handling of sync failures
 
-**Use your preferred IDE**
+### Configuration
+- ✅ **Calendar Selection**: Choose which Google Calendar to sync with
+- ✅ **Reminder Settings**: Configurable reminder notifications
+- ✅ **Color Coding**: Assign colors to therapists for visual organization
+- ✅ **Meeting Links**: Optional Google Meet integration for virtual sessions
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## Setup
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Prerequisites
+- Node.js 18+ 
+- Supabase account
+- Google Cloud Console access
 
-Follow these steps:
+### Installation
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd revive-clinic-hub
+```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+2. Install dependencies:
+```bash
+npm install
+```
 
-# Step 3: Install the necessary dependencies.
-npm i
+3. Set up environment variables:
+```bash
+cp .env.example .env
+```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+4. Configure your environment variables:
+```env
+# Supabase
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Google Calendar
+VITE_GOOGLE_CLIENT_ID=your_google_client_id
+VITE_GOOGLE_CLIENT_SECRET=your_google_client_secret
+VITE_GOOGLE_REDIRECT_URI=http://localhost:5173/google-auth-callback
+```
+
+5. Set up the database:
+```bash
+npx supabase db push
+```
+
+6. Start the development server:
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## Google Calendar Setup
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+See [GOOGLE_CALENDAR_SETUP.md](./GOOGLE_CALENDAR_SETUP.md) for detailed setup instructions.
 
-**Use GitHub Codespaces**
+## Usage
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Connecting Google Calendar
+1. Go to Settings page
+2. Click "Connect Google Calendar"
+3. Complete the OAuth flow
+4. Select your preferred calendar
 
-## What technologies are used for this project?
+### Managing Appointments
+- **Create**: New appointments are automatically synced to Google Calendar
+- **Update**: Modified appointments (time, date, therapist, etc.) are automatically updated
+- **Cancel**: Cancelled appointments are automatically removed from Google Calendar
+- **Manual Sync**: Use the sync button for appointments that weren't automatically synced
 
-This project is built with:
+## Development
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### Tech Stack
+- **Frontend**: React 18, TypeScript, Vite
+- **UI**: Tailwind CSS, shadcn/ui
+- **Backend**: Supabase (PostgreSQL, Auth, Storage)
+- **State Management**: TanStack Query
+- **Calendar Integration**: Google Calendar API
 
-## How can I deploy this project?
+### Project Structure
+```
+src/
+├── components/          # Reusable UI components
+├── hooks/              # Custom React hooks
+├── integrations/       # External service integrations
+│   ├── google-calendar/ # Google Calendar integration
+│   └── supabase/       # Supabase client and types
+├── i18n/               # Internationalization
+├── lib/                # Utility functions
+└── pages/              # Page components
+```
 
-Simply open [Lovable](https://lovable.dev/projects/ec13ede2-df80-4870-a51b-520e45b66983) and click on Share -> Publish.
+## Contributing
 
-## Can I connect a custom domain to my Lovable project?
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
-Yes, you can!
+## License
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+MIT License - see LICENSE file for details.

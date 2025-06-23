@@ -37,7 +37,7 @@ const MonthlyFinanceSection = () => {
         .select(`
           *,
           clients (first_name, last_name),
-          appointments (start_time, therapists (first_name, last_name))
+          appointments (start_time, therapists (first_name, last_name, calendar_color_id, email))
         `)
         .gte('payment_date', currentRange.start.toISOString())
         .lte('payment_date', currentRange.end.toISOString())
