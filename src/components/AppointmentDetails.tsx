@@ -12,7 +12,7 @@ import { useUpdateAppointment, useTherapistAvailability } from '@/hooks/useAppoi
 import { useTherapists } from '@/hooks/useTherapists';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Calendar, User, Clock, DollarSign, CreditCard, CalendarDays, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Loader2, Calendar, User, Clock, DollarSign, CreditCard, CalendarDays, ExternalLink, AlertTriangle, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
@@ -235,6 +235,29 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
     }
   };
 
+  const handleMarkAsCompleted = async () => {
+    try {
+      await updateAppointment.mutateAsync({
+        id: appointment.id,
+        status: 'completed',
+      });
+
+      toast({
+        title: t('appointments.success'),
+        description: t('appointments.appointmentCompleted'),
+      });
+      
+      onClose();
+    } catch (error) {
+      console.error('Error marking appointment as completed:', error);
+      toast({
+        title: t('appointments.error'),
+        description: t('appointments.failedToComplete'),
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleManualSync = async () => {
     try {
       await syncAppointment({ 
@@ -384,12 +407,12 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                       <span className="text-sm text-muted-foreground">
                         {appointment.google_calendar_event_id ? (
                           <span className="flex items-center space-x-1">
-                            <span className="text-green-600">✓</span>
+                            <span className="text-primary">✓</span>
                             <span>{t('appointments.syncedWithGoogleCalendar')}</span>
                             <ExternalLink className="h-3 w-3" />
                           </span>
                         ) : (
-                          <span className="text-orange-600">{t('appointments.notSyncedWithGoogleCalendar')}</span>
+                          <span className="text-destructive">{t('appointments.notSyncedWithGoogleCalendar')}</span>
                         )}
                       </span>
                     </div>
@@ -426,14 +449,30 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                 >
                   {t('appointments.deleteAppointment')}
                 </Button>
+              ) : appointment.status === 'completed' ? (
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <span className="text-green-600 font-medium">{t('appointments.completed')}</span>
+                </div>
               ) : (
-                <Button 
-                  variant="destructive" 
-                  onClick={handleCancelAppointment}
-                  disabled={updateAppointment.isPending || appointment.status === 'cancelled'}
-                >
-                  {t('appointments.cancelAppointment')}
-                </Button>
+                <div className="flex space-x-2">
+                  <Button 
+                    variant="default" 
+                    onClick={handleMarkAsCompleted}
+                    disabled={updateAppointment.isPending}
+                  >
+                    {updateAppointment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    {t('appointments.markAsCompleted')}
+                  </Button>
+                  <Button 
+                    variant="destructive" 
+                    onClick={handleCancelAppointment}
+                    disabled={updateAppointment.isPending}
+                  >
+                    {t('appointments.cancelAppointment')}
+                  </Button>
+                </div>
               )}
               
               <Button variant="outline" onClick={onClose}>
@@ -517,6 +556,20 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                     <CreditCard className="mr-2 h-4 w-4" />
                     {t('appointments.markAsPaid')} {paymentData.facturado && `(${formatCurrency(totalWithIva)})`}
                   </Button>
+
+                  {/* Mark as Completed button for better workflow */}
+                  {appointment.status !== 'completed' && (
+                    <Button 
+                    variant="outline"
+                    onClick={handleMarkAsCompleted} 
+                    disabled={updateAppointment.isPending}
+                    className="w-full"
+                  >
+                    {updateAppointment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    {t('appointments.markAsCompleted')}
+                  </Button>
+                  )}
                 </CardContent>
               </Card>
             ) : (
@@ -525,12 +578,26 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   <div className="text-lg font-medium text-foreground mb-2">
                     {appointment.payment_status === 'paid' ? t('appointments.paymentCompleted') : t('appointments.paymentNotAvailable')}
                   </div>
-                  <div className="text-muted-foreground">
+                  <div className="text-muted-foreground mb-4">
                     {appointment.payment_status === 'paid' 
                       ? `${t('appointments.paidVia')} ${getPaymentMethodText(appointment.payment_method)} ${t('appointments.on')} ${format(new Date(appointment.payment_date), 'PPP')}`
                       : t('appointments.paymentCannotBeProcessed')
                     }
                   </div>
+                  
+                  {/* Mark as Completed button for paid appointments */}
+                  {appointment.payment_status === 'paid' && appointment.status !== 'completed' && (
+                    <Button 
+                      variant="default"
+                      onClick={handleMarkAsCompleted} 
+                      disabled={updateAppointment.isPending}
+                      className="w-full"
+                    >
+                      {updateAppointment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      {t('appointments.markAsCompleted')}
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -602,19 +669,19 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   {/* Conflict Warning */}
                   {availability?.hasConflict && (
                     <div className="space-y-3">
-                      <Alert className="border-orange-200 bg-orange-50">
-                        <AlertTriangle className="h-4 w-4 text-orange-600" />
-                        <AlertDescription className="text-orange-700">
+                      <Alert className="border-destructive/20 bg-destructive/5">
+                        <AlertTriangle className="h-4 w-4 text-destructive" />
+                        <AlertDescription className="text-destructive/80">
                           {t('appointments.therapistUnavailable')}
                         </AlertDescription>
                       </Alert>
                       
                       <div className="space-y-2 text-sm">
-                        <p className="font-medium text-orange-700">{t('appointments.conflictingAppointments')}:</p>
+                        <p className="font-medium text-destructive/80">{t('appointments.conflictingAppointments')}:</p>
                         {availability.conflicts.map((conflict: any) => (
                           <div key={conflict.id} className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-orange-600" />
-                            <span>
+                            <Clock className="h-4 w-4 text-destructive/70" />
+                            <span className="text-foreground">
                               {format(new Date(conflict.start_time), 'h:mm a', { locale })} - {format(new Date(conflict.end_time), 'h:mm a', { locale })}
                             </span>
                             <span className="text-muted-foreground">
@@ -626,14 +693,14 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                       
                       {availability.availableSlots.length > 0 && (
                         <div className="space-y-2">
-                          <p className="font-medium text-orange-700">
+                          <p className="font-medium text-destructive/80">
                             {t('appointments.alternativeTimes')} ({availability.availableSlots.length} {t('appointments.available')})
                           </p>
                           
                           {/* Show next available time prominently */}
                           {availability.availableSlots[0] && (
-                            <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                              <p className="text-green-800 text-sm font-medium mb-1">
+                            <div className="mb-3 p-3 bg-primary/5 border border-primary/20 rounded-lg">
+                              <p className="text-primary/80 text-sm font-medium mb-1">
                                 {t('appointments.nextAvailable')}:
                               </p>
                               <Button
@@ -646,7 +713,6 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                                     start_time: format(selectedTime, "yyyy-MM-dd'T'HH:mm")
                                   }));
                                 }}
-                                className="bg-green-600 hover:bg-green-700"
                               >
                                 {availability.availableSlots[0].label}
                               </Button>

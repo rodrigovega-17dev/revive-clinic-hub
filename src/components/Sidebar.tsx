@@ -13,10 +13,11 @@ import {
   ChevronLeft,
   Activity,
   Calculator,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { LanguageSelector } from "./LanguageSelector";
+import { useAuth } from "@/hooks/useAuth";
 
 const navigation = [
   { name: "navigation.dashboard", href: "/", icon: BarChart3 },
@@ -33,6 +34,26 @@ export const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { profile, signOut } = useAuth();
+
+  const handleLogout = async () => {
+    const { error } = await signOut();
+    if (!error) {
+      navigate('/auth');
+    }
+  };
+
+  // Get user display name
+  const getUserDisplayName = () => {
+    if (!profile) return "Guest";
+    return `${profile.first_name} ${profile.last_name}`.trim() || profile.email;
+  };
+
+  // Get user role display
+  const getUserRole = () => {
+    if (!profile) return "Guest";
+    return profile.role.charAt(0).toUpperCase() + profile.role.slice(1);
+  };
 
   return (
     <div
@@ -88,27 +109,49 @@ export const Sidebar = () => {
         })}
       </nav>
 
-      {/* Language Selector */}
-      {!collapsed && (
-        <div className="px-4 py-2 border-t border-sidebar-border">
-          <LanguageSelector />
-        </div>
-      )}
-
-      {/* Footer */}
-      {!collapsed && (
-        <div className="p-4 border-t border-sidebar-border bg-sidebar/50">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-muted to-muted/80 rounded-full flex items-center justify-center">
-              <User className="w-5 h-5 text-muted-foreground" />
+      {/* Footer with User Info and Logout */}
+      <div className="p-4 border-t border-sidebar-border bg-sidebar/50">
+        {!collapsed ? (
+          <div className="flex items-center justify-between">
+            {/* User Info */}
+            <div className="flex items-center space-x-3 flex-1 min-w-0">
+              <div className="w-10 h-10 bg-gradient-to-br from-muted to-muted/80 rounded-full flex items-center justify-center">
+                <User className="w-5 h-5 text-muted-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-sidebar-foreground truncate">
+                  {getUserDisplayName()}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {getUserRole()}
+                </p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-sidebar-foreground">Dr. Admin</p>
-              <p className="text-xs text-muted-foreground">Administrator</p>
-            </div>
+            
+            {/* Logout Icon */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className="hover:bg-red-500/10 hover:text-red-500 text-sidebar-foreground/70 hover:text-sidebar-foreground p-2"
+              title={t('navigation.logout')}
+            >
+              <LogOut className="w-4 h-4" />
+            </Button>
           </div>
-        </div>
-      )}
+        ) : (
+          /* Collapsed state - just logout icon */
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLogout}
+            className="w-full hover:bg-red-500/10 hover:text-red-500 text-sidebar-foreground/70 hover:text-sidebar-foreground"
+            title={t('navigation.logout')}
+          >
+            <LogOut className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
     </div>
   );
 };

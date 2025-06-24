@@ -191,7 +191,8 @@
     "finance": "Finance",
     "payroll": "Payroll",
     "reports": "Reports",
-    "settings": "Settings"
+    "settings": "Settings",
+    "logout": "Logout"
   },
   "auth": {
     "login": "Login",

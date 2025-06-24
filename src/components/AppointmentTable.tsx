@@ -37,20 +37,20 @@ const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: Appointme
   
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'scheduled': return 'bg-blue-100 text-blue-800';
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      case 'no_show': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'scheduled': return 'bg-primary/10 text-primary border-primary/20';
+      case 'completed': return 'bg-green-500/10 text-green-600 border-green-500/20 dark:text-green-400';
+      case 'cancelled': return 'bg-destructive/10 text-destructive border-destructive/20';
+      case 'no_show': return 'bg-orange-500/10 text-orange-600 border-orange-500/20 dark:text-orange-400';
+      default: return 'bg-muted text-muted-foreground border-border';
     }
   };
 
   const getPaymentStatusColor = (status: string) => {
     switch (status) {
-      case 'paid': return 'bg-green-100 text-green-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'overdue': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'paid': return 'bg-green-500/10 text-green-600 border-green-500/20 dark:text-green-400';
+      case 'pending': return 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20 dark:text-yellow-400';
+      case 'overdue': return 'bg-destructive/10 text-destructive border-destructive/20';
+      default: return 'bg-muted text-muted-foreground border-border';
     }
   };
 
@@ -136,12 +136,12 @@ const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: Appointme
                       </p>
                     </TableCell>
                     <TableCell>
-                      <Badge className={getStatusColor(appointment.status)}>
+                      <Badge className={`${getStatusColor(appointment.status)} border`}>
                         {getStatusText(appointment.status)}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge className={getPaymentStatusColor(appointment.payment_status)}>
+                      <Badge className={`${getPaymentStatusColor(appointment.payment_status)} border`}>
                         {getPaymentStatusText(appointment.payment_status)}
                       </Badge>
                     </TableCell>

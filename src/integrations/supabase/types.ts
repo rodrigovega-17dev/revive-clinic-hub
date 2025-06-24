@@ -27,8 +27,11 @@ export type Database = {
           therapist_id: string
           treatment_id: string | null
           updated_at: string
-          facturado: boolean | null
-          iva_amount: number | null
+          sync_status: string | null
+          last_synced_at: string | null
+          sync_error_message: string | null
+          google_calendar_version: string | null
+          local_version: number | null
         }
         Insert: {
           client_id: string
@@ -47,8 +50,11 @@ export type Database = {
           therapist_id: string
           treatment_id?: string | null
           updated_at?: string
-          facturado?: boolean | null
-          iva_amount?: number | null
+          sync_status?: string | null
+          last_synced_at?: string | null
+          sync_error_message?: string | null
+          google_calendar_version?: string | null
+          local_version?: number | null
         }
         Update: {
           client_id?: string
@@ -67,8 +73,11 @@ export type Database = {
           therapist_id?: string
           treatment_id?: string | null
           updated_at?: string
-          facturado?: boolean | null
-          iva_amount?: number | null
+          sync_status?: string | null
+          last_synced_at?: string | null
+          sync_error_message?: string | null
+          google_calendar_version?: string | null
+          local_version?: number | null
         }
         Relationships: [
           {
@@ -239,6 +248,8 @@ export type Database = {
           payment_date: string
           received_by: string | null
           shift_id: string | null
+          facturado: boolean | null
+          iva_amount: number | null
         }
         Insert: {
           amount: number
@@ -251,6 +262,8 @@ export type Database = {
           payment_date?: string
           received_by?: string | null
           shift_id?: string | null
+          facturado?: boolean | null
+          iva_amount?: number | null
         }
         Update: {
           amount?: number
@@ -263,6 +276,8 @@ export type Database = {
           payment_date?: string
           received_by?: string | null
           shift_id?: string | null
+          facturado?: boolean | null
+          iva_amount?: number | null
         }
         Relationships: [
           {
@@ -508,6 +523,44 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      sync_logs: {
+        Row: {
+          id: string
+          appointment_id: string | null
+          old_status: string | null
+          new_status: string | null
+          changed_at: string | null
+          error_message: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          appointment_id?: string | null
+          old_status?: string | null
+          new_status?: string | null
+          changed_at?: string | null
+          error_message?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          appointment_id?: string | null
+          old_status?: string | null
+          new_status?: string | null
+          changed_at?: string | null
+          error_message?: string | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_logs_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {

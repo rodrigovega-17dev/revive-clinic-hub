@@ -176,7 +176,8 @@
     "finance": "Finanzas",
     "payroll": "Nómina",
     "reports": "Reportes",
-    "settings": "Configuración"
+    "settings": "Configuración",
+    "logout": "Cerrar Sesión"
   },
   "auth": {
     "login": "Iniciar Sesión",

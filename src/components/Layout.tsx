@@ -1,6 +1,7 @@
 import { ReactNode } from 'react'
 import { Sidebar } from './Sidebar'
 import { ThemeToggle } from './ThemeToggle'
+import { LanguageSelector } from './LanguageSelector'
 
 interface LayoutProps {
   children: ReactNode
@@ -17,6 +18,7 @@ export function Layout({ children }: LayoutProps) {
             <h1 className="text-xl font-semibold text-foreground">Revive Clinic Hub</h1>
           </div>
           <div className="flex items-center space-x-4">
+            <LanguageSelector />
             <ThemeToggle />
           </div>
         </header>

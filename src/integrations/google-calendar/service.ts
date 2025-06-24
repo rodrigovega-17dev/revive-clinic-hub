@@ -102,8 +102,17 @@ class GoogleCalendarService {
     const endTime = new Date(appointment.end_time);
     const timeZone = options.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+    // Get client and therapist names with fallbacks
+    const clientName = appointment.clients 
+      ? `${appointment.clients.first_name || 'Unknown'} ${appointment.clients.last_name || 'Client'}`
+      : 'Unknown Client';
+    
+    const therapistName = appointment.therapists
+      ? `${appointment.therapists.first_name || 'Unknown'} ${appointment.therapists.last_name || 'Therapist'}`
+      : 'Unknown Therapist';
+
     const event: GoogleCalendarEvent = {
-      summary: `${appointment.clients?.first_name} ${appointment.clients?.last_name} - ${appointment.therapists?.first_name} ${appointment.therapists?.last_name}`,
+      summary: `${clientName} - ${therapistName}`,
       description: this.generateEventDescription(appointment),
       start: {
         dateTime: startTime.toISOString(),
@@ -177,8 +186,9 @@ class GoogleCalendarService {
     }
 
     // Add therapist info
-    if (appointment.therapists?.first_name) {
-      parts.push(`Therapist: ${appointment.therapists.first_name} ${appointment.therapists.last_name}`);
+    if (appointment.therapists) {
+      const therapistName = `${appointment.therapists.first_name || 'Unknown'} ${appointment.therapists.last_name || 'Therapist'}`;
+      parts.push(`Therapist: ${therapistName}`);
     }
 
     // Add client info

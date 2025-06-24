@@ -103,7 +103,12 @@ export const useCreateAppointment = () => {
       const { data, error } = await supabase
         .from('appointments')
         .insert(appointment)
-        .select()
+        .select(`
+          *,
+          clients (first_name, last_name, email, phone),
+          therapists (first_name, last_name, calendar_color_id, email),
+          treatments (name, price)
+        `)
         .single();
       
       if (error) throw error;
@@ -135,7 +140,7 @@ export const useUpdateAppointment = () => {
         .select(`
           *,
           clients (first_name, last_name, email, phone),
-          therapists (first_name, last_name, calendar_color_id),
+          therapists (first_name, last_name, calendar_color_id, email),
           treatments (name, price)
         `)
         .single();
@@ -378,11 +383,6 @@ const generateAlternativeSlots = (
   const now = new Date();
   const businessHours = { start: 8, end: 18 }; // 8 AM to 6 PM
   
-  // Get current language for localization
-  const { currentLanguage } = useLanguage();
-  const { t } = useTranslation();
-  const locale = currentLanguage === 'es' ? es : enUS;
-  
   // Generate slots for today and next 7 days
   for (let dayOffset = 0; dayOffset <= 7; dayOffset++) {
     const currentDay = new Date(year, month, day + dayOffset);
@@ -427,20 +427,24 @@ const generateAlternativeSlots = (
       });
       
       if (!hasConflict) {
-        const timeString = slotStart.toLocaleTimeString(currentLanguage === 'es' ? 'es-ES' : 'en-US', {
+        const timeString = slotStart.toLocaleTimeString('en-US', {
           hour: 'numeric',
           minute: '2-digit',
           hour12: true,
         });
         
-        // Add day information with localization
+        // Add day information
         let dayLabel = '';
         if (dayOffset === 0) {
-          dayLabel = t('appointments.today');
+          dayLabel = 'Today';
         } else if (dayOffset === 1) {
-          dayLabel = t('appointments.tomorrow');
+          dayLabel = 'Tomorrow';
         } else {
-          dayLabel = format(slotStart, 'EEE, MMM d', { locale });
+          dayLabel = slotStart.toLocaleDateString('en-US', { 
+            weekday: 'short', 
+            month: 'short', 
+            day: 'numeric' 
+          });
         }
         
         slots.push({

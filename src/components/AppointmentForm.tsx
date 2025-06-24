@@ -228,21 +228,21 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
         
         {/* Conflict Resolution Section */}
         {availability?.hasConflict && (
-          <Card className="mb-4 border-orange-200 bg-orange-50">
+          <Card className="mb-4 border-destructive/20 bg-destructive/5">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-orange-800">
+              <CardTitle className="flex items-center gap-2 text-destructive">
                 <AlertTriangle className="h-5 w-5" />
                 {t('appointments.schedulingConflict')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <p className="text-orange-700 mb-2">{t('appointments.therapistUnavailable')}</p>
+                <p className="text-destructive/80 mb-2">{t('appointments.therapistUnavailable')}</p>
                 <div className="space-y-2">
                   {availability.conflicts.map((conflict: any) => (
                     <div key={conflict.id} className="flex items-center gap-2 text-sm">
-                      <Clock className="h-4 w-4 text-orange-600" />
-                      <span>
+                      <Clock className="h-4 w-4 text-destructive/70" />
+                      <span className="text-foreground">
                         {format(new Date(conflict.start_time), 'h:mm a')} - {format(new Date(conflict.end_time), 'h:mm a')}
                       </span>
                       <span className="text-muted-foreground">
@@ -255,21 +255,20 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
               
               {availability.availableSlots.length > 0 && (
                 <div>
-                  <p className="text-orange-700 mb-2 font-medium">
+                  <p className="text-destructive/80 mb-2 font-medium">
                     {t('appointments.alternativeTimes')} ({availability.availableSlots.length} {t('appointments.available')})
                   </p>
                   
                   {/* Show next available time prominently */}
                   {availability.availableSlots[0] && (
-                    <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <p className="text-green-800 text-sm font-medium mb-1">
+                    <div className="mb-3 p-3 bg-primary/5 border border-primary/20 rounded-lg">
+                      <p className="text-primary/80 text-sm font-medium mb-1">
                         {t('appointments.nextAvailable')}:
                       </p>
                       <Button
                         variant="default"
                         size="sm"
                         onClick={() => handleAlternativeTimeSelect(availability.availableSlots[0])}
-                        className="bg-green-600 hover:bg-green-700"
                       >
                         {availability.availableSlots[0].label}
                       </Button>
@@ -292,11 +291,11 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
                 </div>
               )}
 
-              <div className="flex gap-2 pt-2 border-t border-orange-200">
+              <div className="flex gap-2 pt-2 border-t border-destructive/20">
                 <Button
                   variant="outline"
                   onClick={() => setShowConflictResolution(false)}
-                  className="text-orange-700 border-orange-300"
+                  className="text-destructive border-destructive/30 hover:bg-destructive/5"
                 >
                   {t('appointments.chooseDifferentTime')}
                 </Button>
