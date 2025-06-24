@@ -1,0 +1,10 @@
+{
+  "name": "revive-clinic-hub-functions",
+  "version": "1.0.0",
+  "description": "Netlify functions for Revive Clinic Hub",
+  "main": "index.js",
+  "dependencies": {
+    "stripe": "^18.2.1",
+    "@supabase/supabase-js": "^2.50.0"
+  }
+} 

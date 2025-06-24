@@ -11,9 +11,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useSearchParams } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 
 const Finance = () => {
   const { t } = useTranslation();
+  const { clinicId } = useAuth();
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   // Set default date to 3 days ago to show sample payments
@@ -28,6 +30,15 @@ const Finance = () => {
   const [searchParams] = useSearchParams();
 
   const handleSyncPayments = async () => {
+    if (!clinicId) {
+      toast({
+        title: t('common.error'),
+        description: t('common.noClinicAccess'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsSyncing(true);
     try {
       // Find appointments that are marked as paid but don't have payment records
@@ -41,6 +52,7 @@ const Finance = () => {
           payment_date,
           treatments (name)
         `)
+        .eq('clinic_id', clinicId)
         .eq('payment_status', 'paid')
         .not('payment_amount', 'is', null);
 
@@ -50,6 +62,7 @@ const Finance = () => {
       const { data: existingPayments, error: paymentsError } = await supabase
         .from('payments')
         .select('appointment_id')
+        .eq('clinic_id', clinicId)
         .not('appointment_id', 'is', null);
 
       if (paymentsError) throw paymentsError;
@@ -70,6 +83,7 @@ const Finance = () => {
       const paymentRecords = appointmentsToSync.map(apt => ({
         appointment_id: apt.id,
         client_id: apt.client_id,
+        clinic_id: clinicId,
         amount: apt.payment_amount,
         method: (apt.payment_method as 'cash' | 'card' | 'transfer' | 'insurance') || 'cash',
         payment_date: apt.payment_date || new Date().toISOString(),

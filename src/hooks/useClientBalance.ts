@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from './useAuth';
 
 interface ClientBalance {
   totalPayments: number;
@@ -9,10 +10,12 @@ interface ClientBalance {
 }
 
 export function useClientBalance(clientId: string | null) {
+  const { clinicId } = useAuth();
+  
   return useQuery({
-    queryKey: ['client-balance', clientId],
+    queryKey: ['client-balance', clientId, clinicId],
     queryFn: async (): Promise<ClientBalance> => {
-      if (!clientId) {
+      if (!clientId || !clinicId) {
         return {
           totalPayments: 0,
           pendingPayments: 0,
@@ -25,7 +28,8 @@ export function useClientBalance(clientId: string | null) {
       const { data: payments, error: paymentsError } = await supabase
         .from('payments')
         .select('amount, payment_date')
-        .eq('client_id', clientId);
+        .eq('client_id', clientId)
+        .eq('clinic_id', clinicId);
 
       if (paymentsError) throw paymentsError;
 
@@ -34,6 +38,7 @@ export function useClientBalance(clientId: string | null) {
         .from('appointments')
         .select('payment_amount, payment_status')
         .eq('client_id', clientId)
+        .eq('clinic_id', clinicId)
         .eq('status', 'completed')
         .or('payment_status.is.null,payment_status.eq.pending');
 
@@ -57,25 +62,31 @@ export function useClientBalance(clientId: string | null) {
         lastPaymentDate,
       };
     },
-    enabled: !!clientId,
+    enabled: !!clientId && !!clinicId,
   });
 }
 
 export function useAllClientBalances() {
+  const { clinicId } = useAuth();
+  
   return useQuery({
-    queryKey: ['all-client-balances'],
+    queryKey: ['all-client-balances', clinicId],
     queryFn: async () => {
+      if (!clinicId) return [];
+
       // Get all clients
       const { data: clients, error: clientsError } = await supabase
         .from('clients')
-        .select('id, first_name, last_name');
+        .select('id, first_name, last_name')
+        .eq('clinic_id', clinicId);
 
       if (clientsError) throw clientsError;
 
       // Get all payments
       const { data: payments, error: paymentsError } = await supabase
         .from('payments')
-        .select('client_id, amount, payment_date');
+        .select('client_id, amount, payment_date')
+        .eq('clinic_id', clinicId);
 
       if (paymentsError) throw paymentsError;
 
@@ -83,6 +94,7 @@ export function useAllClientBalances() {
       const { data: pendingAppointments, error: pendingError } = await supabase
         .from('appointments')
         .select('client_id, payment_amount, payment_status')
+        .eq('clinic_id', clinicId)
         .eq('status', 'completed')
         .or('payment_status.is.null,payment_status.eq.pending');
 
@@ -108,5 +120,6 @@ export function useAllClientBalances() {
 
       return clientBalances;
     },
+    enabled: !!clinicId,
   });
 } 

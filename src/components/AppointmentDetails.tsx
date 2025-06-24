@@ -18,10 +18,13 @@ import { es, enUS } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatCurrency } from '@/lib/utils';
-import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
+import { useClinicGoogleCalendar } from '@/hooks/useClinicGoogleCalendar';
 import { useDeleteAppointment } from '@/hooks/useAppointments';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useClinicSettings } from '@/hooks/useClinic';
+import { useAuth } from '@/hooks/useAuth';
+import PaymentForm from './PaymentForm';
 
 interface AppointmentDetailsProps {
   appointment: any;
@@ -63,8 +66,17 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const { data: therapists } = useTherapists();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { isAuthenticated, syncAppointment, deleteAppointment } = useGoogleCalendar();
+  const { isAuthenticated, syncAppointment, deleteAppointment } = useClinicGoogleCalendar();
   const deleteAppointmentMutation = useDeleteAppointment();
+  const { clinicSettings } = useClinicSettings();
+  const { auth } = useAuth();
+  const { currency } = useClinicSettings();
+  const { clinicId } = useAuth();
+
+  // Clinic-aware currency formatting
+  const formatCurrencyWithClinic = (value: number) => {
+    return formatCurrency(value, 2, currency);
+  };
 
   // Calculate IVA amount (16%)
   const ivaAmount = paymentData.facturado ? paymentData.amount * 0.16 : 0;
@@ -365,7 +377,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   <div className="flex items-center space-x-2">
                     <DollarSign className="h-4 w-4 text-muted-foreground" />
                     <span className="text-foreground">
-                      {formatCurrency(appointment.payment_amount || 0)}
+                      {formatCurrencyWithClinic(appointment.payment_amount || 0)}
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -534,15 +546,15 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                     <div className="p-3 bg-muted/50 rounded-lg space-y-2">
                       <div className="flex justify-between">
                         <span className="text-foreground">{t('appointments.baseAmount')}:</span>
-                        <span className="text-foreground">{formatCurrency(paymentData.amount)}</span>
+                        <span className="text-foreground">{formatCurrencyWithClinic(paymentData.amount)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-foreground">{t('appointments.ivaAmount')}:</span>
-                        <span className="text-foreground">{formatCurrency(ivaAmount)}</span>
+                        <span className="text-foreground">{formatCurrencyWithClinic(ivaAmount)}</span>
                       </div>
                       <div className="flex justify-between font-semibold border-t pt-2">
                         <span className="text-foreground">{t('appointments.total')}:</span>
-                        <span className="text-foreground">{formatCurrency(totalWithIva)}</span>
+                        <span className="text-foreground">{formatCurrencyWithClinic(totalWithIva)}</span>
                       </div>
                     </div>
                   )}
@@ -554,7 +566,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   >
                     {updateAppointment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     <CreditCard className="mr-2 h-4 w-4" />
-                    {t('appointments.markAsPaid')} {paymentData.facturado && `(${formatCurrency(totalWithIva)})`}
+                    {t('appointments.markAsPaid')} {paymentData.facturado && `(${formatCurrencyWithClinic(totalWithIva)})`}
                   </Button>
 
                   {/* Mark as Completed button for better workflow */}

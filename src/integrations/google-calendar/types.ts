@@ -16,20 +16,20 @@ export interface GoogleCalendarEvent {
   }>;
   reminders?: {
     useDefault: boolean;
-    overrides?: Array<{
+    overrides: Array<{
       method: 'email' | 'popup';
       minutes: number;
     }>;
   };
+  colorId?: string;
   conferenceData?: {
     createRequest: {
       requestId: string;
       conferenceSolutionKey: {
-        type: 'hangoutsMeet' | 'addOn';
+        type: 'hangoutsMeet';
       };
     };
   };
-  colorId?: string;
 }
 
 export interface GoogleCalendar {
@@ -52,7 +52,7 @@ export interface GoogleCalendarAuth {
   accessToken: string;
   refreshToken: string;
   expiresAt: number;
-  calendarId: string;
+  calendarId?: string;
   selectedCalendarId?: string;
 }
 
@@ -65,11 +65,11 @@ export interface SyncStatus {
 }
 
 export interface GoogleCalendarSyncOptions {
-  createMeetingLinks?: boolean;
-  sendInvites?: boolean;
-  reminderMinutes?: number;
-  timeZone?: string;
   calendarId?: string;
+  timeZone?: string;
+  reminderMinutes?: number;
+  sendInvites?: boolean;
+  createMeetingLinks?: boolean;
 }
 
 export interface GoogleCalendarColor {
@@ -79,6 +79,44 @@ export interface GoogleCalendarColor {
 }
 
 export interface GoogleCalendarColors {
-  calendar: Record<string, GoogleCalendarColor>;
-  event: Record<string, GoogleCalendarColor>;
+  calendar: Record<string, { background: string; foreground: string }>;
+  event: Record<string, { background: string; foreground: string }>;
+}
+
+// New types for multitenant implementation
+export interface ClinicGoogleCalendarAuth {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  calendarId?: string;
+  selectedCalendarId?: string;
+  clinicId: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClinicGoogleCalendarSettings {
+  enabled: boolean;
+  selectedCalendarId?: string;
+  syncSettings: {
+    autoSync: boolean;
+    syncDirection: 'app_to_calendar' | 'calendar_to_app' | 'bidirectional';
+    reminderMinutes: number;
+    sendInvites: boolean;
+    createMeetingLinks: boolean;
+    syncPastAppointments: boolean;
+    syncCancelledAppointments: boolean;
+    colorMapping: Record<string, string>; // therapist_id -> color_id
+  };
+  lastSyncAt?: string;
+  syncStatus: 'idle' | 'syncing' | 'error';
+  lastError?: string;
+}
+
+export interface ClinicGoogleCalendarData {
+  auth: ClinicGoogleCalendarAuth | null;
+  settings: ClinicGoogleCalendarSettings;
+  calendars: GoogleCalendar[];
+  selectedCalendar: GoogleCalendar | null;
 } 

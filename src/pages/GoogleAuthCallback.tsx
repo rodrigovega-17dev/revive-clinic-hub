@@ -4,13 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
-import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
+import { useClinicGoogleCalendar } from '@/hooks/useClinicGoogleCalendar';
 
 const GoogleAuthCallback: React.FC = () => {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { handleAuthCallback } = useGoogleCalendar();
+  const { handleAuthCallback } = useClinicGoogleCalendar();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -74,7 +74,7 @@ const GoogleAuthCallback: React.FC = () => {
               <>
                 <CheckCircle className="h-12 w-12 mx-auto text-green-500" />
                 <h2 className="text-xl font-semibold text-green-600">
-                  {t('googleCalendar.oauthSuccess')}
+                  {t('googleCalendar.connectedSuccessfully')}
                 </h2>
                 <p className="text-muted-foreground">
                   Redirecting to settings...
@@ -89,7 +89,7 @@ const GoogleAuthCallback: React.FC = () => {
               <>
                 <XCircle className="h-12 w-12 mx-auto text-red-500" />
                 <h2 className="text-xl font-semibold text-red-600">
-                  {t('googleCalendar.oauthError')}
+                  {t('googleCalendar.connectionFailed')}
                 </h2>
                 <p className="text-muted-foreground">
                   {errorMessage}

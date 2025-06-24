@@ -11,6 +11,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ExpenseFormProps {
   open: boolean;
@@ -19,6 +20,7 @@ interface ExpenseFormProps {
 
 const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
   const { t } = useTranslation();
+  const { clinicId, user } = useAuth();
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
@@ -40,9 +42,15 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
 
   const createExpenseMutation = useMutation({
     mutationFn: async (expenseData: any) => {
+      if (!clinicId) throw new Error('No clinic ID available');
+      
       const { data, error } = await supabase
         .from('expenses')
-        .insert([expenseData])
+        .insert([{
+          ...expenseData,
+          clinic_id: clinicId,
+          recorded_by: user?.id || null,
+        }])
         .select()
         .single();
       
@@ -70,6 +78,15 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!clinicId) {
+      toast({
+        title: t('common.error'),
+        description: t('common.noClinicAccess'),
+        variant: 'destructive',
+      });
+      return;
+    }
     
     if (!amount || !description || !category) {
       toast({

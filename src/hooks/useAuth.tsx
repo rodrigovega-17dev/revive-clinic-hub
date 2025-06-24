@@ -1,15 +1,17 @@
-
 import { useState, useEffect, createContext, useContext } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
 
 type Profile = Tables<'profiles'>;
+type Clinic = Tables<'clinics'>;
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
+  clinic: Clinic | null;
+  clinicId: string | null;
   loading: boolean;
   signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
@@ -22,7 +24,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [clinic, setClinic] = useState<Clinic | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Helper function to get clinic ID from profile
+  const getClinicId = (): string | null => {
+    return profile?.clinic_id || null;
+  };
 
   useEffect(() => {
     // Set up auth state listener
@@ -39,10 +47,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               .select('*')
               .eq('id', session.user.id)
               .single();
+            
             setProfile(profileData);
+
+            // Fetch clinic data if profile has clinic_id
+            const clinicId = profileData?.clinic_id;
+            if (clinicId) {
+              const { data: clinicData } = await supabase
+                .from('clinics')
+                .select('*')
+                .eq('id', clinicId)
+                .single();
+              
+              setClinic(clinicData);
+            }
           }, 0);
         } else {
           setProfile(null);
+          setClinic(null);
         }
         setLoading(false);
       }
@@ -92,6 +114,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     user,
     session,
     profile,
+    clinic,
+    clinicId: getClinicId(),
     loading,
     signUp,
     signIn,

@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useClinic, useUpdateClinic } from '@/hooks/useClinic';
+import { useUserPreferences } from '@/hooks/useUserPreferences';
+import { useSecurity } from '@/hooks/useSecurity';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,32 +13,201 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Settings as SettingsIcon, Globe, Bell, Shield, Building2, Palette, Database, Zap } from 'lucide-react';
-import GoogleCalendarConnect from '@/components/GoogleCalendarConnect';
+import { Settings as SettingsIcon, Globe, Bell, Shield, Building2, Palette, Database, Zap, Loader2, AlertTriangle, CreditCard } from 'lucide-react';
+import ClinicGoogleCalendarConnect from '@/components/ClinicGoogleCalendarConnect';
+import { PasswordChangeDialog } from '@/components/PasswordChangeDialog';
+import { SessionManagement } from '@/components/SessionManagement';
+import { Badge } from '@/components/ui/badge';
+import SubscriptionManagement from '@/components/SubscriptionManagement';
 
-const Settings: React.FC = () => {
+const Settings = (): JSX.Element => {
   const { t } = useTranslation();
   const { currentLanguage, switchLanguage, availableLanguages } = useLanguage();
   const { toast } = useToast();
 
-  // Form state
-  const [clinicName, setClinicName] = useState('Revive Clinic Hub');
+  // Clinic data
+  const { data: clinic, isLoading: clinicLoading } = useClinic();
+  const updateClinicMutation = useUpdateClinic();
+
+  // User preferences
+  const { 
+    data: preferences, 
+    loading: preferencesLoading, 
+    updatePreferences, 
+    updatePreference 
+  } = useUserPreferences();
+
+  // Security
+  const { 
+    securitySettings, 
+    sessionInfo,
+    loading: securityLoading, 
+    changePassword, 
+    signOutCurrentDevice, 
+    signOutFromAllDevices,
+    toggleTwoFactor 
+  } = useSecurity();
+
+  // Form state for clinic information
+  const [clinicName, setClinicName] = useState('');
   const [clinicAddress, setClinicAddress] = useState('');
   const [clinicPhone, setClinicPhone] = useState('');
   const [clinicEmail, setClinicEmail] = useState('');
   const [currency, setCurrency] = useState('USD');
   const [timezone, setTimezone] = useState('UTC');
-  const [notifications, setNotifications] = useState(true);
+  
+  // Form state for user preferences
   const [emailNotifications, setEmailNotifications] = useState(true);
+  const [pushNotifications, setPushNotifications] = useState(true);
+  const [appointmentReminders, setAppointmentReminders] = useState(true);
+  const [paymentReminders, setPaymentReminders] = useState(true);
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
+  const [defaultDashboardView, setDefaultDashboardView] = useState<'overview' | 'appointments' | 'finance'>('overview');
+  const [showQuickStats, setShowQuickStats] = useState(true);
+  const [showRecentActivity, setShowRecentActivity] = useState(true);
+  const [calendarView, setCalendarView] = useState<'day' | 'week' | 'month'>('week');
+  const [showPastAppointments, setShowPastAppointments] = useState(false);
 
-  // Save settings function
-  const handleSaveSettings = () => {
-    // Here you would typically save to your backend
+  // Form state for security settings
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [twoFactorMethod, setTwoFactorMethod] = useState<'email' | 'sms' | 'app'>('email');
+  const [loginNotifications, setLoginNotifications] = useState(true);
+  const [suspiciousActivityAlerts, setSuspiciousActivityAlerts] = useState(true);
+
+  // Load clinic data into form when available
+  useEffect(() => {
+    if (clinic) {
+      setClinicName(clinic.name || '');
+      setClinicAddress(clinic.address || '');
+      setClinicPhone(clinic.phone || '');
+      setClinicEmail(clinic.email || '');
+      setCurrency(clinic.currency || 'USD');
+      setTimezone(clinic.timezone || 'UTC');
+    }
+  }, [clinic]);
+
+  // Load user preferences into form when available
+  useEffect(() => {
+    if (preferences) {
+      setEmailNotifications(preferences.email_notifications);
+      setPushNotifications(preferences.push_notifications);
+      setAppointmentReminders(preferences.appointment_reminders);
+      setPaymentReminders(preferences.payment_reminders);
+      setTheme(preferences.theme as 'light' | 'dark' | 'system');
+      setDefaultDashboardView(preferences.default_dashboard_view as 'overview' | 'appointments' | 'finance');
+      setShowQuickStats(preferences.show_quick_stats);
+      setShowRecentActivity(preferences.show_recent_activity);
+      setCalendarView(preferences.calendar_view as 'day' | 'week' | 'month');
+      setShowPastAppointments(preferences.show_past_appointments);
+    }
+  }, [preferences]);
+
+  // Load security settings into form when available
+  useEffect(() => {
+    if (securitySettings) {
+      setTwoFactorEnabled(securitySettings.two_factor_enabled);
+      setTwoFactorMethod(securitySettings.two_factor_method as 'email' | 'sms' | 'app');
+      setLoginNotifications(securitySettings.login_notifications);
+      setSuspiciousActivityAlerts(securitySettings.suspicious_activity_alerts);
+    }
+  }, [securitySettings]);
+
+  // Save clinic settings (currency, timezone)
+  const handleSaveClinicSettings = async () => {
+    if (!clinic) return;
+
+    try {
+      await updateClinicMutation.mutateAsync({
+        currency,
+        timezone,
+      });
+
+      toast({
+        title: t('notifications.success'),
+        description: t('settings.settingsSaved'),
+      });
+    } catch (error) {
+      console.error('Error saving clinic settings:', error);
+      toast({
+        title: t('notifications.error'),
+        description: t('settings.failedToSaveSettings'),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Save general settings (both user preferences and clinic settings)
+  const handleSaveGeneralSettings = async () => {
+    try {
+      // Save user preferences
+      await updatePreferences({
+        theme,
+        default_dashboard_view: defaultDashboardView,
+        show_quick_stats: showQuickStats,
+        show_recent_activity: showRecentActivity,
+        calendar_view: calendarView,
+        show_past_appointments: showPastAppointments,
+      });
+
+      // Save clinic settings (currency, timezone)
+      if (clinic) {
+        await updateClinicMutation.mutateAsync({
+          currency,
+          timezone,
+        });
+      }
+
+      toast({
+        title: t('notifications.success'),
+        description: t('settings.settingsSaved'),
+      });
+    } catch (error) {
+      console.error('Error saving general settings:', error);
+      toast({
+        title: t('notifications.error'),
+        description: t('settings.failedToSaveSettings'),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Save notification settings (placeholder for now)
+  const handleSaveNotificationSettings = async () => {
+    try {
+      await updatePreferences({
+        email_notifications: emailNotifications,
+        push_notifications: pushNotifications,
+        appointment_reminders: appointmentReminders,
+        payment_reminders: paymentReminders,
+      });
+
     toast({
       title: t('notifications.success'),
       description: t('settings.settingsSaved'),
     });
+    } catch (error) {
+      console.error('Error saving notification settings:', error);
+      toast({
+        title: t('notifications.error'),
+        description: t('settings.failedToSaveSettings'),
+        variant: 'destructive',
+      });
+    }
   };
+
+  if (clinicLoading || preferencesLoading) {
+    return (
+      <div className="container mx-auto p-6 space-y-6">
+        <div className="flex items-center gap-2 mb-6">
+          <SettingsIcon className="h-6 w-6" />
+          <h1 className="text-3xl font-bold">{t('settings.title')}</h1>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -54,10 +226,10 @@ const Settings: React.FC = () => {
             <Building2 className="h-4 w-4" />
             {t('settings.clinic')}
           </TabsTrigger>
-          <TabsTrigger value="notifications" className="flex items-center gap-2">
+          {/* <TabsTrigger value="notifications" className="flex items-center gap-2">
             <Bell className="h-4 w-4" />
             {t('settings.notifications')}
-          </TabsTrigger>
+          </TabsTrigger> */}
           <TabsTrigger value="security" className="flex items-center gap-2">
             <Shield className="h-4 w-4" />
             {t('settings.security')}
@@ -65,6 +237,10 @@ const Settings: React.FC = () => {
           <TabsTrigger value="integrations" className="flex items-center gap-2">
             <Zap className="h-4 w-4" />
             Integrations
+          </TabsTrigger>
+          <TabsTrigger value="subscription" className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4" />
+            Subscription
           </TabsTrigger>
           <TabsTrigger value="data" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
@@ -132,6 +308,97 @@ const Settings: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="theme">{t('settings.theme')}</Label>
+                <Select value={theme} onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="light">{t('settings.lightTheme')}</SelectItem>
+                    <SelectItem value="dark">{t('settings.darkTheme')}</SelectItem>
+                    <SelectItem value="system">{t('settings.systemTheme')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* <div className="space-y-2">
+                <Label htmlFor="defaultDashboardView">{t('settings.defaultDashboardView')}</Label>
+                <Select value={defaultDashboardView} onValueChange={(value) => setDefaultDashboardView(value as 'overview' | 'appointments' | 'finance')}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="overview">{t('settings.overview')}</SelectItem>
+                    <SelectItem value="appointments">{t('settings.appointments')}</SelectItem>
+                    <SelectItem value="finance">{t('settings.finance')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="calendarView">{t('settings.calendarView')}</Label>
+                <Select value={calendarView} onValueChange={(value) => setCalendarView(value as 'day' | 'week' | 'month')}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="day">{t('settings.day')}</SelectItem>
+                    <SelectItem value="week">{t('settings.week')}</SelectItem>
+                    <SelectItem value="month">{t('settings.month')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>{t('settings.showQuickStats')}</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {t('settings.showQuickStatsDesc')}
+                  </p>
+                </div>
+                <Switch
+                  checked={showQuickStats}
+                  onCheckedChange={setShowQuickStats}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>{t('settings.showRecentActivity')}</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {t('settings.showRecentActivityDesc')}
+                  </p>
+                </div>
+                <Switch
+                  checked={showRecentActivity}
+                  onCheckedChange={setShowRecentActivity}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>{t('settings.showPastAppointments')}</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {t('settings.showPastAppointmentsDesc')}
+                  </p>
+                </div>
+                <Switch
+                  checked={showPastAppointments}
+                  onCheckedChange={setShowPastAppointments}
+                />
+              </div> */}
+
+              <div className="flex justify-end pt-4">
+                <Button 
+                  onClick={handleSaveGeneralSettings}
+                  disabled={updateClinicMutation.isPending}
+                >
+                  {updateClinicMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {t('settings.saveSettings')}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -191,12 +458,22 @@ const Settings: React.FC = () => {
                   />
                 </div>
               </div>
+
+              <div className="flex justify-end pt-4">
+                <Button 
+                  onClick={handleSaveClinicSettings}
+                  disabled={updateClinicMutation.isPending}
+                >
+                  {updateClinicMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {t('settings.saveSettings')}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         {/* Notifications Settings Tab */}
-        <TabsContent value="notifications" className="space-y-6">
+        {/* <TabsContent value="notifications" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -216,8 +493,8 @@ const Settings: React.FC = () => {
                   </p>
                 </div>
                 <Switch
-                  checked={notifications}
-                  onCheckedChange={setNotifications}
+                  checked={pushNotifications}
+                  onCheckedChange={setPushNotifications}
                 />
               </div>
 
@@ -233,9 +510,45 @@ const Settings: React.FC = () => {
                   onCheckedChange={setEmailNotifications}
                 />
               </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>{t('settings.appointmentReminders')}</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {t('settings.appointmentRemindersDesc')}
+                  </p>
+                </div>
+                <Switch
+                  checked={appointmentReminders}
+                  onCheckedChange={setAppointmentReminders}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>{t('settings.paymentReminders')}</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {t('settings.paymentRemindersDesc')}
+                  </p>
+                </div>
+                <Switch
+                  checked={paymentReminders}
+                  onCheckedChange={setPaymentReminders}
+                />
+              </div>
+
+              <div className="flex justify-end pt-4">
+                <Button 
+                  onClick={handleSaveNotificationSettings}
+                  disabled={updateClinicMutation.isPending}
+                >
+                  {updateClinicMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {t('settings.saveSettings')}
+                </Button>
+              </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent> */}
 
         {/* Security Settings Tab */}
         <TabsContent value="security" className="space-y-6">
@@ -249,16 +562,95 @@ const Settings: React.FC = () => {
                 {t('settings.securityPrivacy')}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <Button variant="outline" className="w-full">
-                {t('settings.changePassword')}
-              </Button>
-              <Button variant="outline" className="w-full">
-                {t('settings.twoFactorAuth')}
-              </Button>
-              <Button variant="outline" className="w-full">
-                {t('settings.sessionManagement')}
-              </Button>
+            <CardContent className="space-y-6">
+              {/* Password Change */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">{t('security.passwordSecurity')}</h3>
+                <PasswordChangeDialog onPasswordChange={changePassword} />
+              </div>
+
+              <Separator />
+
+              {/* Two-Factor Authentication */}
+              {/* <div className="space-y-4">
+                <h3 className="text-lg font-medium">{t('security.twoFactorAuthentication')}</h3>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>{t('security.enableTwoFactor')}</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {t('security.twoFactorDescription')}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={twoFactorEnabled}
+                    onCheckedChange={(enabled) => {
+                      setTwoFactorEnabled(enabled);
+                      toggleTwoFactor(enabled, twoFactorMethod);
+                    }}
+                  />
+                </div>
+
+                {twoFactorEnabled && (
+                  <div className="space-y-2">
+                    <Label>{t('security.twoFactorMethod')}</Label>
+                    <Select value={twoFactorMethod} onValueChange={(value) => setTwoFactorMethod(value as 'email' | 'sms' | 'app')}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="email">{t('security.email')}</SelectItem>
+                        <SelectItem value="sms">{t('security.sms')}</SelectItem>
+                        <SelectItem value="app">{t('security.authenticatorApp')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+
+              <Separator /> */}
+
+              {/* Security Notifications */}
+              {/* <div className="space-y-4">
+                <h3 className="text-lg font-medium">{t('security.securityNotifications')}</h3>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>{t('security.loginNotifications')}</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {t('security.loginNotificationsDesc')}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={loginNotifications}
+                    onCheckedChange={setLoginNotifications}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>{t('security.suspiciousActivityAlerts')}</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {t('security.suspiciousActivityAlertsDesc')}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={suspiciousActivityAlerts}
+                    onCheckedChange={setSuspiciousActivityAlerts}
+                  />
+                </div>
+              </div>
+
+              <Separator /> */}
+
+              {/* Session Management */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">{t('security.sessionManagement')}</h3>
+                <SessionManagement
+                  sessionInfo={sessionInfo}
+                  onSignOutCurrent={signOutCurrentDevice}
+                  onSignOutAllDevices={signOutFromAllDevices}
+                  loading={securityLoading}
+                />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -276,7 +668,7 @@ const Settings: React.FC = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <GoogleCalendarConnect />
+              <ClinicGoogleCalendarConnect />
             </CardContent>
           </Card>
         </TabsContent>
@@ -306,16 +698,25 @@ const Settings: React.FC = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Subscription Tab */}
+        <TabsContent value="subscription" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                {t('settings.subscription')}
+              </CardTitle>
+              <CardDescription>
+                {t('settings.manageSubscription')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <SubscriptionManagement />
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
-
-      <Separator />
-
-      {/* Save Button */}
-      <div className="flex justify-end">
-        <Button onClick={handleSaveSettings} className="px-8">
-          {t('settings.saveSettings')}
-        </Button>
-      </div>
     </div>
   );
 };

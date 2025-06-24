@@ -2,12 +2,24 @@ import { ReactNode } from 'react'
 import { Sidebar } from './Sidebar'
 import { ThemeToggle } from './ThemeToggle'
 import { LanguageSelector } from './LanguageSelector'
+import { useClinic } from '@/hooks/useClinic'
+import { useSubscriptionRedirect } from '@/hooks/useSubscriptionRedirect'
 
 interface LayoutProps {
   children: ReactNode
 }
 
 export function Layout({ children }: LayoutProps) {
+  const { data: clinic } = useClinic();
+  
+  // Check subscription status and redirect if needed
+  useSubscriptionRedirect();
+
+  // Get clinic display name
+  const getClinicDisplayName = () => {
+    return clinic?.name || "Revive Clinic Hub";
+  };
+
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
@@ -15,7 +27,7 @@ export function Layout({ children }: LayoutProps) {
         {/* Header */}
         <header className="h-16 border-b border-border bg-background flex items-center justify-between px-6">
           <div className="flex items-center space-x-4">
-            <h1 className="text-xl font-semibold text-foreground">Revive Clinic Hub</h1>
+            <h1 className="text-xl font-semibold text-foreground">{getClinicDisplayName()}</h1>
           </div>
           <div className="flex items-center space-x-4">
             <LanguageSelector />

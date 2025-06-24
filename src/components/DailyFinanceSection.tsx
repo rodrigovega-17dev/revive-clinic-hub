@@ -7,10 +7,13 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar, DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Eye, ArrowLeftRight, Shield } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Skeleton } from '@/components/ui/skeleton';
-import { format, startOfDay, endOfDay } from 'date-fns';
-import DateSelector from '@/components/DateSelector';
+import { format, startOfDay, endOfDay, subDays } from 'date-fns';
 import { formatCurrency } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import { useClinicSettings } from '@/hooks/useClinic';
+import { DateFilter } from '@/components/DateFilter';
+import { PaymentForm } from './PaymentForm';
+import { ExpenseForm } from './ExpenseForm';
 
 interface DailyFinanceSectionProps {
   selectedDate: Date;
@@ -19,12 +22,16 @@ interface DailyFinanceSectionProps {
 
 const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSectionProps) => {
   const { t } = useTranslation();
+  const { clinicId } = useAuth();
+  const { currency } = useClinicSettings();
   const [showAllPayments, setShowAllPayments] = useState(false);
 
   // Fetch daily payments
   const { data: payments, isLoading: paymentsLoading } = useQuery({
-    queryKey: ['daily-payments', selectedDate, showAllPayments],
+    queryKey: ['daily-payments', selectedDate, showAllPayments, clinicId],
     queryFn: async () => {
+      if (!clinicId) return [];
+
       let query = supabase
         .from('payments')
         .select(`
@@ -43,6 +50,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
             )
           )
         `)
+        .eq('clinic_id', clinicId)
         .order('payment_date', { ascending: false });
 
       if (!showAllPayments) {
@@ -63,21 +71,26 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
 
       return data || [];
     },
+    enabled: !!clinicId,
   });
 
   // Fetch daily expenses
   const { data: expenses, isLoading: expensesLoading } = useQuery({
-    queryKey: ['daily-expenses', selectedDate],
+    queryKey: ['daily-expenses', selectedDate, clinicId],
     queryFn: async () => {
+      if (!clinicId) return [];
+      
       const { data, error } = await supabase
         .from('expenses')
         .select('*')
+        .eq('clinic_id', clinicId)
         .eq('date', format(selectedDate, 'yyyy-MM-dd'))
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data || [];
     },
+    enabled: !!clinicId,
   });
 
   const totalRevenue = payments?.reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
@@ -88,6 +101,11 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
   const totalCash = payments?.filter(p => p.method === 'cash').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
   const totalIntangible = payments?.filter(p => p.method !== 'cash').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
   const amountInCashier = totalCash - totalExpenses;
+
+  // Clinic-aware currency formatting
+  const formatCurrencyWithClinic = (value: number) => {
+    return formatCurrency(value, 2, currency);
+  };
 
   const getPaymentMethodIcon = (method: string) => {
     switch (method) {
@@ -117,8 +135,8 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
   if (paymentsLoading || expensesLoading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-64 w-full" />
+        <div className="h-32 w-full bg-muted animate-pulse rounded" />
+        <div className="h-64 w-full bg-muted animate-pulse rounded" />
       </div>
     );
   }
@@ -132,7 +150,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
             <Calendar className="h-5 w-5 text-muted-foreground" />
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">{t('finance.selectedDate')}</p>
-              <DateSelector selectedDate={selectedDate} onDateChange={onDateChange} />
+              <p className="text-sm text-muted-foreground">{format(selectedDate, 'MMMM d, yyyy')}</p>
             </div>
           </div>
         </CardContent>
@@ -146,7 +164,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
               <TrendingUp className="h-4 w-4 text-green-400" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{t('finance.totalEarnings')}</p>
-                <p className="text-2xl font-bold text-foreground">{formatCurrency(totalRevenue)}</p>
+                <p className="text-2xl font-bold text-foreground">{formatCurrencyWithClinic(totalRevenue)}</p>
               </div>
             </div>
           </CardContent>
@@ -159,7 +177,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{t('finance.totalIntangible')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(totalIntangible)}
+                  {formatCurrencyWithClinic(totalIntangible)}
                 </p>
               </div>
             </div>
@@ -173,7 +191,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{t('finance.totalCash')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(totalCash)}
+                  {formatCurrencyWithClinic(totalCash)}
                 </p>
               </div>
             </div>
@@ -186,7 +204,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
               <TrendingDown className="h-4 w-4 text-red-400" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{t('finance.expensesCash')}</p>
-                <p className="text-2xl font-bold text-foreground">{formatCurrency(totalExpenses)}</p>
+                <p className="text-2xl font-bold text-foreground">{formatCurrencyWithClinic(totalExpenses)}</p>
               </div>
             </div>
           </CardContent>
@@ -199,7 +217,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{t('finance.amountInCashier')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(amountInCashier)}
+                  {formatCurrencyWithClinic(amountInCashier)}
                 </p>
               </div>
             </div>
@@ -260,7 +278,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                     </TableCell>
                     <TableCell>
                       <span className="font-medium text-green-600">
-                        {formatCurrency(payment.amount)}
+                        {formatCurrencyWithClinic(payment.amount)}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -325,7 +343,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                     </TableCell>
                     <TableCell>
                       <span className="font-medium text-red-600">
-                        -{formatCurrency(expense.amount)}
+                        -{formatCurrencyWithClinic(expense.amount)}
                       </span>
                     </TableCell>
                     <TableCell className="text-muted-foreground">

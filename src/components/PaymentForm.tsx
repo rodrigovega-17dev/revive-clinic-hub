@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useClinicSettings } from '@/hooks/useClinic';
+import { Loader2, DollarSign, CreditCard, Banknote } from 'lucide-react';
 
 interface PaymentFormProps {
   open: boolean;
@@ -21,6 +24,7 @@ interface PaymentFormProps {
 
 export default function PaymentForm({ open, onClose }: PaymentFormProps) {
   const { t } = useTranslation();
+  const { clinicId, user } = useAuth();
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [clientId, setClientId] = useState<string>('none');
@@ -30,11 +34,25 @@ export default function PaymentForm({ open, onClose }: PaymentFormProps) {
   
   const { data: clients } = useClients();
   const { toast } = useToast();
-  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { currency } = useClinicSettings();
+
+  // Clinic-aware currency formatting
+  const formatCurrencyWithClinic = (value: number) => {
+    return formatCurrency(value, 2, currency);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!clinicId) {
+      toast({
+        title: t('common.error'),
+        description: t('common.noClinicAccess'),
+        variant: 'destructive',
+      });
+      return;
+    }
     
     if (!amount || !description) {
       toast({
@@ -62,6 +80,7 @@ export default function PaymentForm({ open, onClose }: PaymentFormProps) {
         amount: numAmount,
         description,
         client_id: clientId === 'none' ? null : clientId,
+        clinic_id: clinicId,
         method: paymentMethod,
         payment_date: paymentDate,
         received_by: user?.id || null,
@@ -75,7 +94,7 @@ export default function PaymentForm({ open, onClose }: PaymentFormProps) {
 
       toast({
         title: t('finance.paymentRecorded'),
-        description: t('finance.paymentRecordedSuccess', { amount: formatCurrency(numAmount) }),
+        description: t('finance.paymentRecordedSuccess', { amount: formatCurrencyWithClinic(numAmount) }),
       });
 
       // Reset form

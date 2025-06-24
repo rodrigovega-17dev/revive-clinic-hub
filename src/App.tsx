@@ -15,6 +15,7 @@ import Therapists from "./pages/Therapists";
 import Finance from "./pages/Finance";
 import Payroll from "./pages/Payroll";
 import Settings from "./pages/Settings";
+import Subscription from "./pages/Subscription";
 import ComingSoon from "./pages/ComingSoon";
 import NotFound from "./pages/NotFound";
 import GoogleAuthCallback from "./pages/GoogleAuthCallback";
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/finance" element={<ProtectedRoute><Layout><Finance /></Layout></ProtectedRoute>} />
             <Route path="/payroll" element={<ProtectedRoute><Layout><Payroll /></Layout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
+            <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Layout><ComingSoon title="Reports" description="Comprehensive reporting and analytics for your clinic" /></Layout></ProtectedRoute>} />
             <Route path="/google-auth-callback" element={<GoogleAuthCallback />} />
             <Route path="*" element={<NotFound />} />

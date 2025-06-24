@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, isToday, parseISO } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Calendar, Clock, User, MoreHorizontal } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Clock, User, MoreHorizontal, DollarSign, TrendingUp, TrendingDown, Download, Filter, Plus, Minus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAppointmentsByMonth } from '@/hooks/useAppointments';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -13,6 +13,11 @@ import { Separator } from '@/components/ui/separator';
 import { useLanguage } from '@/hooks/useLanguage';
 import { formatCurrency } from '@/lib/utils';
 import AppointmentDetails from './AppointmentDetails';
+import { useClinicSettings } from '@/hooks/useClinic';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/hooks/useAuth';
 
 interface MonthlyAppointmentsViewProps {
   currentDate: Date;
@@ -45,6 +50,7 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
 }) => {
   const { t } = useTranslation();
   const { currentLanguage } = useLanguage();
+  const { currency } = useClinicSettings();
   const [selectedMonth, setSelectedMonth] = useState(currentDate);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showDayPopup, setShowDayPopup] = useState(false);
@@ -119,6 +125,11 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
       default:
         return t('appointments.statusScheduled');
     }
+  };
+
+  // Clinic-aware currency formatting
+  const formatCurrencyWithClinic = (value: number) => {
+    return formatCurrency(value, 2, currency);
   };
 
   if (isLoading) {
@@ -335,7 +346,7 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
                           {appointment.payment_amount && (
                             <div className="flex items-center space-x-2">
                               <span className="text-sm font-medium text-foreground">
-                                {formatCurrency(appointment.payment_amount)}
+                                {formatCurrencyWithClinic(appointment.payment_amount)}
                               </span>
                             </div>
                           )}

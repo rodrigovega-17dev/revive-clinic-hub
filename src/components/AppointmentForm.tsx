@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import DatePicker from '@/components/ui/date-picker';
 import { supabase } from '@/integrations/supabase/client';
 import { useClients } from '@/hooks/useClients';
@@ -16,11 +16,14 @@ import { useTherapists } from '@/hooks/useTherapists';
 import { useTreatments } from '@/hooks/useTreatments';
 import { useTherapistAvailability, useCreateAppointment } from '@/hooks/useAppointments';
 import { useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { format, addMinutes, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/utils';
-import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
-import { AlertTriangle, Clock, User } from 'lucide-react';
+import { useClinicGoogleCalendar } from '@/hooks/useClinicGoogleCalendar';
+import { AlertTriangle, Clock, User, Stethoscope, DollarSign, MessageSquare, MapPin, Loader2, Plus, X } from 'lucide-react';
+import { useClinicSettings } from '@/hooks/useClinic';
+import { useAuth } from '@/hooks/useAuth';
+import { es, enUS } from 'date-fns/locale';
 
 interface AppointmentFormProps {
   open: boolean;
@@ -44,8 +47,12 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
   const { data: treatments } = useTreatments();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { autoSyncAppointment } = useGoogleCalendar();
+  const { syncAppointment } = useClinicGoogleCalendar();
   const createAppointmentMutation = useCreateAppointment();
+  const { data: clinicSettings } = useClinicSettings();
+  const { data: authData } = useAuth();
+  const { currency } = useClinicSettings();
+  const { clinicId } = useAuth();
 
   // Check for therapist availability
   const { data: availability, isLoading: checkingAvailability } = useTherapistAvailability(
@@ -131,6 +138,11 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
   const startTime = `${startHour}:00`;
   const endTime = calculateEndTime(startHour, sessionDuration);
 
+  // Clinic-aware currency formatting
+  const formatCurrencyWithClinic = (value: number) => {
+    return formatCurrency(value, 2, currency);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -208,7 +220,7 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
       
       onClose();
 
-      autoSyncAppointment(data);
+      syncAppointment({ appointment: data });
     } catch (error: any) {
       console.error('Error creating appointment:', error);
       toast({
@@ -362,7 +374,7 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
               <SelectContent className="bg-popover border-border">
                 {treatments?.map((treatment) => (
                   <SelectItem key={treatment.id} value={treatment.id}>
-                    {treatment.name} - {formatCurrency(treatment.price)}
+                    {treatment.name} - {formatCurrencyWithClinic(treatment.price)}
                   </SelectItem>
                 ))}
               </SelectContent>

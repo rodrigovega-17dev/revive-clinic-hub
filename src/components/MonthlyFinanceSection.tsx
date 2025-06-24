@@ -1,19 +1,22 @@
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { formatCurrency } from '@/lib/utils';
+import { useClinicSettings } from '@/hooks/useClinic';
+import { DollarSign, TrendingUp, Minus, Receipt } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DollarSign, TrendingUp, CreditCard, Minus, Receipt } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import SearchInput from '@/components/SearchInput';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { formatCurrency } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
 
 const MonthlyFinanceSection = () => {
   const { t } = useTranslation();
+  const { clinicId } = useAuth();
+  const { currency } = useClinicSettings();
   const [selectedPeriod, setSelectedPeriod] = useState<'current' | 'previous'>('current');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -30,8 +33,10 @@ const MonthlyFinanceSection = () => {
 
   // Fetch financial data
   const { data: payments, isLoading: paymentsLoading } = useQuery({
-    queryKey: ['payments', selectedPeriod],
+    queryKey: ['payments', selectedPeriod, clinicId],
     queryFn: async () => {
+      if (!clinicId) return [];
+      
       const { data, error } = await supabase
         .from('payments')
         .select(`
@@ -39,6 +44,7 @@ const MonthlyFinanceSection = () => {
           clients (first_name, last_name),
           appointments (start_time, therapists (first_name, last_name, calendar_color_id, email))
         `)
+        .eq('clinic_id', clinicId)
         .gte('payment_date', currentRange.start.toISOString())
         .lte('payment_date', currentRange.end.toISOString())
         .order('payment_date', { ascending: false });
@@ -46,15 +52,19 @@ const MonthlyFinanceSection = () => {
       if (error) throw error;
       return data;
     },
+    enabled: !!clinicId,
   });
 
   // Fetch expenses
   const { data: expenses, isLoading: expensesLoading } = useQuery({
-    queryKey: ['expenses', selectedPeriod],
+    queryKey: ['expenses', selectedPeriod, clinicId],
     queryFn: async () => {
+      if (!clinicId) return [];
+      
       const { data, error } = await supabase
         .from('expenses')
         .select('*')
+        .eq('clinic_id', clinicId)
         .gte('date', format(currentRange.start, 'yyyy-MM-dd'))
         .lte('date', format(currentRange.end, 'yyyy-MM-dd'))
         .order('date', { ascending: false });
@@ -62,6 +72,7 @@ const MonthlyFinanceSection = () => {
       if (error) throw error;
       return data;
     },
+    enabled: !!clinicId,
   });
 
   const filteredPayments = payments?.filter(payment => {
@@ -104,6 +115,11 @@ const MonthlyFinanceSection = () => {
     }
   };
 
+  // Clinic-aware currency formatting
+  const formatCurrencyWithClinic = (value: number) => {
+    return formatCurrency(value, 2, currency);
+  };
+
   if (paymentsLoading || expensesLoading) {
     return (
       <div className="space-y-6">
@@ -140,7 +156,7 @@ const MonthlyFinanceSection = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{t('finance.totalRevenue')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(totalPayments)}
+                  {formatCurrencyWithClinic(totalPayments)}
                 </p>
               </div>
             </div>
@@ -154,7 +170,7 @@ const MonthlyFinanceSection = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{t('finance.totalExpenses')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(totalExpenses)}
+                  {formatCurrencyWithClinic(totalExpenses)}
                 </p>
               </div>
             </div>
@@ -164,11 +180,11 @@ const MonthlyFinanceSection = () => {
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
-              <CreditCard className="h-4 w-4 text-green-400" />
+              <DollarSign className="h-4 w-4 text-green-400" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{t('finance.cashRevenue')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(cashPayments)}
+                  {formatCurrencyWithClinic(cashPayments)}
                 </p>
               </div>
             </div>
@@ -182,7 +198,7 @@ const MonthlyFinanceSection = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{t('finance.netTotal')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(totalPayments - totalExpenses)}
+                  {formatCurrencyWithClinic(totalPayments - totalExpenses)}
                 </p>
               </div>
             </div>
@@ -236,7 +252,7 @@ const MonthlyFinanceSection = () => {
                       }
                     </TableCell>
                     <TableCell className="font-medium text-foreground">
-                      {formatCurrency(payment.amount)}
+                      {formatCurrencyWithClinic(payment.amount)}
                     </TableCell>
                     <TableCell>
                       <Badge className={getPaymentMethodColor(payment.method)}>
@@ -301,7 +317,7 @@ const MonthlyFinanceSection = () => {
                       </Badge>
                     </TableCell>
                     <TableCell className="font-medium text-red-600">
-                      {formatCurrency(expense.amount)}
+                      {formatCurrencyWithClinic(expense.amount)}
                     </TableCell>
                   </TableRow>
                 ))}

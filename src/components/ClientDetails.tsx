@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +12,8 @@ import { format, differenceInYears } from 'date-fns';
 import type { Tables } from '@/integrations/supabase/types';
 import { formatCurrency } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '@/hooks/useAuth';
+import { useClinicSettings } from '@/hooks/useClinic';
 
 type Client = Tables<'clients'>;
 
@@ -22,11 +25,19 @@ interface ClientDetailsProps {
 
 export default function ClientDetails({ client, open, onClose }: ClientDetailsProps) {
   const { t } = useTranslation();
+  const { clinicId } = useAuth();
   const { data: balance, isLoading: balanceLoading } = useClientBalance(client.id);
+  const { currency } = useClinicSettings();
+  const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
+  const [isAppointmentFormOpen, setIsAppointmentFormOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
+  const [isAppointmentDetailsOpen, setIsAppointmentDetailsOpen] = useState(false);
   
   const { data: paymentHistory } = useQuery({
-    queryKey: ['client-payments', client.id],
+    queryKey: ['client-payments', client.id, clinicId],
     queryFn: async () => {
+      if (!clinicId) return [];
+      
       const { data, error } = await supabase
         .from('payments')
         .select(`
@@ -38,17 +49,20 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
           appointment_id
         `)
         .eq('client_id', client.id)
+        .eq('clinic_id', clinicId)
         .order('payment_date', { ascending: false });
 
       if (error) throw error;
       return data;
     },
-    enabled: !!client.id,
+    enabled: !!client.id && !!clinicId,
   });
 
   const { data: pendingAppointments } = useQuery({
-    queryKey: ['client-pending-appointments', client.id],
+    queryKey: ['client-pending-appointments', client.id, clinicId],
     queryFn: async () => {
+      if (!clinicId) return [];
+      
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -62,6 +76,7 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
           therapists (first_name, last_name, calendar_color_id, email)
         `)
         .eq('client_id', client.id)
+        .eq('clinic_id', clinicId)
         .eq('status', 'completed')
         .or('payment_status.is.null,payment_status.eq.pending')
         .order('start_time', { ascending: false });
@@ -69,7 +84,7 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
       if (error) throw error;
       return data;
     },
-    enabled: !!client.id,
+    enabled: !!client.id && !!clinicId,
   });
 
   const getAge = (birthDate: string | null) => {
@@ -103,6 +118,11 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
       case 'insurance': return t('finance.insurance');
       default: return method;
     }
+  };
+
+  // Clinic-aware currency formatting
+  const formatCurrencyWithClinic = (value: number) => {
+    return formatCurrency(value, 2, currency);
   };
 
   return (
@@ -186,19 +206,19 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
                   <div className="text-center">
                     <p className="text-sm text-muted-foreground">{t('clients.totalPayments')}</p>
                     <p className="text-2xl font-bold text-foreground">
-                      {formatCurrency(balance.totalPayments)}
+                      {formatCurrencyWithClinic(balance.totalPayments)}
                     </p>
                   </div>
                   <div className="text-center">
                     <p className="text-sm text-muted-foreground">{t('clients.pendingPayments')}</p>
                     <p className="text-2xl font-bold text-foreground">
-                      {formatCurrency(balance.pendingPayments)}
+                      {formatCurrencyWithClinic(balance.pendingPayments)}
                     </p>
                   </div>
                   <div className="text-center">
                     <p className="text-sm text-muted-foreground">{t('clients.currentBalance')}</p>
                     <p className={`text-2xl font-bold ${balance.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {balance.balance >= 0 ? '+' : ''}{formatCurrency(balance.balance)}
+                      {balance.balance >= 0 ? '+' : ''}{formatCurrencyWithClinic(balance.balance)}
                     </p>
                   </div>
                 </div>
@@ -244,7 +264,7 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
                           }
                         </TableCell>
                         <TableCell className="font-medium">
-                          {formatCurrency(appointment.payment_amount || 0)}
+                          {formatCurrencyWithClinic(appointment.payment_amount || 0)}
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary">
@@ -293,7 +313,7 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
                           </Badge>
                         </TableCell>
                         <TableCell className="font-medium text-foreground">
-                          {formatCurrency(payment.amount)}
+                          {formatCurrencyWithClinic(payment.amount)}
                         </TableCell>
                       </TableRow>
                     ))}

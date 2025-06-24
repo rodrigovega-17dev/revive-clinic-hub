@@ -1,19 +1,25 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import type { TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { format } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
-import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
+import { useClinicGoogleCalendar } from '@/hooks/useClinicGoogleCalendar';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useAuth } from './useAuth';
 
+type Appointment = Tables<'appointments'>;
 type AppointmentInsert = TablesInsert<'appointments'>;
 type AppointmentUpdate = TablesUpdate<'appointments'> & { id: string };
 
 export const useUpcomingAppointments = () => {
+  const { clinicId } = useAuth();
+  
   return useQuery({
-    queryKey: ['appointments', 'upcoming'],
+    queryKey: ['appointments', 'upcoming', clinicId],
     queryFn: async () => {
+      if (!clinicId) return [];
+      
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -22,6 +28,7 @@ export const useUpcomingAppointments = () => {
           therapists (id, first_name, last_name, calendar_color_id),
           treatments (name, duration_minutes)
         `)
+        .eq('clinic_id', clinicId)
         .gte('start_time', new Date().toISOString())
         .eq('status', 'scheduled')
         .order('start_time', { ascending: true })
@@ -30,13 +37,18 @@ export const useUpcomingAppointments = () => {
       if (error) throw error;
       return data;
     },
+    enabled: !!clinicId,
   });
 };
 
 export const useAppointmentsByDate = (selectedDate: string) => {
+  const { clinicId } = useAuth();
+  
   return useQuery({
-    queryKey: ['appointments', 'by-date', selectedDate],
+    queryKey: ['appointments', 'by-date', selectedDate, clinicId],
     queryFn: async () => {
+      if (!clinicId) return {};
+      
       // Parse the date properly to avoid timezone issues
       const [year, month, day] = selectedDate.split('-').map(Number);
       const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
@@ -50,6 +62,7 @@ export const useAppointmentsByDate = (selectedDate: string) => {
           therapists (id, first_name, last_name, calendar_color_id),
           treatments (name, duration_minutes, price)
         `)
+        .eq('clinic_id', clinicId)
         .gte('start_time', startOfDay.toISOString())
         .lte('start_time', endOfDay.toISOString())
         .order('therapist_id')
@@ -72,13 +85,18 @@ export const useAppointmentsByDate = (selectedDate: string) => {
 
       return groupedAppointments || {};
     },
+    enabled: !!clinicId,
   });
 };
 
 export const useAllAppointments = () => {
+  const { clinicId } = useAuth();
+  
   return useQuery({
-    queryKey: ['appointments', 'all'],
+    queryKey: ['appointments', 'all', clinicId],
     queryFn: async () => {
+      if (!clinicId) return [];
+      
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -87,22 +105,32 @@ export const useAllAppointments = () => {
           therapists (id, first_name, last_name, calendar_color_id),
           treatments (name, duration_minutes, price)
         `)
+        .eq('clinic_id', clinicId)
         .order('start_time', { ascending: false });
       
       if (error) throw error;
       return data;
     },
+    enabled: !!clinicId,
   });
 };
 
 export const useCreateAppointment = () => {
   const queryClient = useQueryClient();
+  const { clinicId } = useAuth();
   
   return useMutation({
-    mutationFn: async (appointment: AppointmentInsert) => {
+    mutationFn: async (appointment: Omit<AppointmentInsert, 'clinic_id'>) => {
+      if (!clinicId) throw new Error('No clinic ID available');
+      
+      const appointmentWithClinic: AppointmentInsert = {
+        ...appointment,
+        clinic_id: clinicId,
+      };
+      
       const { data, error } = await supabase
         .from('appointments')
-        .insert(appointment)
+        .insert(appointmentWithClinic)
         .select(`
           *,
           clients (first_name, last_name, email, phone),
@@ -129,10 +157,10 @@ export const useCreateAppointment = () => {
 
 export const useUpdateAppointment = () => {
   const queryClient = useQueryClient();
-  const { autoSyncAppointment } = useGoogleCalendar();
+  const { autoSyncAppointment } = useClinicGoogleCalendar();
   
   return useMutation({
-    mutationFn: async ({ id, ...updates }: AppointmentUpdate) => {
+    mutationFn: async ({ id, ...updates }: { id: string } & Partial<AppointmentUpdate>) => {
       const { data, error } = await supabase
         .from('appointments')
         .update(updates)
@@ -158,7 +186,7 @@ export const useUpdateAppointment = () => {
         exact: false 
       });
       
-      // Sync to Google Calendar if connected
+      // Auto-sync to Google Calendar if connected (handles cancellation properly)
       autoSyncAppointment(updatedAppointment);
     },
   });
@@ -166,7 +194,7 @@ export const useUpdateAppointment = () => {
 
 export const useDeleteAppointment = () => {
   const queryClient = useQueryClient();
-  const { deleteAppointment: deleteGoogleEvent } = useGoogleCalendar();
+  const { deleteAppointment: deleteGoogleEvent } = useClinicGoogleCalendar();
   
   return useMutation({
     mutationFn: async (appointment: any) => {
@@ -203,9 +231,18 @@ export const useDeleteAppointment = () => {
 };
 
 export const useTodayStats = () => {
+  const { clinicId } = useAuth();
+  
   return useQuery({
-    queryKey: ['stats', 'today'],
+    queryKey: ['stats', 'today', clinicId],
     queryFn: async () => {
+      if (!clinicId) return {
+        totalAppointments: 0,
+        completedAppointments: 0,
+        todayRevenue: 0,
+        totalClients: 0,
+      };
+
       const today = new Date();
       const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
       const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
@@ -214,6 +251,7 @@ export const useTodayStats = () => {
       const { data: appointments, error: appointmentsError } = await supabase
         .from('appointments')
         .select('status')
+        .eq('clinic_id', clinicId)
         .gte('start_time', startOfDay)
         .lte('start_time', endOfDay);
 
@@ -223,6 +261,7 @@ export const useTodayStats = () => {
       const { data: payments, error: paymentsError } = await supabase
         .from('payments')
         .select('amount')
+        .eq('clinic_id', clinicId)
         .gte('payment_date', startOfDay)
         .lte('payment_date', endOfDay);
 
@@ -232,6 +271,7 @@ export const useTodayStats = () => {
       const { count: totalClients, error: clientsError } = await supabase
         .from('clients')
         .select('*', { count: 'exact', head: true })
+        .eq('clinic_id', clinicId)
         .eq('is_active', true);
 
       if (clientsError) throw clientsError;
@@ -247,13 +287,18 @@ export const useTodayStats = () => {
         totalClients: totalClients || 0,
       };
     },
+    enabled: !!clinicId,
   });
 };
 
 export const useAppointmentsByMonth = (year: number, month: number) => {
+  const { clinicId } = useAuth();
+  
   return useQuery({
-    queryKey: ['appointments-by-month', year, month],
+    queryKey: ['appointments-by-month', year, month, clinicId],
     queryFn: async () => {
+      if (!clinicId) return {};
+
       const startDate = new Date(year, month - 1, 1).toISOString();
       const endDate = new Date(year, month, 0).toISOString();
 
@@ -279,6 +324,7 @@ export const useAppointmentsByMonth = (year: number, month: number) => {
             duration_minutes
           )
         `)
+        .eq('clinic_id', clinicId)
         .gte('start_time', startDate)
         .lte('start_time', endDate)
         .order('start_time', { ascending: true });
@@ -298,6 +344,7 @@ export const useAppointmentsByMonth = (year: number, month: number) => {
 
       return groupedByDate;
     },
+    enabled: !!clinicId,
   });
 };
 

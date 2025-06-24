@@ -14,10 +14,12 @@ import {
   Activity,
   Calculator,
   LogOut,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { useClinic } from "@/hooks/useClinic";
 
 const navigation = [
   { name: "navigation.dashboard", href: "/", icon: BarChart3 },
@@ -35,6 +37,7 @@ export const Sidebar = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { profile, signOut } = useAuth();
+  const { data: clinic } = useClinic();
 
   const handleLogout = async () => {
     const { error } = await signOut();
@@ -55,6 +58,11 @@ export const Sidebar = () => {
     return profile.role.charAt(0).toUpperCase() + profile.role.slice(1);
   };
 
+  // Get clinic display name
+  const getClinicDisplayName = () => {
+    return clinic?.name || "Revive Clinic";
+  };
+
   return (
     <div
       className={cn(
@@ -70,8 +78,8 @@ export const Sidebar = () => {
               <Activity className="w-6 h-6 text-sidebar-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-sidebar-foreground">Revive Clinic</h1>
-              <p className="text-xs text-muted-foreground font-medium">Physiotherapy CRM</p>
+              <h1 className="text-lg font-bold text-sidebar-foreground">{getClinicDisplayName()}</h1>
+              <p className="text-xs text-muted-foreground font-medium">Cliniker CRM</p>
             </div>
           </div>
         )}

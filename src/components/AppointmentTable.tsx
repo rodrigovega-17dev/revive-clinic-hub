@@ -1,11 +1,13 @@
+import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format } from 'date-fns';
-import { User, Eye } from 'lucide-react';
+import { User, Eye, Edit, Trash2, Calendar, Clock } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
+import { useClinicSettings } from '@/hooks/useClinic';
 
 // Google Calendar default colors
 const GOOGLE_CALENDAR_COLORS = [
@@ -34,6 +36,12 @@ interface AppointmentTableProps {
 
 const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: AppointmentTableProps) => {
   const { t } = useTranslation();
+  const { currency } = useClinicSettings();
+  
+  // Clinic-aware currency formatting
+  const formatCurrencyWithClinic = (value: number) => {
+    return formatCurrency(value, 2, currency);
+  };
   
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -132,7 +140,7 @@ const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: Appointme
                     </TableCell>
                     <TableCell>
                       <p className="text-sm font-medium text-foreground">
-                        {formatCurrency(appointment.payment_amount || 0)}
+                        {formatCurrencyWithClinic(appointment.payment_amount || 0)}
                       </p>
                     </TableCell>
                     <TableCell>

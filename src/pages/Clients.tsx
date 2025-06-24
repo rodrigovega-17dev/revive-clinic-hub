@@ -16,6 +16,7 @@ import { format, differenceInYears } from 'date-fns';
 import { useSearchParams } from 'react-router-dom';
 import type { Tables } from '@/integrations/supabase/types';
 import { formatCurrency } from '@/lib/utils';
+import { useClinicSettings } from '@/hooks/useClinic';
 
 type Client = Tables<'clients'>;
 
@@ -28,6 +29,12 @@ const Clients = () => {
   const { data: clients, isLoading } = useClients();
   const { data: clientBalances } = useAllClientBalances();
   const [searchParams] = useSearchParams();
+  const { currency } = useClinicSettings();
+
+  // Clinic-aware currency formatting
+  const formatCurrencyWithClinic = (value: number) => {
+    return formatCurrency(value, 2, currency);
+  };
 
   // Enhanced search function for clients
   const filteredClients = useMemo(() => {
@@ -190,7 +197,7 @@ const Clients = () => {
                     const isPositive = totalBalance >= 0;
                     return (
                       <span className={isPositive ? 'text-green-600' : 'text-red-600'}>
-                        {isPositive ? '+' : ''}{formatCurrency(totalBalance)}
+                        {isPositive ? '+' : ''}{formatCurrencyWithClinic(totalBalance)}
                       </span>
                     );
                   })()}
@@ -285,7 +292,7 @@ const Clients = () => {
                     <TableCell>
                       {client.charge_amount ? (
                         <div className="text-sm font-medium text-foreground">
-                          {formatCurrency(client.charge_amount)}
+                          {formatCurrencyWithClinic(client.charge_amount)}
                         </div>
                       ) : (
                         <span className="text-muted-foreground">-</span>
@@ -304,12 +311,12 @@ const Clients = () => {
                           return (
                             <div className="text-sm font-medium">
                               <span className={isPositive ? 'text-green-600' : 'text-red-600'}>
-                                {isPositive ? '+' : ''}{formatCurrency(balance.balance)}
+                                {isPositive ? '+' : ''}{formatCurrencyWithClinic(balance.balance)}
                               </span>
                             </div>
                           );
                         }
-                        return <span className="text-muted-foreground">{formatCurrency(0)}</span>;
+                        return <span className="text-muted-foreground">{formatCurrencyWithClinic(0)}</span>;
                       })()}
                     </TableCell>
                     <TableCell className="text-right">

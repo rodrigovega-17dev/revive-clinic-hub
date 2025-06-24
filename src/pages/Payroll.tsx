@@ -11,15 +11,24 @@ import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import { formatCurrency } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import { useClinicSettings } from '@/hooks/useClinic';
 
 const Payroll = () => {
   const { t } = useTranslation();
+  const { clinicId } = useAuth();
+  const { currency } = useClinicSettings();
   const [currentDate, setCurrentDate] = useState(new Date());
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
   const defaultPeriod = `first-${currentYear}-${currentMonth + 1}`;
   
   const [selectedPeriod, setSelectedPeriod] = useState(defaultPeriod);
+
+  // Clinic-aware currency formatting
+  const formatCurrencyWithClinic = (value: number) => {
+    return formatCurrency(value, 2, currency);
+  };
 
   // Update current date every minute to check for new periods
   useEffect(() => {
@@ -93,8 +102,20 @@ const Payroll = () => {
 
   // Fetch payroll data
   const { data: payrollData, isLoading } = useQuery({
-    queryKey: ['payroll', currentPeriod.startDate, currentPeriod.endDate],
+    queryKey: ['payroll', currentPeriod.startDate, currentPeriod.endDate, clinicId],
     queryFn: async () => {
+      if (!clinicId) return {
+        therapistStats: [],
+        totals: {
+          totalRevenue: 0,
+          totalRevenueBeforeIVA: 0,
+          totalIVA: 0,
+          totalTherapistEarnings: 0,
+          totalClinicEarnings: 0,
+          totalAppointments: 0
+        }
+      };
+
       const { data: appointments, error } = await supabase
         .from('appointments')
         .select(`
@@ -108,8 +129,15 @@ const Payroll = () => {
           clients (
             first_name,
             last_name
+          ),
+          payments (
+            id,
+            amount,
+            facturado,
+            iva_amount
           )
         `)
+        .eq('clinic_id', clinicId)
         .eq('status', 'completed')
         .eq('payment_status', 'paid')
         .gte('start_time', startOfDay(currentPeriod.startDate).toISOString())
@@ -123,9 +151,14 @@ const Payroll = () => {
         const therapistName = `${appointment.therapists.first_name} ${appointment.therapists.last_name}`;
         const commissionPercentage = appointment.therapists.commission_percentage || 0; // Default to 0% if not set
         
+        // Get payment data for IVA calculations
+        const payment = appointment.payments?.[0]; // Assuming one payment per appointment
+        const isFacturado = payment?.facturado || false;
+        const ivaAmount = Number(payment?.iva_amount || 0);
+        
         // Calculate amount before IVA for commission calculations
-        const amountBeforeIVA = appointment.facturado && appointment.iva_amount 
-          ? Number(appointment.payment_amount || 0) - Number(appointment.iva_amount || 0)
+        const amountBeforeIVA = isFacturado && ivaAmount > 0
+          ? Number(appointment.payment_amount || 0) - ivaAmount
           : Number(appointment.payment_amount || 0);
         
         if (!acc[therapistId]) {
@@ -146,7 +179,7 @@ const Payroll = () => {
         acc[therapistId].totalAppointments += 1;
         acc[therapistId].totalRevenue += Number(appointment.payment_amount || 0);
         acc[therapistId].totalRevenueBeforeIVA += amountBeforeIVA;
-        acc[therapistId].totalIVA += Number(appointment.iva_amount || 0);
+        acc[therapistId].totalIVA += ivaAmount;
         acc[therapistId].appointments.push(appointment);
         
         return acc;
@@ -178,6 +211,7 @@ const Payroll = () => {
         }
       };
     },
+    enabled: !!clinicId,
   });
 
   if (isLoading) {
@@ -267,7 +301,7 @@ const Payroll = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{t('payroll.totalRevenue')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(Number(payrollData?.totals.totalRevenue || 0))}
+                  {formatCurrencyWithClinic(Number(payrollData?.totals.totalRevenue || 0))}
                 </p>
               </div>
             </div>
@@ -281,7 +315,7 @@ const Payroll = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{t('payroll.revenuePreIVA')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(Number(payrollData?.totals.totalRevenueBeforeIVA || 0))}
+                  {formatCurrencyWithClinic(Number(payrollData?.totals.totalRevenueBeforeIVA || 0))}
                 </p>
               </div>
             </div>
@@ -295,7 +329,7 @@ const Payroll = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{t('payroll.totalIVA')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(Number(payrollData?.totals.totalIVA || 0))}
+                  {formatCurrencyWithClinic(Number(payrollData?.totals.totalIVA || 0))}
                 </p>
               </div>
             </div>
@@ -309,7 +343,7 @@ const Payroll = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{t('payroll.therapistEarnings')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(Number(payrollData?.totals.totalTherapistEarnings || 0))}
+                  {formatCurrencyWithClinic(Number(payrollData?.totals.totalTherapistEarnings || 0))}
                 </p>
               </div>
             </div>
@@ -323,7 +357,7 @@ const Payroll = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{t('payroll.clinicEarnings')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(Number(payrollData?.totals.totalClinicEarnings || 0))}
+                  {formatCurrencyWithClinic(Number(payrollData?.totals.totalClinicEarnings || 0))}
                 </p>
               </div>
             </div>
@@ -381,24 +415,24 @@ const Payroll = () => {
                       {therapist.totalAppointments}
                     </TableCell>
                     <TableCell className="text-foreground">
-                      {formatCurrency(Number(therapist.totalRevenue))}
+                      {formatCurrencyWithClinic(Number(therapist.totalRevenue))}
                     </TableCell>
                     <TableCell className="text-foreground">
-                      {formatCurrency(Number(therapist.totalRevenueBeforeIVA))} (Pre-IVA)
+                      {formatCurrencyWithClinic(Number(therapist.totalRevenueBeforeIVA))} (Pre-IVA)
                     </TableCell>
                     <TableCell className="text-foreground">
-                      {formatCurrency(Number(therapist.totalIVA))} (IVA)
+                      {formatCurrencyWithClinic(Number(therapist.totalIVA))} (IVA)
                     </TableCell>
                     <TableCell className="text-foreground">
                       {therapist.commissionPercentage}%
                     </TableCell>
                     <TableCell>
                       <div className="font-medium text-green-600">
-                        {formatCurrency(Number(therapist.therapistEarnings))}
+                        {formatCurrencyWithClinic(Number(therapist.therapistEarnings))}
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {formatCurrency(Number(therapist.clinicEarnings))}
+                      {formatCurrencyWithClinic(Number(therapist.clinicEarnings))}
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">
