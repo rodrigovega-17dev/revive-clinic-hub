@@ -11,9 +11,9 @@ import { format, startOfDay, endOfDay, subDays } from 'date-fns';
 import { formatCurrency } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useClinicSettings } from '@/hooks/useClinic';
-import { DateFilter } from '@/components/DateFilter';
-import { PaymentForm } from './PaymentForm';
-import { ExpenseForm } from './ExpenseForm';
+import DateFilter from '@/components/DateFilter';
+import PaymentForm from './PaymentForm';
+import ExpenseForm from './ExpenseForm';
 
 interface DailyFinanceSectionProps {
   selectedDate: Date;
@@ -146,13 +146,13 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
       {/* Date Selector */}
       <Card className="bg-card border-border">
         <CardContent className="pt-6">
-          <div className="flex items-center space-x-4">
-            <Calendar className="h-5 w-5 text-muted-foreground" />
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-foreground">{t('finance.selectedDate')}</p>
-              <p className="text-sm text-muted-foreground">{format(selectedDate, 'MMMM d, yyyy')}</p>
-            </div>
-          </div>
+          <DateFilter
+            selectedDate={format(selectedDate, 'yyyy-MM-dd')}
+            onDateChange={(dateString) => {
+              const newDate = new Date(dateString + 'T00:00:00');
+              onDateChange(newDate);
+            }}
+          />
         </CardContent>
       </Card>
 

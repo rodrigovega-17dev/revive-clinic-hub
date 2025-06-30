@@ -226,6 +226,8 @@
   "appointments": {
     "title": "Citas",
     "newAppointment": "Nueva Cita",
+    "new": "Nuevo",
+    "allDay": "Todo el día",
     "scheduleAppointment": "Programar Cita",
     "scheduleNewAppointment": "Programar Nueva Cita",
     "client": "Cliente",
@@ -311,7 +313,9 @@
       "sat": "Sáb"
     },
     "dailyView": "Vista Diaria",
+    "weeklyView": "Vista Semanal",
     "monthlyView": "Vista Mensual",
+    "weekSummary": "Resumen de la Semana",
     "appointmentDetails": "Detalles de la Cita",
     "manageAppointmentStatus": "Gestionar estado de la cita, pago y programación",
     "details": "Detalles",
@@ -402,7 +406,8 @@
     "noClientsYet": "Aún no hay clientes",
     "tryAdjustingSearch": "Intenta ajustar los términos de búsqueda o agrega un nuevo cliente.",
     "getStartedAdding": "Comienza agregando tu primer cliente.",
-    "balance": "Balance"
+    "balance": "Balance",
+    "contactSupport": "Contactar Soporte"
   },
   "therapists": {
     "title": "Terapeutas",
@@ -448,7 +453,8 @@
     "therapistCreated": "Terapeuta creado exitosamente",
     "therapistUpdated": "Terapeuta actualizado exitosamente",
     "commissionPercentage": "Porcentaje de Comisión",
-    "enterSpecialty": "Ingresa el nombre de la especialidad"
+    "enterSpecialty": "Ingresa el nombre de la especialidad",
+    "contactSupport": "Contactar Soporte"
   },
   "finance": {
     "title": "Finanzas",
@@ -562,7 +568,8 @@
     "fillRequiredFields": "Por favor completa todos los campos requeridos.",
     "invalidAmount": "Monto Inválido",
     "enterValidAmount": "Por favor ingresa un monto válido mayor a 0.",
-    "failedToRecordPayment": "No se pudo registrar el pago. Por favor intenta de nuevo."
+    "failedToRecordPayment": "No se pudo registrar el pago. Por favor intenta de nuevo.",
+    "contactSupport": "Contactar Soporte"
   },
   "payroll": {
     "title": "Nómina",
@@ -646,7 +653,8 @@
     "failedToSaveSettings": "Error al guardar la configuración",
     "changePassword": "Cambiar Contraseña",
     "twoFactorAuth": "Autenticación de Dos Factores",
-    "sessionManagement": "Gestión de Sesiones"
+    "sessionManagement": "Gestión de Sesiones",
+    "contactSupport": "Contactar Soporte"
   },
   "errors": {
     "somethingWentWrong": "Algo salió mal",
@@ -714,7 +722,8 @@
     "settingsUpdated": "Configuración Actualizada",
     "settingsUpdatedSuccess": "La configuración de Google Calendar ha sido actualizada",
     "settingsUpdateFailed": "Error de Actualización",
-    "settingsUpdateError": "Error al actualizar la configuración de Google Calendar"
+    "settingsUpdateError": "Error al actualizar la configuración de Google Calendar",
+    "contactSupport": "Contactar Soporte"
   },
   "security": {
     "passwordSecurity": "Seguridad de Contraseña",
@@ -766,7 +775,8 @@
     "passwordTooShort": "La contraseña debe tener al menos 8 caracteres",
     "passwordsDoNotMatch": "Las contraseñas no coinciden",
     "newPasswordSameAsCurrent": "La nueva contraseña debe ser diferente a la actual",
-    "unexpectedError": "Ocurrió un error inesperado"
+    "unexpectedError": "Ocurrió un error inesperado",
+    "contactSupport": "Contactar Soporte"
   },
   "subscription": {
     "title": "Suscripción",

@@ -328,6 +328,8 @@
   "appointments": {
     "title": "Appointments",
     "newAppointment": "New Appointment",
+    "new": "New",
+    "allDay": "All day",
     "scheduleAppointment": "Schedule Appointment",
     "scheduleNewAppointment": "Schedule New Appointment",
     "client": "Client",
@@ -394,7 +396,9 @@
       "sat": "Sat"
     },
     "dailyView": "Daily View",
+    "weeklyView": "Weekly View",
     "monthlyView": "Monthly View",
+    "weekSummary": "Week Summary",
     "appointmentDetails": "Appointment Details",
     "manageAppointmentStatus": "Manage appointment status, payment, and scheduling",
     "details": "Details",

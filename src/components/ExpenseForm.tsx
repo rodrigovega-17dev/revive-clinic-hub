@@ -59,7 +59,11 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['daily-expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['monthly-expenses'] });
       queryClient.invalidateQueries({ queryKey: ['todays-expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      
       toast({
         title: t('common.success'),
         description: t('finance.expenseAdded'),

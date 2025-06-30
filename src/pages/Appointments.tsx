@@ -13,6 +13,7 @@ import AppointmentDetails from '@/components/AppointmentDetails';
 import DateFilter from '@/components/DateFilter';
 import AppointmentTable from '@/components/AppointmentTable';
 import MonthlyAppointmentsView from '@/components/MonthlyAppointmentsView';
+import WeeklyAppointmentsView from '@/components/WeeklyAppointmentsView';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -23,7 +24,7 @@ const Appointments = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedView, setSelectedView] = useState<'daily' | 'monthly'>('daily');
+  const [selectedView, setSelectedView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [searchParams] = useSearchParams();
   
   const locale = currentLanguage === 'es' ? es : enUS;
@@ -112,9 +113,10 @@ const Appointments = () => {
       </div>
 
       {/* View Selector */}
-      <Tabs value={selectedView} onValueChange={(value) => setSelectedView(value as 'daily' | 'monthly')}>
-        <TabsList className="grid w-full grid-cols-2">
+      <Tabs value={selectedView} onValueChange={(value) => setSelectedView(value as 'daily' | 'weekly' | 'monthly')}>
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="daily">{t('appointments.dailyView')}</TabsTrigger>
+          <TabsTrigger value="weekly">{t('appointments.weeklyView')}</TabsTrigger>
           <TabsTrigger value="monthly">{t('appointments.monthlyView')}</TabsTrigger>
         </TabsList>
 
@@ -168,6 +170,13 @@ const Appointments = () => {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+
+        <TabsContent value="weekly" className="space-y-6">
+          <WeeklyAppointmentsView
+            currentDate={selectedDate}
+            onDateSelect={handleMonthlyDateSelect}
+          />
         </TabsContent>
 
         <TabsContent value="monthly" className="space-y-6">

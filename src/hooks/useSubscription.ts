@@ -92,9 +92,80 @@ export const useSubscriptionStatus = () => {
   return useQuery({
     queryKey: ['subscription-status', clinicId],
     queryFn: async () => {
+      console.log('useSubscriptionStatus: clinicId =', clinicId);
       if (!clinicId) return null;
       
-      // Read subscription data directly from clinics table
+      // First, check if there's an active subscription in clinic_subscriptions table
+      const { data: subscription, error: subscriptionError } = await supabase
+        .from('clinic_subscriptions')
+        .select(`
+          *,
+          subscription_plans (
+            id,
+            name,
+            slug,
+            max_therapists,
+            price_monthly,
+            price_yearly
+          )
+        `)
+        .eq('clinic_id', clinicId)
+        .in('status', ['active', 'trialing'])
+        .single();
+      
+      console.log('useSubscriptionStatus: subscription query result =', { subscription, subscriptionError });
+      
+      // If there's an active subscription, use that data
+      if (subscription && !subscriptionError) {
+        console.log('useSubscriptionStatus: Found active subscription, using subscription data');
+        // Get therapist count
+        const { count: therapistCount } = await supabase
+          .from('therapists')
+          .select('*', { count: 'exact', head: true })
+          .eq('clinic_id', clinicId)
+          .eq('is_active', true);
+        
+        // Get today's appointment count
+        const { count: appointmentCount } = await supabase
+          .from('appointments')
+          .select('*', { count: 'exact', head: true })
+          .eq('clinic_id', clinicId)
+          .gte('start_time', new Date().toISOString().split('T')[0])
+          .lt('start_time', new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+        
+        // Get client count
+        const { count: clientCount } = await supabase
+          .from('clients')
+          .select('*', { count: 'exact', head: true })
+          .eq('clinic_id', clinicId)
+          .eq('is_active', true);
+        
+        const result = {
+          status: subscription.status as SubscriptionStatus,
+          trial_ends_at: subscription.trial_end,
+          plan: subscription.subscription_plans ? {
+            id: subscription.subscription_plans.id,
+            name: subscription.subscription_plans.name,
+            slug: subscription.subscription_plans.slug,
+            max_therapists: subscription.subscription_plans.max_therapists,
+            price_monthly: subscription.subscription_plans.price_monthly,
+            price_yearly: subscription.subscription_plans.price_yearly
+          } : null,
+          subscription: subscription,
+          usage: {
+            therapist_count: therapistCount || 0,
+            appointment_count: appointmentCount || 0,
+            client_count: clientCount || 0
+          }
+        };
+        
+        console.log('useSubscriptionStatus: Returning subscription result =', result);
+        return result;
+      }
+      
+      console.log('useSubscriptionStatus: No active subscription found, falling back to clinic data');
+      
+      // If no active subscription, fall back to clinic data (for trial users)
       const { data: clinic, error } = await supabase
         .from('clinics')
         .select(`
@@ -112,6 +183,8 @@ export const useSubscriptionStatus = () => {
         `)
         .eq('id', clinicId)
         .single();
+      
+      console.log('useSubscriptionStatus: clinic query result =', { clinic, error });
       
       if (error) throw error;
       
@@ -137,7 +210,7 @@ export const useSubscriptionStatus = () => {
         .eq('clinic_id', clinicId)
         .eq('is_active', true);
       
-      return {
+      const result = {
         status: clinic.subscription_status || 'trial',
         trial_ends_at: clinic.trial_ends_at,
         plan: clinic.subscription_plans ? {
@@ -148,13 +221,16 @@ export const useSubscriptionStatus = () => {
           price_monthly: clinic.subscription_plans.price_monthly,
           price_yearly: clinic.subscription_plans.price_yearly
         } : null,
-        subscription: null, // Not using clinic_subscriptions table for now
+        subscription: null,
         usage: {
           therapist_count: therapistCount || 0,
           appointment_count: appointmentCount || 0,
           client_count: clientCount || 0
         }
       };
+      
+      console.log('useSubscriptionStatus: Returning clinic result =', result);
+      return result;
     },
     enabled: !!clinicId,
     staleTime: 1 * 60 * 1000, // 1 minute

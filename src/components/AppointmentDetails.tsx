@@ -59,7 +59,10 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
     rescheduleData.therapist_id || appointment?.therapist_id,
     rescheduleDate,
     rescheduleHour,
-    parseInt(rescheduleData.duration)
+    parseInt(rescheduleData.duration),
+    appointment?.id, // Exclude the current appointment from conflict check
+    t, // translation function
+    locale === es ? 'es-ES' : 'en-US' // locale
   );
   
   const updateAppointment = useUpdateAppointment();
@@ -68,8 +71,6 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const queryClient = useQueryClient();
   const { isAuthenticated, syncAppointment, deleteAppointment } = useClinicGoogleCalendar();
   const deleteAppointmentMutation = useDeleteAppointment();
-  const { clinicSettings } = useClinicSettings();
-  const { auth } = useAuth();
   const { currency } = useClinicSettings();
   const { clinicId } = useAuth();
 
@@ -137,6 +138,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
         .insert({
           appointment_id: appointment.id,
           client_id: appointment.client_id,
+          clinic_id: clinicId,
           amount: paymentData.facturado ? totalWithIva : paymentData.amount,
           method: paymentData.method,
           payment_date: new Date().toISOString(),

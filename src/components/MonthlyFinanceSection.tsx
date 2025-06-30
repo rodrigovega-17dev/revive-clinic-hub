@@ -12,6 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/useAuth';
+import SearchInput from '@/components/SearchInput';
 
 const MonthlyFinanceSection = () => {
   const { t } = useTranslation();

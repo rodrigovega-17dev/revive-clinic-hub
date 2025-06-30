@@ -29,36 +29,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Helper function to get clinic ID from profile
   const getClinicId = (): string | null => {
-    return profile?.clinic_id || null;
+    const clinicId = profile?.clinic_id || null;
+    console.log('getClinicId called - profile:', profile, 'clinicId:', clinicId);
+    return clinicId;
   };
 
   useEffect(() => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state change:', event, session?.user?.id);
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
           // Fetch user profile
           setTimeout(async () => {
-            const { data: profileData } = await supabase
+            console.log('Fetching profile for user:', session.user.id);
+            const { data: profileData, error: profileError } = await supabase
               .from('profiles')
               .select('*')
               .eq('id', session.user.id)
               .single();
             
+            console.log('Profile data:', profileData, 'Profile error:', profileError);
             setProfile(profileData);
 
             // Fetch clinic data if profile has clinic_id
             const clinicId = profileData?.clinic_id;
+            console.log('Clinic ID from profile:', clinicId);
             if (clinicId) {
-              const { data: clinicData } = await supabase
+              const { data: clinicData, error: clinicError } = await supabase
                 .from('clinics')
                 .select('*')
                 .eq('id', clinicId)
                 .single();
               
+              console.log('Clinic data:', clinicData, 'Clinic error:', clinicError);
               setClinic(clinicData);
             }
           }, 0);
@@ -72,6 +79,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Initial session check:', session?.user?.id);
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);

@@ -118,6 +118,10 @@ const Settings = (): JSX.Element => {
 
     try {
       await updateClinicMutation.mutateAsync({
+        name: clinicName,
+        address: clinicAddress,
+        phone: clinicPhone,
+        email: clinicEmail,
         currency,
         timezone,
       });
@@ -149,9 +153,13 @@ const Settings = (): JSX.Element => {
         show_past_appointments: showPastAppointments,
       });
 
-      // Save clinic settings (currency, timezone)
+      // Save clinic settings (all fields)
       if (clinic) {
         await updateClinicMutation.mutateAsync({
+          name: clinicName,
+          address: clinicAddress,
+          phone: clinicPhone,
+          email: clinicEmail,
           currency,
           timezone,
         });

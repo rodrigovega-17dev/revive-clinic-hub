@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
-import { format } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 import { useClinicGoogleCalendar } from '@/hooks/useClinicGoogleCalendar';
 import { useTranslation } from 'react-i18next';
@@ -151,13 +151,19 @@ export const useCreateAppointment = () => {
         queryKey: ['appointments-by-month'],
         exact: false 
       });
+      
+      // Invalidate weekly appointments queries to ensure weekly view updates
+      queryClient.invalidateQueries({ 
+        queryKey: ['weekly-appointments'],
+        exact: false 
+      });
     },
   });
 };
 
 export const useUpdateAppointment = () => {
   const queryClient = useQueryClient();
-  const { autoSyncAppointment } = useClinicGoogleCalendar();
+  const { syncAppointment, isAuthenticated } = useClinicGoogleCalendar();
   
   return useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & Partial<AppointmentUpdate>) => {
@@ -186,8 +192,30 @@ export const useUpdateAppointment = () => {
         exact: false 
       });
       
-      // Auto-sync to Google Calendar if connected (handles cancellation properly)
-      autoSyncAppointment(updatedAppointment);
+      // Invalidate weekly appointments queries to ensure weekly view updates
+      queryClient.invalidateQueries({ 
+        queryKey: ['weekly-appointments'],
+        exact: false 
+      });
+      
+      // Debug: Log the updated appointment data
+      console.log('Updated appointment data:', {
+        id: updatedAppointment.id,
+        hasGoogleEventId: !!updatedAppointment.google_calendar_event_id,
+        googleEventId: updatedAppointment.google_calendar_event_id,
+        status: updatedAppointment.status,
+        start_time: updatedAppointment.start_time
+      });
+      
+      // Auto-sync to Google Calendar if connected and authenticated
+      if (isAuthenticated) {
+        try {
+          syncAppointment({ appointment: updatedAppointment });
+        } catch (error) {
+          console.error('Failed to sync appointment to Google Calendar:', error);
+          // Don't throw error here as the appointment was already updated successfully
+        }
+      }
     },
   });
 };
@@ -224,6 +252,12 @@ export const useDeleteAppointment = () => {
       // Invalidate all monthly view queries to ensure calendar updates
       queryClient.invalidateQueries({ 
         queryKey: ['appointments-by-month'],
+        exact: false 
+      });
+      
+      // Invalidate weekly appointments queries to ensure weekly view updates
+      queryClient.invalidateQueries({ 
+        queryKey: ['weekly-appointments'],
         exact: false 
       });
     },
@@ -299,8 +333,10 @@ export const useAppointmentsByMonth = (year: number, month: number) => {
     queryFn: async () => {
       if (!clinicId) return {};
 
-      const startDate = new Date(year, month - 1, 1).toISOString();
-      const endDate = new Date(year, month, 0).toISOString();
+      // Use date-fns to properly get start and end of month
+      const monthDate = new Date(year, month - 1, 1);
+      const startDate = startOfMonth(monthDate).toISOString();
+      const endDate = endOfMonth(monthDate).toISOString();
 
       const { data, error } = await supabase
         .from('appointments')
@@ -348,9 +384,17 @@ export const useAppointmentsByMonth = (year: number, month: number) => {
   });
 };
 
-export const useTherapistAvailability = (therapistId: string, date: string, startTime: string, duration: number) => {
+export const useTherapistAvailability = (
+  therapistId: string, 
+  date: string, 
+  startTime: string, 
+  duration: number, 
+  excludeAppointmentId?: string,
+  t?: (key: string) => string,
+  locale?: string
+) => {
   return useQuery({
-    queryKey: ['therapist-availability', therapistId, date, startTime, duration],
+    queryKey: ['therapist-availability', therapistId, date, startTime, duration, excludeAppointmentId],
     queryFn: async () => {
       if (!therapistId || !date || !startTime) {
         return { hasConflict: false, conflicts: [], availableSlots: [] };
@@ -383,8 +427,13 @@ export const useTherapistAvailability = (therapistId: string, date: string, star
 
       if (error) throw error;
 
-      // Check for conflicts
+      // Check for conflicts, excluding the specified appointment if provided
       const conflicts = existingAppointments?.filter(appointment => {
+        // Skip the appointment being excluded (for rescheduling)
+        if (excludeAppointmentId && appointment.id === excludeAppointmentId) {
+          return false;
+        }
+        
         const appointmentStart = new Date(appointment.start_time);
         const appointmentEnd = new Date(appointment.end_time);
         
@@ -404,7 +453,9 @@ export const useTherapistAvailability = (therapistId: string, date: string, star
         duration,
         year,
         month - 1,
-        day
+        day,
+        t,
+        locale
       ) : [];
 
       return {
@@ -424,7 +475,9 @@ const generateAlternativeSlots = (
   duration: number,
   year: number,
   month: number,
-  day: number
+  day: number,
+  t?: (key: string) => string,
+  locale?: string
 ): Array<{ time: string; label: string }> => {
   const slots: Array<{ time: string; label: string }> = [];
   const now = new Date();
@@ -474,20 +527,21 @@ const generateAlternativeSlots = (
       });
       
       if (!hasConflict) {
-        const timeString = slotStart.toLocaleTimeString('en-US', {
+        // Use locale-aware time formatting
+        const timeString = slotStart.toLocaleTimeString(locale || 'en-US', {
           hour: 'numeric',
           minute: '2-digit',
           hour12: true,
         });
         
-        // Add day information
+        // Add day information with proper internationalization
         let dayLabel = '';
         if (dayOffset === 0) {
-          dayLabel = 'Today';
+          dayLabel = t ? t('appointments.today') : 'Today';
         } else if (dayOffset === 1) {
-          dayLabel = 'Tomorrow';
+          dayLabel = t ? t('appointments.tomorrow') : 'Tomorrow';
         } else {
-          dayLabel = slotStart.toLocaleDateString('en-US', { 
+          dayLabel = slotStart.toLocaleDateString(locale || 'en-US', { 
             weekday: 'short', 
             month: 'short', 
             day: 'numeric' 

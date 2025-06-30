@@ -23,6 +23,7 @@ import { useClinicGoogleCalendar } from '@/hooks/useClinicGoogleCalendar';
 import { AlertTriangle, Clock, User, Stethoscope, DollarSign, MessageSquare, MapPin, Loader2, Plus, X } from 'lucide-react';
 import { useClinicSettings } from '@/hooks/useClinic';
 import { useAuth } from '@/hooks/useAuth';
+import { useLanguage } from '@/hooks/useLanguage';
 import { es, enUS } from 'date-fns/locale';
 
 interface AppointmentFormProps {
@@ -47,19 +48,22 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
   const { data: treatments } = useTreatments();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { syncAppointment } = useClinicGoogleCalendar();
+  const { isAuthenticated, syncAppointment } = useClinicGoogleCalendar();
   const createAppointmentMutation = useCreateAppointment();
-  const { data: clinicSettings } = useClinicSettings();
-  const { data: authData } = useAuth();
-  const { currency } = useClinicSettings();
+  const { currency, timezone } = useClinicSettings();
+  const { user } = useAuth();
   const { clinicId } = useAuth();
+  const { currentLanguage } = useLanguage();
 
   // Check for therapist availability
   const { data: availability, isLoading: checkingAvailability } = useTherapistAvailability(
     therapistId,
     startDate,
     startHour,
-    parseInt(sessionDuration)
+    parseInt(sessionDuration),
+    undefined, // excludeAppointmentId
+    t, // translation function
+    currentLanguage === 'es' ? 'es-ES' : 'en-US' // locale
   );
 
   // Debug logging
@@ -220,7 +224,10 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
       
       onClose();
 
-      syncAppointment({ appointment: data });
+      // Only sync to Google Calendar if authenticated
+      if (isAuthenticated) {
+        syncAppointment({ appointment: data });
+      }
     } catch (error: any) {
       console.error('Error creating appointment:', error);
       toast({

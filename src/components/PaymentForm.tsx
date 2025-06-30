@@ -82,7 +82,7 @@ export default function PaymentForm({ open, onClose }: PaymentFormProps) {
         client_id: clientId === 'none' ? null : clientId,
         clinic_id: clinicId,
         method: paymentMethod,
-        payment_date: paymentDate,
+        payment_date: new Date(paymentDate + 'T00:00:00').toISOString(),
         received_by: user?.id || null,
       };
 

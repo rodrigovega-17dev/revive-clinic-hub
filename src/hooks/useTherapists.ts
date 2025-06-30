@@ -17,10 +17,7 @@ export const useTherapists = () => {
       
       const { data, error } = await supabase
         .from('therapists')
-        .select(`
-          *,
-          profiles (first_name, last_name, email, phone)
-        `)
+        .select('*')
         .eq('clinic_id', clinicId)
         .order('created_at', { ascending: false });
       

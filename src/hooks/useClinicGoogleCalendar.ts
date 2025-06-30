@@ -182,6 +182,12 @@ export const useClinicGoogleCalendar = () => {
       // Invalidate queries to refresh appointment data
       queryClient.invalidateQueries({ queryKey: ['appointments', clinicId] });
       
+      // Invalidate weekly appointments queries to ensure weekly view updates
+      queryClient.invalidateQueries({ 
+        queryKey: ['weekly-appointments'],
+        exact: false 
+      });
+      
       toast({
         title: t('googleCalendar.syncSuccess'),
         description: t(`googleCalendar.${result.action}Success`),
@@ -204,6 +210,13 @@ export const useClinicGoogleCalendar = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments', clinicId] });
+      
+      // Invalidate weekly appointments queries to ensure weekly view updates
+      queryClient.invalidateQueries({ 
+        queryKey: ['weekly-appointments'],
+        exact: false 
+      });
+      
       toast({
         title: t('googleCalendar.deleteSuccess'),
         description: t('googleCalendar.deleteSuccessDescription'),

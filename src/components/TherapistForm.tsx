@@ -48,7 +48,6 @@ const TherapistForm = ({ open, onClose }: TherapistFormProps) => {
         license_number: licenseNumber.trim() || null,
         commission_percentage: parseFloat(commissionPercentage) || 0,
         calendar_color_id: calendarColorId,
-        specialties: null,
         user_id: null,
       });
 

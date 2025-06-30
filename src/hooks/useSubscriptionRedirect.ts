@@ -1,23 +1,38 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useSubscriptionStatus } from './useSubscription';
+import { useAuth } from './useAuth';
 
 export const useSubscriptionRedirect = () => {
   const navigate = useNavigate();
-  const { data: subscriptionStatus, isLoading } = useSubscriptionStatus();
+  const location = useLocation();
+  const { data: subscriptionStatus, isLoading: subscriptionLoading } = useSubscriptionStatus();
+  const { loading: authLoading, clinicId } = useAuth();
 
   useEffect(() => {
-    if (isLoading) return;
-    if (window.location.pathname === '/subscription') return;
-    if (window.location.pathname === '/auth') return;
+    // Wait for both auth and subscription data to load
+    if (authLoading || subscriptionLoading) {
+      console.log('Waiting for data to load - authLoading:', authLoading, 'subscriptionLoading:', subscriptionLoading);
+      return;
+    }
 
+    const currentPath = location.pathname;
     console.log('Subscription redirect check:', {
       subscriptionStatus,
-      currentPath: window.location.pathname
+      currentPath,
+      authLoading,
+      subscriptionLoading,
+      clinicId
     });
 
-    // If no subscription status at all, redirect
-    if (!subscriptionStatus) {
+    // If no clinic ID, user might not be properly set up
+    if (!clinicId) {
+      console.log('No clinic ID found, user might not be properly set up');
+      return;
+    }
+
+    // If no subscription status and not on subscription page, redirect
+    if (!subscriptionStatus && currentPath !== '/subscription') {
       console.log('No subscription status, redirecting to subscription page');
       navigate('/subscription');
       return;
@@ -29,33 +44,25 @@ export const useSubscriptionRedirect = () => {
       return;
     }
 
-    // If trial expired
+    // If trial is active and not expired, allow access
     if (
       subscriptionStatus.status === 'trial' &&
       subscriptionStatus.trial_ends_at &&
-      new Date(subscriptionStatus.trial_ends_at) < new Date()
+      new Date(subscriptionStatus.trial_ends_at) >= new Date()
     ) {
-      console.log('Trial expired, redirecting to subscription page');
-      navigate('/subscription');
+      console.log('Trial is active, allowing access');
       return;
     }
 
-    // If subscription is canceled, past due, or unpaid, redirect
+    // If trial expired or subscription is canceled, past due, unpaid, or incomplete, redirect
     if (
+      (subscriptionStatus.status === 'trial' && subscriptionStatus.trial_ends_at && new Date(subscriptionStatus.trial_ends_at) < new Date()) ||
       ['canceled', 'past_due', 'unpaid', 'incomplete'].includes(subscriptionStatus.status)
     ) {
       console.log('Subscription status requires redirect:', subscriptionStatus.status);
       navigate('/subscription');
-      return;
     }
+  }, [subscriptionStatus, location.pathname, navigate, authLoading, subscriptionLoading, clinicId]);
 
-    // If we get here and status is not 'active', redirect to be safe
-    if (subscriptionStatus.status !== 'active') {
-      console.log('Unknown subscription status, redirecting to subscription page:', subscriptionStatus.status);
-      navigate('/subscription');
-      return;
-    }
-  }, [subscriptionStatus, isLoading, navigate]);
-
-  return { subscriptionStatus, isLoading };
+  return { subscriptionStatus, isLoading: subscriptionLoading };
 }; 

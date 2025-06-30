@@ -1,14 +1,37 @@
 const Stripe = require('stripe');
 const { createClient } = require('@supabase/supabase-js');
 
+// Access environment variables directly (server-side)
 const stripe = new Stripe(process.env.VITE_STRIPE_SECRET_KEY, {
-  apiVersion: '2024-12-18.acacia',
+  apiVersion: '2025-05-28.basil',
 });
+
+// Check if required environment variables are set
+if (!process.env.VITE_SUPABASE_URL) {
+  throw new Error('VITE_SUPABASE_URL environment variable is required');
+}
+
+if (!process.env.VITE_SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error('VITE_SUPABASE_SERVICE_ROLE_KEY environment variable is required');
+}
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL,
   process.env.VITE_SUPABASE_SERVICE_ROLE_KEY
 );
+
+// Helper function to safely convert Stripe timestamps
+function safeDateConversion(timestamp) {
+  if (!timestamp || timestamp === null || timestamp === undefined) {
+    return null;
+  }
+  try {
+    return new Date(timestamp * 1000).toISOString();
+  } catch (error) {
+    console.error('Error converting timestamp:', timestamp, error);
+    return null;
+  }
+}
 
 exports.handler = async (event, context) => {
   // Only allow POST requests
@@ -40,6 +63,8 @@ exports.handler = async (event, context) => {
   }
 
   try {
+    console.log('Processing webhook event:', stripeEvent.type);
+    
     // Handle the event
     switch (stripeEvent.type) {
       case 'customer.subscription.created':
@@ -71,12 +96,14 @@ exports.handler = async (event, context) => {
     console.error('Error processing webhook:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Internal server error' }),
+      body: JSON.stringify({ error: 'Internal server error', details: error.message }),
     };
   }
 };
 
 async function handleSubscriptionEvent(subscription) {
+  console.log('Handling subscription event for subscription:', subscription.id);
+  
   const clinicId = subscription.metadata.clinic_id;
   const planId = subscription.metadata.plan_id;
 
@@ -85,8 +112,10 @@ async function handleSubscriptionEvent(subscription) {
     return;
   }
 
+  console.log('Updating clinic:', clinicId, 'with plan:', planId);
+
   // Update clinic subscription status
-  await supabase
+  const { error: clinicError } = await supabase
     .from('clinics')
     .update({
       subscription_status: subscription.status,
@@ -96,8 +125,15 @@ async function handleSubscriptionEvent(subscription) {
     })
     .eq('id', clinicId);
 
+  if (clinicError) {
+    console.error('Error updating clinic:', clinicError);
+    throw clinicError;
+  }
+
+  console.log('Clinic updated successfully');
+
   // Insert or update clinic_subscriptions record
-  await supabase
+  const { error: subscriptionError } = await supabase
     .from('clinic_subscriptions')
     .upsert({
       clinic_id: clinicId,
@@ -105,16 +141,25 @@ async function handleSubscriptionEvent(subscription) {
       stripe_customer_id: subscription.customer,
       stripe_subscription_id: subscription.id,
       status: subscription.status,
-      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-      current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+      current_period_start: safeDateConversion(subscription.current_period_start),
+      current_period_end: safeDateConversion(subscription.current_period_end),
       cancel_at_period_end: subscription.cancel_at_period_end || false,
-      canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
-      trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString() : null,
-      trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+      canceled_at: safeDateConversion(subscription.canceled_at),
+      trial_start: safeDateConversion(subscription.trial_start),
+      trial_end: safeDateConversion(subscription.trial_end),
     });
+
+  if (subscriptionError) {
+    console.error('Error updating clinic_subscriptions:', subscriptionError);
+    throw subscriptionError;
+  }
+
+  console.log('Subscription record updated successfully');
 }
 
 async function handleSubscriptionDeleted(subscription) {
+  console.log('Handling subscription deleted for subscription:', subscription.id);
+  
   const clinicId = subscription.metadata.clinic_id;
 
   if (!clinicId) {
@@ -123,7 +168,7 @@ async function handleSubscriptionDeleted(subscription) {
   }
 
   // Update clinic to trial status
-  await supabase
+  const { error } = await supabase
     .from('clinics')
     .update({
       subscription_status: 'trial',
@@ -131,22 +176,42 @@ async function handleSubscriptionDeleted(subscription) {
       stripe_subscription_id: null,
     })
     .eq('id', clinicId);
+
+  if (error) {
+    console.error('Error updating clinic after subscription deletion:', error);
+    throw error;
+  }
+
+  console.log('Clinic updated to trial status after subscription deletion');
 }
 
 async function handleInvoiceEvent(invoice) {
-  if (!invoice.subscription) return;
+  console.log('Handling invoice event for invoice:', invoice.id);
+  
+  if (!invoice.subscription) {
+    console.log('No subscription associated with invoice');
+    return;
+  }
 
   // Get subscription details
-  const { data: subscription } = await supabase
+  const { data: subscription, error: subscriptionError } = await supabase
     .from('clinic_subscriptions')
     .select('clinic_id, id')
     .eq('stripe_subscription_id', invoice.subscription)
     .single();
 
-  if (!subscription) return;
+  if (subscriptionError) {
+    console.error('Error fetching subscription for invoice:', subscriptionError);
+    return;
+  }
+
+  if (!subscription) {
+    console.log('No subscription found for invoice subscription ID:', invoice.subscription);
+    return;
+  }
 
   // Save invoice to database
-  await supabase
+  const { error: invoiceError } = await supabase
     .from('subscription_invoices')
     .upsert({
       clinic_id: subscription.clinic_id,
@@ -155,34 +220,61 @@ async function handleInvoiceEvent(invoice) {
       amount: invoice.amount_paid / 100,
       currency: invoice.currency,
       status: invoice.status,
-      invoice_date: invoice.created ? new Date(invoice.created * 1000).toISOString() : null,
-      due_date: invoice.due_date ? new Date(invoice.due_date * 1000).toISOString() : null,
-      paid_at: invoice.status === 'paid' && invoice.created 
-        ? new Date(invoice.created * 1000).toISOString() 
-        : null,
+      invoice_date: safeDateConversion(invoice.created),
+      due_date: safeDateConversion(invoice.due_date),
+      paid_at: invoice.status === 'paid' ? safeDateConversion(invoice.created) : null,
     });
+
+  if (invoiceError) {
+    console.error('Error saving invoice:', invoiceError);
+    throw invoiceError;
+  }
+
+  console.log('Invoice saved successfully');
 }
 
 async function handlePaymentFailed(invoice) {
-  if (!invoice.subscription) return;
+  console.log('Handling payment failed for invoice:', invoice.id);
+  
+  if (!invoice.subscription) {
+    console.log('No subscription associated with failed payment invoice');
+    return;
+  }
 
   // Update subscription status to past_due
-  await supabase
+  const { error: subscriptionError } = await supabase
     .from('clinic_subscriptions')
     .update({ status: 'past_due' })
     .eq('stripe_subscription_id', invoice.subscription);
 
+  if (subscriptionError) {
+    console.error('Error updating subscription status to past_due:', subscriptionError);
+    throw subscriptionError;
+  }
+
   // Update clinic status
-  const { data: subscription } = await supabase
+  const { data: subscription, error: fetchError } = await supabase
     .from('clinic_subscriptions')
     .select('clinic_id')
     .eq('stripe_subscription_id', invoice.subscription)
     .single();
 
+  if (fetchError) {
+    console.error('Error fetching subscription for clinic update:', fetchError);
+    return;
+  }
+
   if (subscription) {
-    await supabase
+    const { error: clinicError } = await supabase
       .from('clinics')
       .update({ subscription_status: 'past_due' })
       .eq('id', subscription.clinic_id);
+
+    if (clinicError) {
+      console.error('Error updating clinic status to past_due:', clinicError);
+      throw clinicError;
+    }
+
+    console.log('Clinic status updated to past_due');
   }
 } 
