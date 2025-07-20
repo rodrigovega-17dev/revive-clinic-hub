@@ -4,12 +4,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, User, Phone, Mail, Calendar, Edit, Award, DollarSign, Palette } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Plus, User, Phone, Mail, Calendar, Edit, Award, DollarSign, Palette, AlertTriangle } from 'lucide-react';
 import { useTherapists } from '@/hooks/useTherapists';
+import { useSubscriptionLimits, useCanAddTherapist } from '@/hooks/useSubscription';
 import TherapistForm from '@/components/TherapistForm';
 import EditTherapistForm from '@/components/EditTherapistForm';
 import SearchInput from '@/components/SearchInput';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
 // Google Calendar default colors for display
@@ -29,10 +32,38 @@ const GOOGLE_CALENDAR_COLORS = [
 
 const Therapists = () => {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const { data: therapists, isLoading } = useTherapists();
+  const subscriptionLimits = useSubscriptionLimits();
+  const canAddTherapist = useCanAddTherapist();
   const [showForm, setShowForm] = useState(false);
   const [editingTherapist, setEditingTherapist] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  const handleAddTherapist = () => {
+    if (!canAddTherapist) {
+      toast({
+        title: t('subscription.limitReached'),
+        description: t('subscription.therapistLimitReached', { 
+          current: subscriptionLimits?.currentTherapists || 0,
+          max: subscriptionLimits?.maxTherapists || 3,
+          plan: subscriptionLimits?.planName || 'Trial'
+        }),
+        variant: 'destructive',
+        action: (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.location.href = '/subscription'}
+          >
+            {t('subscription.upgrade')}
+          </Button>
+        ),
+      });
+      return;
+    }
+    setShowForm(true);
+  };
 
   const filteredTherapists = useMemo(() => {
     if (!therapists) return [];
@@ -96,7 +127,7 @@ const Therapists = () => {
           <h1 className="text-3xl font-bold tracking-tight">{t('therapists.title')}</h1>
           <p className="text-muted-foreground">{t('therapists.description')}</p>
         </div>
-        <Button onClick={() => setShowForm(true)}>
+        <Button onClick={handleAddTherapist}>
           <Plus className="h-4 w-4 mr-2" />
           {t('therapists.addTherapist')}
         </Button>
@@ -262,7 +293,7 @@ const Therapists = () => {
                 : t('therapists.getStartedAdding')
               }
             </p>
-            <Button onClick={() => setShowForm(true)}>
+            <Button onClick={handleAddTherapist}>
               <Plus className="h-4 w-4 mr-2" />
               {t('therapists.addTherapist')}
             </Button>

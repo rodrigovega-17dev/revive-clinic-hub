@@ -26,7 +26,7 @@ const GoogleAuthCallback: React.FC = () => {
 
     if (!code) {
       setStatus('error');
-      setErrorMessage('No authorization code received');
+      setErrorMessage(t('googleCalendar.noAuthCode'));
       return;
     }
 
@@ -65,7 +65,7 @@ const GoogleAuthCallback: React.FC = () => {
                 <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
                 <h2 className="text-xl font-semibold">{t('googleCalendar.oauthRedirect')}</h2>
                 <p className="text-muted-foreground">
-                  Completing Google Calendar connection...
+                  {t('googleCalendar.completingConnection')}
                 </p>
               </>
             )}
@@ -77,10 +77,10 @@ const GoogleAuthCallback: React.FC = () => {
                   {t('googleCalendar.connectedSuccessfully')}
                 </h2>
                 <p className="text-muted-foreground">
-                  Redirecting to settings...
+                  {t('googleCalendar.redirectingSettings')}
                 </p>
                 <Button onClick={handleGoToSettings} className="mt-4">
-                  Go to Settings
+                  {t('googleCalendar.goToSettings')}
                 </Button>
               </>
             )}
@@ -96,10 +96,10 @@ const GoogleAuthCallback: React.FC = () => {
                 </p>
                 <div className="flex space-x-2 mt-4">
                   <Button onClick={handleRetry} variant="outline">
-                    Try Again
+                    {t('googleCalendar.tryAgain')}
                   </Button>
                   <Button onClick={handleGoToSettings}>
-                    Go to Settings
+                    {t('googleCalendar.goToSettings')}
                   </Button>
                 </div>
               </>

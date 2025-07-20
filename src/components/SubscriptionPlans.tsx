@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, Crown, Star } from 'lucide-react';
-import { useSubscriptionPlans, useBillingCycles, useCreateCheckoutSession } from '@/hooks/useSubscription';
+import { Check, Crown, Star, CheckCircle } from 'lucide-react';
+import { useSubscriptionPlans, useBillingCycles, useCreateCheckoutSession, useSubscriptionStatus } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { formatCurrency } from '@/lib/utils';
 import type { SubscriptionPlan } from '@/integrations/stripe/types';
@@ -20,6 +20,7 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({
 }) => {
   const { t } = useTranslation();
   const { data: plans, isLoading } = useSubscriptionPlans();
+  const { data: subscriptionStatus } = useSubscriptionStatus();
   const billingCycles = useBillingCycles();
   const [selectedBillingCycle, setSelectedBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const { clinic } = useAuth();
@@ -62,6 +63,24 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({
   const getBillingCycleDiscount = () => {
     const cycle = billingCycles.find(c => c.value === selectedBillingCycle);
     return cycle?.discount || 0;
+  };
+
+  const isCurrentPlan = (plan: SubscriptionPlan) => {
+    return subscriptionStatus?.plan?.id === plan.id;
+  };
+
+  const getButtonText = (plan: SubscriptionPlan) => {
+    if (isCurrentPlan(plan)) {
+      return t('subscription.currentPlan');
+    }
+    return t('subscription.selectPlan');
+  };
+
+  const getButtonVariant = (plan: SubscriptionPlan) => {
+    if (isCurrentPlan(plan)) {
+      return 'secondary';
+    }
+    return plan.is_popular ? 'default' : 'outline';
   };
 
   if (isLoading) {
@@ -123,12 +142,22 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({
           <Card 
             key={plan.id} 
             className={`relative transition-all duration-200 hover:shadow-lg ${
-              plan.is_popular 
-                ? 'ring-2 ring-primary shadow-lg scale-105' 
-                : 'hover:scale-105'
+              isCurrentPlan(plan)
+                ? 'ring-2 ring-green-500 shadow-lg'
+                : plan.is_popular 
+                  ? 'ring-2 ring-primary shadow-lg scale-105' 
+                  : 'hover:scale-105'
             }`}
           >
-            {plan.is_popular && (
+            {isCurrentPlan(plan) && (
+              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                <Badge className="bg-green-500 text-white flex items-center gap-1">
+                  <CheckCircle className="h-3 w-3" />
+                  {t('subscription.currentPlan')}
+                </Badge>
+              </div>
+            )}
+            {!isCurrentPlan(plan) && plan.is_popular && (
               <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
                 <Badge className="bg-primary text-primary-foreground flex items-center gap-1">
                   <Star className="h-3 w-3" />
@@ -191,9 +220,9 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({
               {/* Action Button */}
               <Button
                 className="w-full"
-                variant={plan.is_popular ? 'default' : 'outline'}
+                variant={getButtonVariant(plan)}
                 onClick={() => handleSubscribe(plan)}
-                disabled={createCheckoutSession.isPending}
+                disabled={createCheckoutSession.isPending || isCurrentPlan(plan)}
               >
                 {createCheckoutSession.isPending ? (
                   <>
@@ -201,7 +230,7 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({
                     {t('subscription.processing')}
                   </>
                 ) : (
-                  t('subscription.selectPlan')
+                  getButtonText(plan)
                 )}
               </Button>
             </CardContent>

@@ -82,62 +82,47 @@ const ClinicGoogleCalendarConnect: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Connection Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
             <Calendar className="h-5 w-5" />
             <span>{t('googleCalendar.title')}</span>
             <Badge variant="default" className="ml-2">
               <CheckCircle className="h-3 w-3 mr-1" />
               {t('googleCalendar.connected')}
             </Badge>
-          </CardTitle>
-          <CardDescription>
-            {t('googleCalendar.syncDescription')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {/* Connection Info */}
-            <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
-              <div className="flex items-center space-x-2">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <span className="text-sm font-medium text-green-800 dark:text-green-200">
-                  {t('googleCalendar.connectedSuccessfully')}
-                </span>
-              </div>
-              <Button
-                onClick={handleDisconnect}
-                variant="outline"
-                size="sm"
-                disabled={isDisconnecting}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/20"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                {t('googleCalendar.disconnect')}
-              </Button>
-            </div>
-
-            {/* Current Calendar Info */}
-            {selectedCalendar && (
-              <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                <div className="flex items-center space-x-2">
-                  <Calendar className="h-4 w-4 text-blue-600" />
-                  <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                    {t('googleCalendar.syncingTo')}: {selectedCalendar.summary}
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
-        </CardContent>
-      </Card>
+          <Button
+            onClick={handleDisconnect}
+            variant="outline"
+            size="sm"
+            disabled={isDisconnecting}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/20"
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            {t('googleCalendar.disconnect')}
+          </Button>
+        </div>
+        <CardDescription>
+          {t('googleCalendar.syncDescription')}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {/* Connection Status */}
+          <div className="flex items-center space-x-2 p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            <span className="text-sm font-medium text-green-800 dark:text-green-200">
+              {t('googleCalendar.connectedSuccessfully')}
+            </span>
+          </div>
 
-      {/* Calendar Selection */}
-      <ClinicGoogleCalendarSelector />
-    </div>
+          {/* Integrated Calendar Selection */}
+          <ClinicGoogleCalendarSelector />
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 

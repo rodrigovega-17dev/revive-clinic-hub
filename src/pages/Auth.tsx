@@ -9,10 +9,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import PasswordInput from '@/components/auth/PasswordInput';
+import PasswordResetForm from '@/components/auth/PasswordResetForm';
 
 const Auth = () => {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [signInData, setSignInData] = useState({ email: '', password: '' });
   const [signUpData, setSignUpData] = useState({ 
     email: '', 
@@ -68,7 +71,7 @@ const Auth = () => {
     } else {
       toast({
         title: t('notifications.success'),
-        description: 'Account created successfully! Please check your email for verification.',
+        description: t('auth.accountCreated'),
       });
     }
     
@@ -79,18 +82,24 @@ const Auth = () => {
     <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-foreground">Revive Clinic Hub</h2>
-          <p className="text-muted-foreground">Physiotherapy Clinic Management</p>
+          <h2 className="text-3xl font-bold text-foreground">{t('auth.headerTitle')}</h2>
+          <p className="text-muted-foreground">{t('auth.headerSubtitle')}</p>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('auth.login')}</CardTitle>
-            <CardDescription>
-              Sign in to your existing account or create a new one
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        {showPasswordReset ? (
+          <PasswordResetForm 
+            onBack={() => setShowPasswordReset(false)}
+            onSuccess={() => setShowPasswordReset(false)}
+          />
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('auth.login')}</CardTitle>
+              <CardDescription>
+                {t('auth.signInOrSignUp')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
             <Tabs defaultValue="signin" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="signin">{t('auth.signIn')}</TabsTrigger>
@@ -104,7 +113,7 @@ const Auth = () => {
                     <Input
                       id="signin-email"
                       type="email"
-                      placeholder="Enter your email"
+                      placeholder={t('auth.emailPlaceholder')}
                       value={signInData.email}
                       onChange={(e) => setSignInData(prev => ({ ...prev, email: e.target.value }))}
                       required
@@ -112,14 +121,26 @@ const Auth = () => {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="signin-password">{t('auth.password')}</Label>
-                    <Input
+                    <PasswordInput
                       id="signin-password"
-                      type="password"
-                      placeholder="Enter your password"
+                      placeholder={t('auth.passwordPlaceholder')}
                       value={signInData.password}
-                      onChange={(e) => setSignInData(prev => ({ ...prev, password: e.target.value }))}
+                      onChange={(value) => setSignInData(prev => ({ ...prev, password: value }))}
                       required
+                      disabled={isLoading}
+                      autoComplete="current-password"
                     />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="px-0 font-normal text-sm"
+                      onClick={() => setShowPasswordReset(true)}
+                      disabled={isLoading}
+                    >
+                      {t('auth.forgotPassword')}
+                    </Button>
                   </div>
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -132,22 +153,22 @@ const Auth = () => {
                 <form onSubmit={handleSignUp} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="signup-firstname">First Name</Label>
+                      <Label htmlFor="signup-firstname">{t('auth.firstName')}</Label>
                       <Input
                         id="signup-firstname"
                         type="text"
-                        placeholder="First name"
+                        placeholder={t('auth.firstNamePlaceholder')}
                         value={signUpData.firstName}
                         onChange={(e) => setSignUpData(prev => ({ ...prev, firstName: e.target.value }))}
                         required
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="signup-lastname">Last Name</Label>
+                      <Label htmlFor="signup-lastname">{t('auth.lastName')}</Label>
                       <Input
                         id="signup-lastname"
                         type="text"
-                        placeholder="Last name"
+                        placeholder={t('auth.lastNamePlaceholder')}
                         value={signUpData.lastName}
                         onChange={(e) => setSignUpData(prev => ({ ...prev, lastName: e.target.value }))}
                         required
@@ -159,7 +180,7 @@ const Auth = () => {
                     <Input
                       id="signup-email"
                       type="email"
-                      placeholder="Enter your email"
+                      placeholder={t('auth.emailPlaceholder')}
                       value={signUpData.email}
                       onChange={(e) => setSignUpData(prev => ({ ...prev, email: e.target.value }))}
                       required
@@ -167,24 +188,26 @@ const Auth = () => {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="signup-password">{t('auth.password')}</Label>
-                    <Input
+                    <PasswordInput
                       id="signup-password"
-                      type="password"
-                      placeholder="Create a password"
+                      placeholder={t('auth.createPasswordPlaceholder')}
                       value={signUpData.password}
-                      onChange={(e) => setSignUpData(prev => ({ ...prev, password: e.target.value }))}
+                      onChange={(value) => setSignUpData(prev => ({ ...prev, password: value }))}
                       required
+                      disabled={isLoading}
+                      autoComplete="new-password"
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Create Account
+                    {t('auth.createAccount')}
                   </Button>
                 </form>
               </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
+        )}
       </div>
     </div>
   );

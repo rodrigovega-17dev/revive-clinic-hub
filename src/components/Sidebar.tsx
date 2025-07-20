@@ -48,19 +48,19 @@ export const Sidebar = () => {
 
   // Get user display name
   const getUserDisplayName = () => {
-    if (!profile) return "Guest";
+    if (!profile) return t('sidebar.fallbackUser');
     return `${profile.first_name} ${profile.last_name}`.trim() || profile.email;
   };
 
   // Get user role display
   const getUserRole = () => {
-    if (!profile) return "Guest";
+    if (!profile) return t('sidebar.fallbackUser');
     return profile.role.charAt(0).toUpperCase() + profile.role.slice(1);
   };
 
   // Get clinic display name
   const getClinicDisplayName = () => {
-    return clinic?.name || "Revive Clinic";
+    return clinic?.name || t('sidebar.fallbackClinic');
   };
 
   return (
@@ -79,7 +79,7 @@ export const Sidebar = () => {
             </div>
             <div>
               <h1 className="text-lg font-bold text-sidebar-foreground">{getClinicDisplayName()}</h1>
-              <p className="text-xs text-muted-foreground font-medium">Cliniker CRM</p>
+              <p className="text-xs text-muted-foreground font-medium">{t('sidebar.subBrand')}</p>
             </div>
           </div>
         )}

@@ -1,3 +1,4 @@
+import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { stripeService } from '@/integrations/stripe/service';
@@ -34,7 +35,16 @@ export const useSubscriptionPlans = () => {
           : [],
       }));
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 15 * 60 * 1000, // 15 minutes - subscription plans rarely change
+    gcTime: 60 * 60 * 1000, // 1 hour - keep in cache longer for static data
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    // Enable background refetch for stale-while-revalidate
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    // Prefetch on hover for better UX
+    refetchInterval: false, // Don't auto-refetch since plans are static
   });
 };
 
@@ -82,7 +92,12 @@ export const useClinicSubscription = () => {
       };
     },
     enabled: !!clinicId,
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 3 * 60 * 1000, // 3 minutes - subscription data changes less frequently
+    gcTime: 15 * 60 * 1000, // 15 minutes - keep in cache longer
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 };
 
@@ -92,148 +107,148 @@ export const useSubscriptionStatus = () => {
   return useQuery({
     queryKey: ['subscription-status', clinicId],
     queryFn: async () => {
-      console.log('useSubscriptionStatus: clinicId =', clinicId);
       if (!clinicId) return null;
       
-      // First, check if there's an active subscription in clinic_subscriptions table
-      const { data: subscription, error: subscriptionError } = await supabase
-        .from('clinic_subscriptions')
-        .select(`
-          *,
-          subscription_plans (
-            id,
-            name,
-            slug,
-            max_therapists,
-            price_monthly,
-            price_yearly
-          )
-        `)
-        .eq('clinic_id', clinicId)
-        .in('status', ['active', 'trialing'])
-        .single();
-      
-      console.log('useSubscriptionStatus: subscription query result =', { subscription, subscriptionError });
-      
-      // If there's an active subscription, use that data
-      if (subscription && !subscriptionError) {
-        console.log('useSubscriptionStatus: Found active subscription, using subscription data');
-        // Get therapist count
-        const { count: therapistCount } = await supabase
-          .from('therapists')
-          .select('*', { count: 'exact', head: true })
+      try {
+        // First, try to get active subscription data (most common case)
+        const { data: subscription, error: subscriptionError } = await supabase
+          .from('clinic_subscriptions')
+          .select(`
+            *,
+            subscription_plans (
+              id,
+              name,
+              slug,
+              max_therapists,
+              price_monthly,
+              price_yearly
+            )
+          `)
           .eq('clinic_id', clinicId)
-          .eq('is_active', true);
+          .in('status', ['active', 'trialing'])
+          .maybeSingle();
         
-        // Get today's appointment count
-        const { count: appointmentCount } = await supabase
-          .from('appointments')
-          .select('*', { count: 'exact', head: true })
-          .eq('clinic_id', clinicId)
-          .gte('start_time', new Date().toISOString().split('T')[0])
-          .lt('start_time', new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+        // Get usage counts in parallel (only if we need them)
+        const [therapistResult, appointmentResult, clientResult] = await Promise.all([
+          supabase
+            .from('therapists')
+            .select('*', { count: 'exact', head: true })
+            .eq('clinic_id', clinicId)
+            .eq('is_active', true),
+          supabase
+            .from('appointments')
+            .select('*', { count: 'exact', head: true })
+            .eq('clinic_id', clinicId)
+            .gte('start_time', new Date().toISOString().split('T')[0])
+            .lt('start_time', new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]),
+          supabase
+            .from('clients')
+            .select('*', { count: 'exact', head: true })
+            .eq('clinic_id', clinicId)
+            .eq('is_active', true)
+        ]);
         
-        // Get client count
-        const { count: clientCount } = await supabase
-          .from('clients')
-          .select('*', { count: 'exact', head: true })
-          .eq('clinic_id', clinicId)
-          .eq('is_active', true);
-        
-        const result = {
-          status: subscription.status as SubscriptionStatus,
-          trial_ends_at: subscription.trial_end,
-          plan: subscription.subscription_plans ? {
-            id: subscription.subscription_plans.id,
-            name: subscription.subscription_plans.name,
-            slug: subscription.subscription_plans.slug,
-            max_therapists: subscription.subscription_plans.max_therapists,
-            price_monthly: subscription.subscription_plans.price_monthly,
-            price_yearly: subscription.subscription_plans.price_yearly
-          } : null,
-          subscription: subscription,
-          usage: {
-            therapist_count: therapistCount || 0,
-            appointment_count: appointmentCount || 0,
-            client_count: clientCount || 0
-          }
+        const usage = {
+          therapist_count: therapistResult.count || 0,
+          appointment_count: appointmentResult.count || 0,
+          client_count: clientResult.count || 0
         };
         
-        console.log('useSubscriptionStatus: Returning subscription result =', result);
-        return result;
-      }
-      
-      console.log('useSubscriptionStatus: No active subscription found, falling back to clinic data');
-      
-      // If no active subscription, fall back to clinic data (for trial users)
-      const { data: clinic, error } = await supabase
-        .from('clinics')
-        .select(`
-          subscription_status,
-          trial_ends_at,
-          subscription_plan_id,
-          subscription_plans (
-            id,
-            name,
-            slug,
-            max_therapists,
-            price_monthly,
-            price_yearly
-          )
-        `)
-        .eq('id', clinicId)
-        .single();
-      
-      console.log('useSubscriptionStatus: clinic query result =', { clinic, error });
-      
-      if (error) throw error;
-      
-      // Get therapist count
-      const { count: therapistCount } = await supabase
-        .from('therapists')
-        .select('*', { count: 'exact', head: true })
-        .eq('clinic_id', clinicId)
-        .eq('is_active', true);
-      
-      // Get today's appointment count
-      const { count: appointmentCount } = await supabase
-        .from('appointments')
-        .select('*', { count: 'exact', head: true })
-        .eq('clinic_id', clinicId)
-        .gte('start_time', new Date().toISOString().split('T')[0])
-        .lt('start_time', new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
-      
-      // Get client count
-      const { count: clientCount } = await supabase
-        .from('clients')
-        .select('*', { count: 'exact', head: true })
-        .eq('clinic_id', clinicId)
-        .eq('is_active', true);
-      
-      const result = {
-        status: clinic.subscription_status || 'trial',
-        trial_ends_at: clinic.trial_ends_at,
-        plan: clinic.subscription_plans ? {
-          id: clinic.subscription_plans.id,
-          name: clinic.subscription_plans.name,
-          slug: clinic.subscription_plans.slug,
-          max_therapists: clinic.subscription_plans.max_therapists,
-          price_monthly: clinic.subscription_plans.price_monthly,
-          price_yearly: clinic.subscription_plans.price_yearly
-        } : null,
-        subscription: null,
-        usage: {
-          therapist_count: therapistCount || 0,
-          appointment_count: appointmentCount || 0,
-          client_count: clientCount || 0
+        // If there's an active subscription, return that data
+        if (subscription && !subscriptionError) {
+          return {
+            status: subscription.status as SubscriptionStatus,
+            trial_ends_at: subscription.trial_end,
+            plan: subscription.subscription_plans ? {
+              id: subscription.subscription_plans.id,
+              name: subscription.subscription_plans.name,
+              slug: subscription.subscription_plans.slug,
+              max_therapists: subscription.subscription_plans.max_therapists,
+              price_monthly: subscription.subscription_plans.price_monthly,
+              price_yearly: subscription.subscription_plans.price_yearly
+            } : null,
+            subscription: subscription,
+            usage
+          };
         }
-      };
-      
-      console.log('useSubscriptionStatus: Returning clinic result =', result);
-      return result;
+        
+        // If no active subscription, try to get clinic data (fallback for trial users)
+        const { data: clinic, error: clinicError } = await supabase
+          .from('clinics')
+          .select(`
+            subscription_status,
+            trial_ends_at,
+            subscription_plan_id
+          `)
+          .eq('id', clinicId)
+          .single();
+        
+        if (clinicError) {
+          console.error('Error fetching clinic data:', clinicError);
+          // Return a default trial status if clinic data fails
+          return {
+            status: 'trial' as SubscriptionStatus,
+            trial_ends_at: null,
+            plan: null,
+            subscription: null,
+            usage
+          };
+        }
+        
+        // Get plan data separately if we have a plan_id
+        let planData = null;
+        if (clinic.subscription_plan_id) {
+          const { data: plan } = await supabase
+            .from('subscription_plans')
+            .select(`
+              id,
+              name,
+              slug,
+              max_therapists,
+              price_monthly,
+              price_yearly
+            `)
+            .eq('id', clinic.subscription_plan_id)
+            .single();
+          
+          planData = plan;
+        }
+        
+        // Return clinic-based subscription status (for trial users)
+        return {
+          status: (clinic.subscription_status || 'trial') as SubscriptionStatus,
+          trial_ends_at: clinic.trial_ends_at,
+          plan: planData,
+          subscription: null,
+          usage
+        };
+        
+      } catch (error) {
+        console.error('Error in subscription status query:', error);
+        
+        // Return a safe default to prevent blocking the UI
+        return {
+          status: 'trial' as SubscriptionStatus,
+          trial_ends_at: null,
+          plan: null,
+          subscription: null,
+          usage: {
+            therapist_count: 0,
+            appointment_count: 0,
+            client_count: 0
+          }
+        };
+      }
     },
     enabled: !!clinicId,
-    staleTime: 1 * 60 * 1000, // 1 minute
+    staleTime: 1 * 60 * 1000, // 1 minute - faster refresh for critical subscription data
+    gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache
+    retry: 1, // Reduce retries to fail faster
+    retryDelay: 1000, // Shorter retry delay
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    // Disable automatic refetch on mount to use cached data when available
+    refetchOnMount: false,
   });
 };
 
@@ -274,7 +289,12 @@ export const useTherapistCount = () => {
       return count || 0;
     },
     enabled: !!clinicId,
-    staleTime: 30 * 1000, // 30 seconds
+    staleTime: 2 * 60 * 1000, // 2 minutes - therapist count changes less frequently
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 };
 
@@ -297,7 +317,12 @@ export const useSubscriptionInvoices = () => {
       return data || [];
     },
     enabled: !!clinicId,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 10 * 60 * 1000, // 10 minutes - invoices don't change frequently
+    gcTime: 30 * 60 * 1000, // 30 minutes - keep in cache longer
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 };
 
@@ -305,15 +330,27 @@ export const useCreateSubscription = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { t } = useTranslation();
+  const { clinicId } = useAuth();
   
   return useMutation({
     mutationFn: async (params: CreateSubscriptionParams) => {
       return stripeService.createSubscription(params);
     },
     onSuccess: () => {
+      // Comprehensive cache invalidation for subscription-related data
       queryClient.invalidateQueries({ queryKey: ['clinic-subscription'] });
       queryClient.invalidateQueries({ queryKey: ['subscription-status'] });
       queryClient.invalidateQueries({ queryKey: ['therapist-count'] });
+      queryClient.invalidateQueries({ queryKey: ['subscription-invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-methods'] });
+      
+      // Prefetch updated subscription data for better UX
+      if (clinicId) {
+        queryClient.prefetchQuery({
+          queryKey: ['subscription-status', clinicId],
+          staleTime: 0, // Force fresh data
+        });
+      }
       
       toast({
         title: t('subscription.created'),
@@ -335,6 +372,7 @@ export const useCancelSubscription = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { t } = useTranslation();
+  const { clinicId } = useAuth();
   
   return useMutation({
     mutationFn: async ({ 
@@ -347,8 +385,18 @@ export const useCancelSubscription = () => {
       return stripeService.cancelSubscription(subscriptionId, cancelAtPeriodEnd);
     },
     onSuccess: () => {
+      // Comprehensive cache invalidation
       queryClient.invalidateQueries({ queryKey: ['clinic-subscription'] });
       queryClient.invalidateQueries({ queryKey: ['subscription-status'] });
+      queryClient.invalidateQueries({ queryKey: ['subscription-invoices'] });
+      
+      // Prefetch updated subscription status for immediate UI update
+      if (clinicId) {
+        queryClient.prefetchQuery({
+          queryKey: ['subscription-status', clinicId],
+          staleTime: 0,
+        });
+      }
       
       toast({
         title: t('subscription.canceled'),
@@ -370,14 +418,25 @@ export const useReactivateSubscription = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { t } = useTranslation();
+  const { clinicId } = useAuth();
   
   return useMutation({
     mutationFn: async (subscriptionId: string) => {
       return stripeService.reactivateSubscription(subscriptionId);
     },
     onSuccess: () => {
+      // Comprehensive cache invalidation
       queryClient.invalidateQueries({ queryKey: ['clinic-subscription'] });
       queryClient.invalidateQueries({ queryKey: ['subscription-status'] });
+      queryClient.invalidateQueries({ queryKey: ['subscription-invoices'] });
+      
+      // Prefetch updated subscription status for immediate UI update
+      if (clinicId) {
+        queryClient.prefetchQuery({
+          queryKey: ['subscription-status', clinicId],
+          staleTime: 0,
+        });
+      }
       
       toast({
         title: t('subscription.reactivated'),
@@ -399,6 +458,7 @@ export const useUpdateSubscription = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { t } = useTranslation();
+  const { clinicId } = useAuth();
   
   return useMutation({
     mutationFn: async ({ 
@@ -413,9 +473,19 @@ export const useUpdateSubscription = () => {
       return stripeService.updateSubscription(subscriptionId, newPlanId, billingCycle);
     },
     onSuccess: () => {
+      // Comprehensive cache invalidation
       queryClient.invalidateQueries({ queryKey: ['clinic-subscription'] });
       queryClient.invalidateQueries({ queryKey: ['subscription-status'] });
       queryClient.invalidateQueries({ queryKey: ['therapist-count'] });
+      queryClient.invalidateQueries({ queryKey: ['subscription-invoices'] });
+      
+      // Prefetch updated subscription status for immediate UI update
+      if (clinicId) {
+        queryClient.prefetchQuery({
+          queryKey: ['subscription-status', clinicId],
+          staleTime: 0,
+        });
+      }
       
       toast({
         title: t('subscription.updated'),
@@ -469,7 +539,12 @@ export const usePaymentMethods = () => {
       return stripeService.getCustomerPaymentMethods(subscription.stripe_customer_id);
     },
     enabled: !!subscription?.stripe_customer_id,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 10 * 60 * 1000, // 10 minutes - payment methods don't change frequently
+    gcTime: 30 * 60 * 1000, // 30 minutes - keep in cache longer
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 };
 
@@ -488,8 +563,13 @@ export const useAddPaymentMethod = () => {
     }) => {
       return stripeService.attachPaymentMethodToCustomer(paymentMethodId, customerId);
     },
-    onSuccess: () => {
+    onSuccess: (_, { customerId }) => {
+      // Invalidate and prefetch payment methods for immediate UI update
       queryClient.invalidateQueries({ queryKey: ['payment-methods'] });
+      queryClient.prefetchQuery({
+        queryKey: ['payment-methods', customerId],
+        staleTime: 0,
+      });
       
       toast({
         title: t('paymentMethod.added'),
@@ -517,6 +597,7 @@ export const useDeletePaymentMethod = () => {
       return stripeService.deletePaymentMethod(paymentMethodId);
     },
     onSuccess: () => {
+      // Invalidate payment methods cache for immediate UI update
       queryClient.invalidateQueries({ queryKey: ['payment-methods'] });
       
       toast({
@@ -544,4 +625,53 @@ export const useBillingCycles = (): BillingCycle[] => {
 export const useCanAddTherapist = (): boolean => {
   const limits = useSubscriptionLimits();
   return limits?.canAddTherapist ?? false;
+};
+
+// Utility hook for prefetching subscription data for better UX
+export const usePrefetchSubscriptionData = () => {
+  const queryClient = useQueryClient();
+  const { clinicId } = useAuth();
+  
+  const prefetchSubscriptionData = React.useCallback(() => {
+    if (!clinicId) return;
+    
+    // Prefetch critical subscription data
+    queryClient.prefetchQuery({
+      queryKey: ['subscription-status', clinicId],
+      staleTime: 0, // Force fresh data
+    });
+    
+    queryClient.prefetchQuery({
+      queryKey: ['clinic-subscription', clinicId],
+      staleTime: 0,
+    });
+    
+    queryClient.prefetchQuery({
+      queryKey: ['subscription-plans'],
+      staleTime: 0,
+    });
+    
+    queryClient.prefetchQuery({
+      queryKey: ['therapist-count', clinicId],
+      staleTime: 0,
+    });
+  }, [queryClient, clinicId]);
+  
+  return { prefetchSubscriptionData };
+};
+
+// Enhanced hook for subscription plans with prefetching on hover
+export const useSubscriptionPlansWithPrefetch = () => {
+  const queryResult = useSubscriptionPlans();
+  const { prefetchSubscriptionData } = usePrefetchSubscriptionData();
+  
+  const handlePlanHover = React.useCallback(() => {
+    // Prefetch subscription data when user hovers over plans
+    prefetchSubscriptionData();
+  }, [prefetchSubscriptionData]);
+  
+  return {
+    ...queryResult,
+    onPlanHover: handlePlanHover,
+  };
 }; 

@@ -19,6 +19,8 @@ export const useSubscriptionRedirect = () => {
     const currentPath = location.pathname;
     console.log('Subscription redirect check:', {
       subscriptionStatus,
+      subscriptionStatusStatus: subscriptionStatus?.status,
+      trialEndsAt: subscriptionStatus?.trial_ends_at,
       currentPath,
       authLoading,
       subscriptionLoading,
@@ -45,23 +47,36 @@ export const useSubscriptionRedirect = () => {
     }
 
     // If trial is active and not expired, allow access
-    if (
-      subscriptionStatus.status === 'trial' &&
-      subscriptionStatus.trial_ends_at &&
-      new Date(subscriptionStatus.trial_ends_at) >= new Date()
-    ) {
-      console.log('Trial is active, allowing access');
+    if (subscriptionStatus.status === 'trial') {
+      if (subscriptionStatus.trial_ends_at) {
+        const trialEndDate = new Date(subscriptionStatus.trial_ends_at);
+        const now = new Date();
+        if (trialEndDate >= now) {
+          console.log('Trial is active and not expired, allowing access');
+          return;
+        } else {
+          console.log('Trial has expired, redirecting to subscription page');
+          navigate('/subscription');
+          return;
+        }
+      } else {
+        // No trial end date - this might be a new user without proper trial setup
+        console.log('Trial status but no trial end date, redirecting to subscription page');
+        navigate('/subscription');
+        return;
+      }
+    }
+
+    // If subscription is canceled, past due, unpaid, or incomplete, redirect
+    if (['canceled', 'past_due', 'unpaid', 'incomplete'].includes(subscriptionStatus.status)) {
+      console.log('Subscription status requires redirect:', subscriptionStatus.status);
+      navigate('/subscription');
       return;
     }
 
-    // If trial expired or subscription is canceled, past due, unpaid, or incomplete, redirect
-    if (
-      (subscriptionStatus.status === 'trial' && subscriptionStatus.trial_ends_at && new Date(subscriptionStatus.trial_ends_at) < new Date()) ||
-      ['canceled', 'past_due', 'unpaid', 'incomplete'].includes(subscriptionStatus.status)
-    ) {
-      console.log('Subscription status requires redirect:', subscriptionStatus.status);
-      navigate('/subscription');
-    }
+    // If we get here with an unknown status, redirect to be safe
+    console.log('Unknown subscription status, redirecting to subscription page:', subscriptionStatus.status);
+    navigate('/subscription');
   }, [subscriptionStatus, location.pathname, navigate, authLoading, subscriptionLoading, clinicId]);
 
   return { subscriptionStatus, isLoading: subscriptionLoading };

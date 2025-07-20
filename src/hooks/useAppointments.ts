@@ -180,9 +180,9 @@ export const useUpdateAppointment = () => {
         .single();
       
       if (error) throw error;
-      return data;
+      return { data, updates };
     },
-    onSuccess: (updatedAppointment) => {
+    onSuccess: ({ data: updatedAppointment, updates }) => {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
       
@@ -204,17 +204,30 @@ export const useUpdateAppointment = () => {
         hasGoogleEventId: !!updatedAppointment.google_calendar_event_id,
         googleEventId: updatedAppointment.google_calendar_event_id,
         status: updatedAppointment.status,
-        start_time: updatedAppointment.start_time
+        start_time: updatedAppointment.start_time,
+        updatedFields: Object.keys(updates)
       });
       
-      // Auto-sync to Google Calendar if connected and authenticated
-      if (isAuthenticated) {
+      // Only sync to Google Calendar if connected and authenticated AND if relevant fields were updated
+      const shouldSyncToGoogle = isAuthenticated && (
+        // Sync if appointment was rescheduled (start_time or end_time changed)
+        'start_time' in updates || 
+        'end_time' in updates ||
+        // Sync if appointment was cancelled
+        (updates.status === 'cancelled') ||
+        // Sync if therapist was changed (might affect calendar)
+        'therapist_id' in updates
+      );
+      
+      if (shouldSyncToGoogle) {
         try {
           syncAppointment({ appointment: updatedAppointment });
         } catch (error) {
           console.error('Failed to sync appointment to Google Calendar:', error);
           // Don't throw error here as the appointment was already updated successfully
         }
+      } else {
+        console.log('Skipping Google Calendar sync - no relevant fields updated');
       }
     },
   });

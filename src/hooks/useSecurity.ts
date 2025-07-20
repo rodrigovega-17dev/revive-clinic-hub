@@ -200,19 +200,51 @@ export const useSecurity = () => {
   const getSessionInfo = () => {
     if (!currentSession) return null;
 
-    // Safely parse dates with fallbacks
-    const created_at = currentSession.created_at 
-      ? new Date(currentSession.created_at).toISOString()
-      : new Date().toISOString();
+    // Debug: Log the session object to understand its structure
+    console.log('Current session object:', currentSession);
+    console.log('Session expires_at:', currentSession.expires_at);
+    console.log('Session expires_at type:', typeof currentSession.expires_at);
+    console.log('Access token expires_in:', currentSession.expires_in);
+    console.log('Refresh token:', currentSession.refresh_token ? 'Present' : 'Missing');
+
+    const now = new Date();
     
-    const expires_at = currentSession.expires_at 
-      ? new Date(currentSession.expires_at).toISOString()
-      : new Date(Date.now() + 3600000).toISOString(); // Default 1 hour from now
+    // Handle expires_at - it could be Unix timestamp (seconds) or ISO string
+    let sessionExpiresAt: Date;
+    if (currentSession.expires_at) {
+      // Check if it's a Unix timestamp (number) or ISO string
+      if (typeof currentSession.expires_at === 'number') {
+        sessionExpiresAt = new Date(currentSession.expires_at * 1000);
+      } else {
+        sessionExpiresAt = new Date(currentSession.expires_at);
+      }
+      
+      // Validate the date - if it's invalid or in the past (like 1970), use a default
+      if (isNaN(sessionExpiresAt.getTime()) || sessionExpiresAt.getFullYear() < 2020) {
+        sessionExpiresAt = new Date(now.getTime() + (securitySettings?.session_timeout_minutes || 480) * 60 * 1000);
+      }
+    } else {
+      // Default to session timeout from settings or 8 hours
+      sessionExpiresAt = new Date(now.getTime() + (securitySettings?.session_timeout_minutes || 480) * 60 * 1000);
+    }
+
+    // Handle created_at - use user creation time or reasonable default
+    let sessionCreatedAt: Date;
+    if (currentSession.user?.created_at) {
+      sessionCreatedAt = new Date(currentSession.user.created_at);
+      // Validate the date
+      if (isNaN(sessionCreatedAt.getTime()) || sessionCreatedAt.getFullYear() < 2020) {
+        sessionCreatedAt = new Date(now.getTime() - 60000); // 1 minute ago
+      }
+    } else {
+      // Default to 1 minute ago as session start
+      sessionCreatedAt = new Date(now.getTime() - 60000);
+    }
 
     return {
-      id: currentSession.access_token,
-      created_at,
-      expires_at,
+      id: currentSession.access_token?.substring(0, 8) || 'current',
+      created_at: sessionCreatedAt.toISOString(),
+      expires_at: sessionExpiresAt.toISOString(),
       user_agent: navigator.userAgent,
       ip_address: 'Current device', // Would need server-side to get real IP
       is_current: true,

@@ -199,6 +199,17 @@ const SubscriptionManagement: React.FC = () => {
 
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-2">
+            {/* Upgrade Button - Always show for trial or active subscriptions */}
+            {(isTrial || isActive) && (
+              <Button
+                onClick={() => window.location.href = '/subscription'}
+                className="bg-primary hover:bg-primary/90"
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                {isTrial ? t('subscription.choosePlan') : t('subscription.upgrade')}
+              </Button>
+            )}
+            
             {isActive && !isCanceled && (
               <Button
                 variant="outline"
@@ -243,8 +254,8 @@ const SubscriptionManagement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Usage Statistics */}
-      {status?.usage && (
+      {/* Usage Statistics - Hidden for now */}
+      {false && status?.usage && (
         <Card>
           <CardHeader>
             <CardTitle>{t('subscription.usage')}</CardTitle>

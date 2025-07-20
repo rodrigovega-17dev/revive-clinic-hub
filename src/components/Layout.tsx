@@ -4,6 +4,7 @@ import { ThemeToggle } from './ThemeToggle'
 import { LanguageSelector } from './LanguageSelector'
 import { useClinic } from '@/hooks/useClinic'
 import { useSubscriptionRedirect } from '@/hooks/useSubscriptionRedirect'
+import { useTranslation } from 'react-i18next'
 
 interface LayoutProps {
   children: ReactNode
@@ -11,13 +12,14 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const { data: clinic } = useClinic();
+  const { t } = useTranslation();
   
   // Check subscription status and redirect if needed
   useSubscriptionRedirect();
 
   // Get clinic display name
   const getClinicDisplayName = () => {
-    return clinic?.name || "Revive Clinic Hub";
+    return clinic?.name || t('sidebar.fallbackClinic');
   };
 
   return (
