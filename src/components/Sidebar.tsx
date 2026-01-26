@@ -22,7 +22,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useClinic } from "@/hooks/useClinic";
 
 const navigation = [
-  { name: "navigation.dashboard", href: "/", icon: BarChart3 },
+  { name: "navigation.dashboard", href: "/dashboard", icon: BarChart3 },
   { name: "navigation.appointments", href: "/appointments", icon: Calendar },
   { name: "navigation.clients", href: "/clients", icon: Users },
   { name: "navigation.therapists", href: "/therapists", icon: User },
