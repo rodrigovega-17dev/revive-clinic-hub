@@ -15,6 +15,7 @@ import { useClients } from '@/hooks/useClients';
 import { useTherapists } from '@/hooks/useTherapists';
 import { useTreatments } from '@/hooks/useTreatments';
 import { useTherapistAvailability, useCreateAppointment } from '@/hooks/useAppointments';
+import { useClientBalance } from '@/hooks/useClientBalance';
 import { useQueryClient } from '@tanstack/react-query';
 import { format, addMinutes, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -79,6 +80,7 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
   const treatmentPrice = treatments?.find(treatment => treatment.id === treatmentId)?.price || 0;
   const selectedClient = clients?.find(client => client.id === clientId);
   const clientDefaultAmount = selectedClient?.charge_amount || 0;
+  const { data: clientBalance } = useClientBalance(clientId || null);
 
   // Update payment amount when client or treatment changes
   const handleClientChange = (newClientId: string) => {
@@ -307,6 +309,18 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
               </SelectContent>
             </Select>
           </div>
+
+          {clientId && (
+            <div className="rounded-lg border border-border bg-muted/30 p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">{t('appointments.currentBalance')}</span>
+                <span className={`font-semibold ${Number(clientBalance?.balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {Number(clientBalance?.balance || 0) >= 0 ? '+' : ''}
+                  {formatCurrencyWithClinic(Number(clientBalance?.balance || 0))}
+                </span>
+              </div>
+            </div>
+          )}
 
           <div>
             <Label htmlFor="therapist">{t('appointments.therapist')} *</Label>

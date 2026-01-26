@@ -5,25 +5,40 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, DollarSign, TrendingUp, Users, Download } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { Calendar, DollarSign, TrendingUp, Users, Download, Loader2 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import { formatCurrency } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useClinicSettings } from '@/hooks/useClinic';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
 
 const Payroll = () => {
   const { t } = useTranslation();
-  const { clinicId } = useAuth();
+  const { clinicId, user } = useAuth();
   const { currency } = useClinicSettings();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [currentDate, setCurrentDate] = useState(new Date());
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
   const defaultPeriod = `first-${currentYear}-${currentMonth + 1}`;
   
   const [selectedPeriod, setSelectedPeriod] = useState(defaultPeriod);
+  const [payoutDialogOpen, setPayoutDialogOpen] = useState(false);
+  const [payoutTherapist, setPayoutTherapist] = useState<any | null>(null);
+  const [payoutAmount, setPayoutAmount] = useState('');
+  const [payoutMethod, setPayoutMethod] = useState<'cash' | 'transfer' | 'card'>('transfer');
+  const [payoutDate, setPayoutDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [payoutNotes, setPayoutNotes] = useState('');
+  const [isSubmittingPayout, setIsSubmittingPayout] = useState(false);
+  const [payoutRemaining, setPayoutRemaining] = useState(0);
 
   // Clinic-aware currency formatting
   const formatCurrencyWithClinic = (value: number) => {
@@ -99,6 +114,8 @@ const Payroll = () => {
   }, [currentDate]);
 
   const currentPeriod = periods.find(p => p.value === selectedPeriod) || periods[0];
+  const todayStart = startOfDay(new Date());
+  const isPastPeriod = endOfDay(currentPeriod.endDate) < todayStart;
 
   // Fetch payroll data
   const { data: payrollData, isLoading } = useQuery({
@@ -213,6 +230,167 @@ const Payroll = () => {
     },
     enabled: !!clinicId,
   });
+
+  const { data: payoutRecords } = useQuery({
+    queryKey: ['therapist-payouts', clinicId, currentPeriod.startDate, currentPeriod.endDate],
+    queryFn: async () => {
+      if (!clinicId) return [];
+
+      const { data, error } = await supabase
+        .from('therapist_payouts')
+        .select('*')
+        .eq('clinic_id', clinicId)
+        .eq('period_start', format(currentPeriod.startDate, 'yyyy-MM-dd'))
+        .eq('period_end', format(currentPeriod.endDate, 'yyyy-MM-dd'));
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!clinicId,
+  });
+
+  const payoutsByTherapist = (payoutRecords || []).reduce((acc: Map<string, { total: number }>, payout: any) => {
+    const existing = acc.get(payout.therapist_id);
+    const nextTotal = (existing?.total || 0) + Number(payout.amount || 0);
+    acc.set(payout.therapist_id, { total: nextTotal });
+    return acc;
+  }, new Map());
+
+  const getTotalPaid = (therapistId: string) => {
+    return payoutsByTherapist.get(therapistId)?.total || 0;
+  };
+
+  const getRemainingAmount = (therapistId: string, earnings: number) => {
+    return Math.max(0, Number(earnings || 0) - getTotalPaid(therapistId));
+  };
+
+  const openPayoutDialog = (therapist: any) => {
+    const remaining = getRemainingAmount(therapist.id, Number(therapist.therapistEarnings || 0));
+    setPayoutTherapist(therapist);
+    setPayoutAmount(String(Number(remaining).toFixed(2)));
+    setPayoutMethod('transfer');
+    setPayoutDate(format(new Date(), 'yyyy-MM-dd'));
+    setPayoutNotes('');
+    setPayoutRemaining(remaining);
+    setPayoutDialogOpen(true);
+  };
+
+  const handleRegisterPayout = async () => {
+    if (!clinicId || !user?.id || !payoutTherapist) {
+      toast({
+        title: t('common.error'),
+        description: t('common.noClinicAccess'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const numericAmount = Number(payoutAmount);
+    if (!numericAmount || numericAmount <= 0) {
+      toast({
+        title: t('payroll.invalidPayout'),
+        description: t('payroll.invalidPayoutDesc'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (numericAmount > payoutRemaining) {
+      toast({
+        title: t('payroll.invalidPayout'),
+        description: t('payroll.invalidPayoutOver'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSubmittingPayout(true);
+    try {
+      const { data: payoutData, error: payoutError } = await supabase
+        .from('therapist_payouts')
+        .insert({
+          clinic_id: clinicId,
+          therapist_id: payoutTherapist.id,
+          period_start: format(currentPeriod.startDate, 'yyyy-MM-dd'),
+          period_end: format(currentPeriod.endDate, 'yyyy-MM-dd'),
+          payout_date: payoutDate,
+          amount: numericAmount,
+          payment_method: payoutMethod,
+          notes: payoutNotes || null,
+          status: 'paid',
+          created_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (payoutError) throw payoutError;
+
+      const expenseDescription = t('payroll.payoutExpenseDescription', {
+        therapist: payoutTherapist.name,
+        period: currentPeriod.label,
+      });
+
+      const { error: expenseError } = await supabase
+        .from('expenses')
+        .insert({
+          description: expenseDescription,
+          amount: numericAmount,
+          date: payoutDate,
+          category: 'Payroll',
+          clinic_id: clinicId,
+          recorded_by: user.id,
+        });
+
+      if (expenseError) {
+        await supabase.from('therapist_payouts').delete().eq('id', payoutData.id);
+        throw expenseError;
+      }
+
+      toast({
+        title: t('payroll.payoutRecorded'),
+        description: t('payroll.payoutRecordedDesc'),
+      });
+
+      setPayoutDialogOpen(false);
+      setPayoutTherapist(null);
+      queryClient.invalidateQueries({ queryKey: ['therapist-payouts'] });
+      queryClient.invalidateQueries({ queryKey: ['payroll'] });
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+    } catch (error) {
+      console.error('Error registering payout:', error);
+      toast({
+        title: t('common.error'),
+        description: t('payroll.payoutFailed'),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmittingPayout(false);
+    }
+  };
+
+  const getPayoutStatus = (therapistId: string) => {
+    const therapist = payrollData?.therapistStats?.find((item: any) => item.id === therapistId);
+    const earnings = Number(therapist?.therapistEarnings || 0);
+    const totalPaid = getTotalPaid(therapistId);
+
+    if (earnings > 0 && totalPaid >= earnings) return 'paid';
+    if (totalPaid > 0 && totalPaid < earnings) return 'partial';
+    if (isPastPeriod && earnings > 0) return 'delayed';
+    return 'pending';
+  };
+
+  const getStatusBadge = (status: string) => {
+    if (status === 'paid') {
+      return <Badge className="bg-green-600 text-white">{t('payroll.statusPaid')}</Badge>;
+    }
+    if (status === 'partial') {
+      return <Badge className="bg-amber-500 text-white">{t('payroll.statusPartial')}</Badge>;
+    }
+    if (status === 'delayed') {
+      return <Badge className="bg-red-500 text-white">{t('payroll.statusDelayed')}</Badge>;
+    }
+    return <Badge variant="secondary">{t('payroll.statusPending')}</Badge>;
+  };
 
   if (isLoading) {
     return (
@@ -401,10 +579,17 @@ const Payroll = () => {
                   <TableHead className="text-foreground">{t('payroll.therapistShare')}</TableHead>
                   <TableHead className="text-foreground">{t('payroll.clinicShare')}</TableHead>
                   <TableHead className="text-foreground">{t('common.status')}</TableHead>
+                  <TableHead className="text-foreground">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {payrollData.therapistStats.map((therapist: any) => (
+                  (() => {
+                    const status = getPayoutStatus(therapist.id);
+                    const earnings = Number(therapist.therapistEarnings || 0);
+                    const remainingAmount = getRemainingAmount(therapist.id, earnings);
+                    const hasEarnings = earnings > 0;
+                    return (
                   <TableRow key={therapist.id} className="hover:bg-muted/50 border-border">
                     <TableCell>
                       <div className="font-medium text-foreground">
@@ -435,11 +620,21 @@ const Payroll = () => {
                       {formatCurrencyWithClinic(Number(therapist.clinicEarnings))}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">
-                        {t('common.pending')}
-                      </Badge>
+                      {getStatusBadge(status)}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!hasEarnings || remainingAmount <= 0}
+                        onClick={() => openPayoutDialog(therapist)}
+                      >
+                        {t('payroll.registerPayout')}
+                      </Button>
                     </TableCell>
                   </TableRow>
+                    );
+                  })()
                 ))}
               </TableBody>
             </Table>
@@ -454,6 +649,86 @@ const Payroll = () => {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={payoutDialogOpen} onOpenChange={setPayoutDialogOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>{t('payroll.registerPayout')}</DialogTitle>
+            <DialogDescription>
+              {payoutTherapist?.name ? t('payroll.registerPayoutFor', { therapist: payoutTherapist.name }) : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {payoutTherapist && (
+              <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                <div className="flex items-center justify-between">
+                  <span>{t('payroll.payoutPaidSoFar')}</span>
+                  <span className="font-semibold text-foreground">
+                    {formatCurrencyWithClinic(getTotalPaid(payoutTherapist.id))}
+                  </span>
+                </div>
+                <div className="mt-1 flex items-center justify-between">
+                  <span>{t('payroll.payoutRemaining')}</span>
+                  <span className="font-semibold text-foreground">
+                    {formatCurrencyWithClinic(payoutRemaining)}
+                  </span>
+                </div>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="payoutAmount">{t('payroll.payoutAmount')}</Label>
+              <Input
+                id="payoutAmount"
+                type="number"
+                min="0"
+                step="0.01"
+                value={payoutAmount}
+                onChange={(event) => setPayoutAmount(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="payoutMethod">{t('payroll.payoutMethod')}</Label>
+              <Select value={payoutMethod} onValueChange={(value) => setPayoutMethod(value as any)}>
+                <SelectTrigger id="payoutMethod">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="transfer">{t('finance.transfer')}</SelectItem>
+                  <SelectItem value="cash">{t('finance.cash')}</SelectItem>
+                  <SelectItem value="card">{t('finance.card')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="payoutDate">{t('payroll.payoutDate')}</Label>
+              <Input
+                id="payoutDate"
+                type="date"
+                value={payoutDate}
+                onChange={(event) => setPayoutDate(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="payoutNotes">{t('payroll.payoutNotes')}</Label>
+              <Textarea
+                id="payoutNotes"
+                value={payoutNotes}
+                onChange={(event) => setPayoutNotes(event.target.value)}
+                placeholder={t('payroll.payoutNotesPlaceholder')}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setPayoutDialogOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={handleRegisterPayout} disabled={isSubmittingPayout}>
+              {isSubmittingPayout && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {t('payroll.confirmPayout')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

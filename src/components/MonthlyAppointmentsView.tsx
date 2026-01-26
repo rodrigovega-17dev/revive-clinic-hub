@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, isToday, parseISO } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Calendar, Clock, User, MoreHorizontal, DollarSign, TrendingUp, TrendingDown, Download, Filter, Plus, Minus } from 'lucide-react';
@@ -7,7 +7,7 @@ import { useAppointmentsByMonth } from '@/hooks/useAppointments';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -22,6 +22,7 @@ import { useAuth } from '@/hooks/useAuth';
 interface MonthlyAppointmentsViewProps {
   currentDate: Date;
   onDateSelect?: (date: Date) => void;
+  searchTerm?: string;
 }
 
 // Google Calendar default colors
@@ -46,7 +47,8 @@ const getTherapistColor = (colorId?: string) => {
 
 const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
   currentDate,
-  onDateSelect
+  onDateSelect,
+  searchTerm
 }) => {
   const { t } = useTranslation();
   const { currentLanguage } = useLanguage();
@@ -60,6 +62,21 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
   const year = selectedMonth.getFullYear();
   const month = selectedMonth.getMonth() + 1;
   const { data: appointmentsByDate, isLoading } = useAppointmentsByMonth(year, month);
+  const normalizedSearch = searchTerm?.trim().toLowerCase() || '';
+
+  const filteredAppointmentsByDate = useMemo(() => {
+    if (!appointmentsByDate || !normalizedSearch) return appointmentsByDate || {};
+    return Object.entries(appointmentsByDate).reduce((acc, [dateKey, appointments]) => {
+      const filtered = (appointments as any[]).filter((appointment) => {
+        const clientName = `${appointment.clients?.first_name || ''} ${appointment.clients?.last_name || ''}`.toLowerCase();
+        return clientName.includes(normalizedSearch);
+      });
+      if (filtered.length > 0) {
+        acc[dateKey] = filtered;
+      }
+      return acc;
+    }, {} as Record<string, any[]>);
+  }, [appointmentsByDate, normalizedSearch]);
 
   const locale = currentLanguage === 'es' ? es : enUS;
 
@@ -87,7 +104,7 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
 
   const handleDateClick = (date: Date) => {
     const dateKey = format(date, 'yyyy-MM-dd');
-    const dayAppointments = appointmentsByDate?.[dateKey] || [];
+    const dayAppointments = filteredAppointmentsByDate?.[dateKey] || [];
     
     if (dayAppointments.length > 0) {
       setSelectedDate(date);
@@ -197,7 +214,7 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
           <div className="grid grid-cols-7">
             {days.map((day) => {
               const dateKey = format(day, 'yyyy-MM-dd');
-              const dayAppointments = appointmentsByDate?.[dateKey] || [];
+              const dayAppointments = filteredAppointmentsByDate?.[dateKey] || [];
               const isCurrentMonth = isSameMonth(day, selectedMonth);
               const isCurrentDay = isToday(day);
               const hasAppointments = dayAppointments.length > 0;
@@ -299,11 +316,14 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
             <DialogTitle className="text-lg font-semibold text-foreground">
               {selectedDate && format(selectedDate, 'EEEE, MMMM d, yyyy', { locale })}
             </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              {t('appointments.dailyView')}
+            </DialogDescription>
           </DialogHeader>
           
           <ScrollArea className="max-h-[60vh]">
             <div className="space-y-3 p-4">
-              {selectedDate && appointmentsByDate?.[format(selectedDate, 'yyyy-MM-dd')]?.map((appointment: any) => (
+              {selectedDate && filteredAppointmentsByDate?.[format(selectedDate, 'yyyy-MM-dd')]?.map((appointment: any) => (
                 <Card
                   key={appointment.id}
                   className="cursor-pointer hover:bg-muted/50 transition-colors border-border bg-card"

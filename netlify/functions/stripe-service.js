@@ -23,6 +23,7 @@ const stripe = new Stripe(stripeSecretKey, {
 });
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const TRIAL_PERIOD_DAYS = 14;
 
 const jsonResponse = (statusCode, body) => ({
   statusCode,
@@ -168,6 +169,7 @@ const createSubscription = async (payload) => {
     payment_behavior: 'default_incomplete',
     payment_settings: { save_default_payment_method: 'on_subscription' },
     expand: ['latest_invoice.payment_intent'],
+    trial_period_days: TRIAL_PERIOD_DAYS,
     metadata: {
       clinic_id: payload.clinicId,
       plan_id: payload.planId,
@@ -315,6 +317,7 @@ const createCheckoutSession = async ({ clinicId, planId, billingCycle, successUr
       billing_cycle: billingCycle,
     },
     subscription_data: {
+      trial_period_days: TRIAL_PERIOD_DAYS,
       metadata: {
         clinic_id: clinicId,
         plan_id: planId,

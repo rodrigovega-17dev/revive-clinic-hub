@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUpdateAppointment, useTherapistAvailability } from '@/hooks/useAppointments';
+import { useClientBalance } from '@/hooks/useClientBalance';
 import { useTherapists } from '@/hooks/useTherapists';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
@@ -42,6 +43,8 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
     method: appointment?.payment_method || '',
     facturado: false,
   });
+  const [useBalanceCredit, setUseBalanceCredit] = useState(false);
+  const [balanceApplied, setBalanceApplied] = useState(0);
   const [rescheduleData, setRescheduleData] = useState({
     start_time: appointment ? format(new Date(appointment.start_time), "yyyy-MM-dd'T'HH:mm") : '',
     duration: appointment ? 
@@ -73,15 +76,22 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const deleteAppointmentMutation = useDeleteAppointment();
   const { currency } = useClinicSettings();
   const { clinicId } = useAuth();
+  const { data: clientBalance } = useClientBalance(appointment?.client_id || null);
 
   // Clinic-aware currency formatting
   const formatCurrencyWithClinic = (value: number) => {
     return formatCurrency(value, 2, currency);
   };
 
+  const appointmentAmount = Number(appointment?.payment_amount || 0);
+  const availableCredit = Math.max(0, Number(clientBalance?.balance || 0));
+  const maxApplicableCredit = Math.min(availableCredit, appointmentAmount);
+  const appliedCredit = useBalanceCredit ? maxApplicableCredit : 0;
+  const amountDue = Math.max(0, appointmentAmount - appliedCredit);
+  const effectiveAmount = useBalanceCredit ? amountDue : paymentData.amount;
   // Calculate IVA amount (16%)
-  const ivaAmount = paymentData.facturado ? paymentData.amount * 0.16 : 0;
-  const totalWithIva = paymentData.amount + ivaAmount;
+  const ivaAmount = paymentData.facturado ? effectiveAmount * 0.16 : 0;
+  const totalWithIva = effectiveAmount + ivaAmount;
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -108,12 +118,13 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       case 'card': return t('appointments.card');
       case 'transfer': return t('appointments.transfer');
       case 'insurance': return t('appointments.insurance');
+      case 'balance': return t('appointments.balance');
       default: return method;
     }
   };
 
   const handleMarkAsPaid = async () => {
-    if (!paymentData.method) {
+    if (amountDue > 0 && !paymentData.method) {
       toast({
         title: t('appointments.error'),
         description: t('appointments.pleaseSelectPaymentMethod'),
@@ -127,25 +138,48 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       await updateAppointment.mutateAsync({
         id: appointment.id,
         payment_status: 'paid',
-        payment_method: paymentData.method,
-        payment_amount: paymentData.amount,
+        payment_method: amountDue > 0 ? paymentData.method : 'balance',
         payment_date: new Date().toISOString(),
       });
 
-      // Create payment record in payments table
-      const { error: paymentError } = await supabase
-        .from('payments')
-        .insert({
+      let paymentError = null;
+      const paymentDate = new Date().toISOString();
+      const paymentInserts: any[] = [];
+
+      if (useBalanceCredit && appliedCredit > 0) {
+        paymentInserts.push({
           appointment_id: appointment.id,
           client_id: appointment.client_id,
           clinic_id: clinicId,
-          amount: paymentData.facturado ? totalWithIva : paymentData.amount,
+          amount: -Math.abs(appliedCredit),
+          method: 'balance',
+          payment_date: paymentDate,
+          description: `Balance applied to ${appointment.treatments?.name || 'appointment'} session`,
+          facturado: false,
+          iva_amount: 0,
+        });
+      }
+
+      if (amountDue > 0) {
+        paymentInserts.push({
+          appointment_id: appointment.id,
+          client_id: appointment.client_id,
+          clinic_id: clinicId,
+          amount: paymentData.facturado ? totalWithIva : amountDue,
           method: paymentData.method,
-          payment_date: new Date().toISOString(),
+          payment_date: paymentDate,
           description: `Payment for ${appointment.treatments?.name || 'appointment'} session${paymentData.facturado ? ' (Facturado + IVA 16%)' : ''}`,
           facturado: paymentData.facturado,
           iva_amount: paymentData.facturado ? ivaAmount : 0,
         });
+      }
+
+      if (paymentInserts.length > 0) {
+        const { error } = await supabase
+          .from('payments')
+          .insert(paymentInserts);
+        paymentError = error;
+      }
 
       if (paymentError) {
         console.error('Error creating payment record:', paymentError);
@@ -160,6 +194,10 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
         queryClient.invalidateQueries({ queryKey: ['daily-payments'] });
         queryClient.invalidateQueries({ queryKey: ['monthly-payments'] });
         queryClient.invalidateQueries({ queryKey: ['stats'] });
+        queryClient.invalidateQueries({ queryKey: ['client-balance'] });
+        queryClient.invalidateQueries({ queryKey: ['all-client-balances'] });
+        queryClient.invalidateQueries({ queryKey: ['client-pending-appointments'] });
+        queryClient.invalidateQueries({ queryKey: ['client-payments', appointment.client_id, clinicId] });
         
         toast({
           title: t('appointments.success'),
@@ -260,8 +298,12 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
         title: t('appointments.success'),
         description: t('appointments.appointmentCompleted'),
       });
-      
-      onClose();
+
+      queryClient.invalidateQueries({ queryKey: ['client-balance'] });
+      queryClient.invalidateQueries({ queryKey: ['all-client-balances'] });
+      queryClient.invalidateQueries({ queryKey: ['client-pending-appointments'] });
+
+      setActiveTab('payment');
     } catch (error) {
       console.error('Error marking appointment as completed:', error);
       toast({
@@ -315,6 +357,27 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       });
     }
   };
+
+  useEffect(() => {
+    if (!appointment) return;
+    setPaymentData({
+      amount: appointment.payment_amount || 0,
+      method: appointment.payment_method || '',
+      facturado: false,
+    });
+    setUseBalanceCredit(false);
+    setBalanceApplied(0);
+    if (appointment.status === 'completed' && appointment.payment_status !== 'paid') {
+      setActiveTab('payment');
+    } else {
+      setActiveTab('details');
+    }
+  }, [appointment?.id]);
+
+  useEffect(() => {
+    if (!useBalanceCredit) return;
+    setBalanceApplied(maxApplicableCredit);
+  }, [useBalanceCredit, maxApplicableCredit]);
 
   if (!appointment) return null;
 
@@ -486,6 +549,51 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   <CardTitle className="text-lg text-foreground">{t('appointments.recordPayment')}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="rounded-lg border border-border bg-muted/30 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">{t('appointments.currentBalance')}</span>
+                      <span className={`font-semibold ${clientBalance?.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {clientBalance?.balance >= 0 ? '+' : ''}
+                        {formatCurrencyWithClinic(Number(clientBalance?.balance || 0))}
+                      </span>
+                    </div>
+                    {availableCredit > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="useBalance"
+                            checked={useBalanceCredit}
+                            onCheckedChange={(checked) => {
+                              const enabled = checked === true;
+                              setUseBalanceCredit(enabled);
+                              setBalanceApplied(enabled ? maxApplicableCredit : 0);
+                            }}
+                          />
+                          <Label htmlFor="useBalance" className="text-foreground">
+                            {t('appointments.useBalance')}
+                          </Label>
+                        </div>
+                        {useBalanceCredit && (
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-2">
+                              <Label className="text-foreground">
+                                {t('appointments.balanceApplied')}
+                              </Label>
+                              <div className="rounded-md border border-border bg-background px-3 py-2 text-foreground">
+                                {formatCurrencyWithClinic(appliedCredit)}
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-foreground">{t('appointments.amountDue')}</Label>
+                              <div className="rounded-md border border-border bg-background px-3 py-2 text-foreground">
+                                {formatCurrencyWithClinic(amountDue)}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="amount" className="text-foreground">{t('appointments.amount')}</Label>
@@ -493,8 +601,9 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                         id="amount"
                         type="number"
                         step="0.01"
-                        value={paymentData.amount}
+                        value={useBalanceCredit ? amountDue : paymentData.amount}
                         onChange={(e) => setPaymentData(prev => ({ ...prev, amount: parseFloat(e.target.value) }))}
+                        disabled={useBalanceCredit}
                         className="bg-input border-border text-foreground"
                       />
                     </div>
@@ -532,7 +641,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                     <div className="p-3 bg-muted/50 rounded-lg space-y-2">
                       <div className="flex justify-between">
                         <span className="text-foreground">{t('appointments.baseAmount')}:</span>
-                        <span className="text-foreground">{formatCurrencyWithClinic(paymentData.amount)}</span>
+                        <span className="text-foreground">{formatCurrencyWithClinic(effectiveAmount)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-foreground">{t('appointments.ivaAmount')}:</span>

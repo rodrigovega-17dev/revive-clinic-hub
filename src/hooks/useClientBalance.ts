@@ -27,7 +27,7 @@ export function useClientBalance(clientId: string | null) {
       // Get all payments made by this client
       const { data: payments, error: paymentsError } = await supabase
         .from('payments')
-        .select('amount, payment_date')
+        .select('amount, payment_date, appointment_id, method')
         .eq('client_id', clientId)
         .eq('clinic_id', clinicId);
 
@@ -44,9 +44,14 @@ export function useClientBalance(clientId: string | null) {
 
       if (pendingError) throw pendingError;
 
-      const totalPayments = payments?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
+      const totalPayments = payments?.reduce((sum, payment) => {
+        const isBalanceAdjustment = payment.method === 'balance';
+        const isAdvancePayment = !payment.appointment_id;
+        return (isBalanceAdjustment || isAdvancePayment) ? sum + (payment.amount || 0) : sum;
+      }, 0) || 0;
       const pendingPayments = pendingAppointments?.reduce((sum, apt) => sum + (apt.payment_amount || 0), 0) || 0;
-      const balance = totalPayments - pendingPayments;
+      // Balance represents available credit only (payments minus applied credit entries)
+      const balance = totalPayments;
       
       const lastPaymentDate = payments && payments.length > 0 
         ? payments.reduce((latest, payment) => 
@@ -85,7 +90,7 @@ export function useAllClientBalances() {
       // Get all payments
       const { data: payments, error: paymentsError } = await supabase
         .from('payments')
-        .select('client_id, amount, payment_date')
+        .select('client_id, amount, payment_date, appointment_id, method')
         .eq('clinic_id', clinicId);
 
       if (paymentsError) throw paymentsError;
@@ -105,9 +110,13 @@ export function useAllClientBalances() {
         const clientPayments = payments?.filter(p => p.client_id === client.id) || [];
         const clientPending = pendingAppointments?.filter(a => a.client_id === client.id) || [];
         
-        const totalPayments = clientPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const totalPayments = clientPayments.reduce((sum, p) => {
+          const isBalanceAdjustment = p.method === 'balance';
+          const isAdvancePayment = !p.appointment_id;
+          return (isBalanceAdjustment || isAdvancePayment) ? sum + (p.amount || 0) : sum;
+        }, 0);
         const pendingPayments = clientPending.reduce((sum, a) => sum + (a.payment_amount || 0), 0);
-        const balance = totalPayments - pendingPayments;
+        const balance = totalPayments;
 
         return {
           clientId: client.id,

@@ -15,6 +15,7 @@ import AppointmentDetails from './AppointmentDetails';
 interface WeeklyAppointmentsViewProps {
   currentDate: Date;
   onDateSelect: (date: Date) => void;
+  searchTerm?: string;
 }
 
 interface Appointment {
@@ -156,7 +157,7 @@ function computePositionedAppointments(dayAppointments: Appointment[]): Position
   return [...positionedAllDay, ...positioned];
 }
 
-const WeeklyAppointmentsView = ({ currentDate, onDateSelect }: WeeklyAppointmentsViewProps) => {
+const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: WeeklyAppointmentsViewProps) => {
   const { t } = useTranslation();
   const { currentLanguage } = useLanguage();
   const { clinicId } = useAuth();
@@ -210,16 +211,25 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect }: WeeklyAppointment
     enabled: !!clinicId,
   });
 
+  const normalizedSearch = searchTerm?.trim().toLowerCase() || '';
+  const filteredAppointments = useMemo(() => {
+    if (!appointments || !normalizedSearch) return appointments || [];
+    return appointments.filter((apt) => {
+      const clientName = `${apt.clients?.first_name || ''} ${apt.clients?.last_name || ''}`.toLowerCase();
+      return clientName.includes(normalizedSearch);
+    });
+  }, [appointments, normalizedSearch]);
+
   // Group appointments by day and compute positions
   const appointmentsByDay = useMemo(() => {
-    if (!appointments) return {};
+    if (!filteredAppointments) return {};
     return weekDays.reduce((acc, day) => {
       const dayKey = format(day, 'yyyy-MM-dd');
-      const dayAppointments = appointments.filter(apt => isSameDay(new Date(apt.start_time), day));
+      const dayAppointments = filteredAppointments.filter(apt => isSameDay(new Date(apt.start_time), day));
       acc[dayKey] = computePositionedAppointments(dayAppointments);
       return acc;
     }, {} as Record<string, PositionedAppointment[]>);
-  }, [appointments, weekDays]);
+  }, [filteredAppointments, weekDays]);
 
   const navigateWeek = (direction: 'prev' | 'next') => {
     const newWeek = direction === 'next' 

@@ -41,7 +41,12 @@ class StripeService {
 
   private async callStripeService<T>(action: string, payload: Record<string, unknown>): Promise<T> {
     const token = await this.getAccessToken();
-    const response = await fetch('/.netlify/functions/stripe-service', {
+    const fallbackBase =
+      window.location.hostname === 'localhost' && window.location.port !== '8888'
+        ? 'http://localhost:8888'
+        : '';
+    const baseUrl = import.meta.env.VITE_NETLIFY_FUNCTIONS_BASE || fallbackBase;
+    const response = await fetch(`${baseUrl}/.netlify/functions/stripe-service`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

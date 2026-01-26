@@ -86,6 +86,9 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
     },
     enabled: !!client.id && !!clinicId,
   });
+  const pendingPaymentsAmount = pendingAppointments?.reduce((sum, appointment) => {
+    return sum + Number(appointment.payment_amount || 0);
+  }, 0) || 0;
 
   const getAge = (birthDate: string | null) => {
     if (!birthDate) return null;
@@ -116,6 +119,7 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
       case 'card': return t('finance.card');
       case 'transfer': return t('finance.transfer');
       case 'insurance': return t('finance.insurance');
+      case 'balance': return t('finance.balance');
       default: return method;
     }
   };
@@ -212,7 +216,7 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
                   <div className="text-center">
                     <p className="text-sm text-muted-foreground">{t('clients.pendingPayments')}</p>
                     <p className="text-2xl font-bold text-foreground">
-                      {formatCurrencyWithClinic(balance.pendingPayments)}
+                      {formatCurrencyWithClinic(pendingPaymentsAmount)}
                     </p>
                   </div>
                   <div className="text-center">

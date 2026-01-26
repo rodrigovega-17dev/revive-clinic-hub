@@ -185,6 +185,9 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({
                 <div className="text-muted-foreground text-sm">
                   /{t(`subscription.${selectedBillingCycle}`)}
                 </div>
+                <div className="mt-2 flex justify-center">
+                  <Badge variant="secondary">{t('subscription.freeTrialBadge')}</Badge>
+                </div>
                 {selectedBillingCycle === 'yearly' && getBillingCycleDiscount() > 0 && (
                   <div className="text-xs text-green-600 mt-1">
                     {t('subscription.savePercent', { percent: getBillingCycleDiscount() })}

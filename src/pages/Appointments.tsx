@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,8 @@ import AppointmentTable from '@/components/AppointmentTable';
 import MonthlyAppointmentsView from '@/components/MonthlyAppointmentsView';
 import WeeklyAppointmentsView from '@/components/WeeklyAppointmentsView';
 import { Skeleton } from '@/components/ui/skeleton';
+import SearchInput from '@/components/SearchInput';
+import { Label } from '@/components/ui/label';
 import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '@/hooks/useLanguage';
 
@@ -25,6 +27,7 @@ const Appointments = () => {
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedView, setSelectedView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [searchTerm, setSearchTerm] = useState('');
   const [searchParams] = useSearchParams();
   
   const locale = currentLanguage === 'es' ? es : enUS;
@@ -57,6 +60,40 @@ const Appointments = () => {
     setSelectedDate(date);
   };
 
+  const totalAppointments = Object.values(groupedAppointments || {}).reduce(
+    (total, group) => total + group.appointments.length, 0
+  );
+
+  const completedToday = Object.values(groupedAppointments || {}).reduce(
+    (total, group) => total + group.appointments.filter(apt => apt.status === 'completed').length, 0
+  );
+
+  const pendingToday = Object.values(groupedAppointments || {}).reduce(
+    (total, group) => total + group.appointments.filter(apt => apt.status === 'scheduled').length, 0
+  );
+
+  const filteredGroupedAppointments = useMemo(() => {
+    if (!groupedAppointments || !searchTerm.trim()) {
+      return groupedAppointments || {};
+    }
+
+    const normalized = searchTerm.trim().toLowerCase();
+    return Object.entries(groupedAppointments).reduce((acc, [therapistId, group]) => {
+      const filtered = group.appointments.filter((appointment: any) => {
+        const clientName = `${appointment.clients?.first_name || ''} ${appointment.clients?.last_name || ''}`.toLowerCase();
+        return clientName.includes(normalized);
+      });
+
+      if (filtered.length > 0) {
+        acc[therapistId] = {
+          therapist: group.therapist,
+          appointments: filtered,
+        };
+      }
+      return acc;
+    }, {} as Record<string, { therapist: any; appointments: any[] }>);
+  }, [groupedAppointments, searchTerm]);
+
   if (appointmentsLoading) {
     return (
       <div className="space-y-6">
@@ -86,18 +123,6 @@ const Appointments = () => {
     );
   }
 
-  const totalAppointments = Object.values(groupedAppointments || {}).reduce(
-    (total, group) => total + group.appointments.length, 0
-  );
-
-  const completedToday = Object.values(groupedAppointments || {}).reduce(
-    (total, group) => total + group.appointments.filter(apt => apt.status === 'completed').length, 0
-  );
-
-  const pendingToday = Object.values(groupedAppointments || {}).reduce(
-    (total, group) => total + group.appointments.filter(apt => apt.status === 'scheduled').length, 0
-  );
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -112,21 +137,23 @@ const Appointments = () => {
         </Button>
       </div>
 
-      {/* View Selector */}
-      <Tabs value={selectedView} onValueChange={(value) => setSelectedView(value as 'daily' | 'weekly' | 'monthly')}>
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="daily">{t('appointments.dailyView')}</TabsTrigger>
-          <TabsTrigger value="weekly">{t('appointments.weeklyView')}</TabsTrigger>
-          <TabsTrigger value="monthly">{t('appointments.monthlyView')}</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="daily" className="space-y-6">
-      {/* Date Filter */}
-      <div className="flex items-center justify-between">
-        <DateFilter 
-              selectedDate={format(selectedDate, 'yyyy-MM-dd')} 
-              onDateChange={handleDateChange} 
-        />
+      {/* Filters */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <DateFilter 
+                selectedDate={format(selectedDate, 'yyyy-MM-dd')} 
+                onDateChange={handleDateChange} 
+          />
+          <div className="space-y-2">
+            <Label className="text-sm text-foreground">{t('appointments.searchByClient')}</Label>
+            <SearchInput
+              value={searchTerm}
+              onChange={setSearchTerm}
+              placeholder={t('appointments.searchByClient')}
+              className="w-[240px]"
+            />
+          </div>
+        </div>
         
         {/* Quick Stats for selected date */}
         <div className="flex gap-4">
@@ -145,10 +172,20 @@ const Appointments = () => {
         </div>
       </div>
 
+      {/* View Selector */}
+      <Tabs value={selectedView} onValueChange={(value) => setSelectedView(value as 'daily' | 'weekly' | 'monthly')}>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="daily">{t('appointments.dailyView')}</TabsTrigger>
+          <TabsTrigger value="weekly">{t('appointments.weeklyView')}</TabsTrigger>
+          <TabsTrigger value="monthly">{t('appointments.monthlyView')}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="daily" className="space-y-6">
+
       {/* Appointments by Therapist */}
-      {Object.keys(groupedAppointments || {}).length > 0 ? (
+      {Object.keys(filteredGroupedAppointments || {}).length > 0 ? (
         <AppointmentTable 
-          groupedAppointments={groupedAppointments || {}}
+          groupedAppointments={filteredGroupedAppointments || {}}
           onAppointmentClick={handleAppointmentClick}
         />
       ) : (
@@ -176,6 +213,7 @@ const Appointments = () => {
           <WeeklyAppointmentsView
             currentDate={selectedDate}
             onDateSelect={handleMonthlyDateSelect}
+            searchTerm={searchTerm}
           />
         </TabsContent>
 
@@ -183,6 +221,7 @@ const Appointments = () => {
           <MonthlyAppointmentsView
             currentDate={selectedDate}
             onDateSelect={handleMonthlyDateSelect}
+            searchTerm={searchTerm}
           />
         </TabsContent>
       </Tabs>
