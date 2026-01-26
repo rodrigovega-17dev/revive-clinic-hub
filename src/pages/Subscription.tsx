@@ -5,10 +5,20 @@ import { CreditCard, Package, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import SubscriptionPlans from '@/components/SubscriptionPlans';
+import { useAuth } from '@/hooks/useAuth';
 
 const Subscription = (): JSX.Element => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { signOut } = useAuth();
+
+  // Ensure subscription back action logs the user out and returns to auth.
+  const handleBackLogout = async () => {
+    const { error } = await signOut();
+    if (!error) {
+      navigate('/auth');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
@@ -18,7 +28,7 @@ const Subscription = (): JSX.Element => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate('/settings')}
+            onClick={handleBackLogout}
             className="flex items-center gap-2"
           >
             <ArrowLeft className="h-4 w-4" />

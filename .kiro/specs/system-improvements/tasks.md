@@ -101,7 +101,7 @@
     - Create fallback UI for network connectivity issues
     - _Requirements: 4.5, 4.6, 4.8_
 
-  - [ ] 5.4 Add subscription performance monitoring
+  - [-] 5.4 Add subscription performance monitoring
     - Implement performance metrics tracking for subscription loading
     - Add logging for subscription query performance
     - Create alerts for slow subscription plan loading

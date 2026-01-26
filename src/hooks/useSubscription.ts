@@ -5,6 +5,7 @@ import { stripeService } from '@/integrations/stripe/service';
 import { useAuth } from './useAuth';
 import { useToast } from './use-toast';
 import { useTranslation } from 'react-i18next';
+import { withPerformanceTracking, usePerformanceMonitor } from '@/lib/performance-monitor';
 import type { 
   SubscriptionPlan, 
   ClinicSubscription, 
@@ -20,20 +21,26 @@ export const useSubscriptionPlans = () => {
   return useQuery({
     queryKey: ['subscription-plans'],
     queryFn: async (): Promise<SubscriptionPlan[]> => {
-      const { data, error } = await supabase
-        .from('subscription_plans')
-        .select('*')
-        .eq('is_active', true)
-        .order('sort_order', { ascending: true });
-      
-      if (error) throw error;
-      
-      return data.map(plan => ({
-        ...plan,
-        features: Array.isArray(plan.features) 
-          ? plan.features.filter((f): f is string => typeof f === 'string')
-          : [],
-      }));
+      return withPerformanceTracking(
+        'subscription-plans-load',
+        async () => {
+          const { data, error } = await supabase
+            .from('subscription_plans')
+            .select('*')
+            .eq('is_active', true)
+            .order('sort_order', { ascending: true });
+          
+          if (error) throw error;
+          
+          return data.map(plan => ({
+            ...plan,
+            features: Array.isArray(plan.features) 
+              ? plan.features.filter((f): f is string => typeof f === 'string')
+              : [],
+          }));
+        },
+        { planCount: 0 } // Will be updated with actual count
+      );
     },
     staleTime: 15 * 60 * 1000, // 15 minutes - subscription plans rarely change
     gcTime: 60 * 60 * 1000, // 1 hour - keep in cache longer for static data
@@ -56,40 +63,46 @@ export const useClinicSubscription = () => {
     queryFn: async (): Promise<ClinicSubscription | null> => {
       if (!clinicId) return null;
       
-      const { data, error } = await supabase
-        .from('clinic_subscriptions')
-        .select(`
-          *,
-          subscription_plans (
-            id,
-            name,
-            slug,
-            description,
-            price_monthly,
-            price_yearly,
-            max_therapists,
-            features,
-            is_popular,
-            sort_order
-          )
-        `)
-        .eq('clinic_id', clinicId)
-        .single();
-      
-      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
-      
-      if (!data) return null;
-      
-      return {
-        ...data,
-        status: data.status as SubscriptionStatus,
-        plan: data.subscription_plans ? {
-          ...data.subscription_plans,
-          features: Array.isArray(data.subscription_plans.features) 
-            ? data.subscription_plans.features.filter((f): f is string => typeof f === 'string')
-            : [],
-        } : undefined,
-      };
+      return withPerformanceTracking(
+        'clinic-subscription-load',
+        async () => {
+          const { data, error } = await supabase
+            .from('clinic_subscriptions')
+            .select(`
+              *,
+              subscription_plans (
+                id,
+                name,
+                slug,
+                description,
+                price_monthly,
+                price_yearly,
+                max_therapists,
+                features,
+                is_popular,
+                sort_order
+              )
+            `)
+            .eq('clinic_id', clinicId)
+            .single();
+          
+          if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
+          
+          if (!data) return null;
+          
+          return {
+            ...data,
+            status: data.status as SubscriptionStatus,
+            plan: data.subscription_plans ? {
+              ...data.subscription_plans,
+              features: Array.isArray(data.subscription_plans.features) 
+                ? data.subscription_plans.features.filter((f): f is string => typeof f === 'string')
+                : [],
+            } : undefined,
+          };
+        },
+        { clinicId }
+      );
     },
     enabled: !!clinicId,
     staleTime: 3 * 60 * 1000, // 3 minutes - subscription data changes less frequently
@@ -109,7 +122,10 @@ export const useSubscriptionStatus = () => {
     queryFn: async () => {
       if (!clinicId) return null;
       
-      try {
+      return withPerformanceTracking(
+        'subscription-status-load',
+        async () => {
+          try {
         // First, try to get active subscription data (most common case)
         const { data: subscription, error: subscriptionError } = await supabase
           .from('clinic_subscriptions')
@@ -223,23 +239,26 @@ export const useSubscriptionStatus = () => {
           usage
         };
         
-      } catch (error) {
-        console.error('Error in subscription status query:', error);
-        
-        // Return a safe default to prevent blocking the UI
-        return {
-          status: 'trial' as SubscriptionStatus,
-          trial_ends_at: null,
-          plan: null,
-          subscription: null,
-          usage: {
-            therapist_count: 0,
-            appointment_count: 0,
-            client_count: 0
-          }
-        };
-      }
-    },
+        } catch (error) {
+          console.error('Error in subscription status query:', error);
+          
+          // Return a safe default to prevent blocking the UI
+          return {
+            status: 'trial' as SubscriptionStatus,
+            trial_ends_at: null,
+            plan: null,
+            subscription: null,
+            usage: {
+              therapist_count: 0,
+              appointment_count: 0,
+              client_count: 0
+            }
+          };
+        }
+      },
+      { clinicId }
+    );
+  },
     enabled: !!clinicId,
     staleTime: 1 * 60 * 1000, // 1 minute - faster refresh for critical subscription data
     gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache
@@ -334,7 +353,11 @@ export const useCreateSubscription = () => {
   
   return useMutation({
     mutationFn: async (params: CreateSubscriptionParams) => {
-      return stripeService.createSubscription(params);
+      return withPerformanceTracking(
+        'subscription-create',
+        () => stripeService.createSubscription(params),
+        { planId: params.planId, billingCycle: params.billingCycle }
+      );
     },
     onSuccess: () => {
       // Comprehensive cache invalidation for subscription-related data
@@ -382,7 +405,11 @@ export const useCancelSubscription = () => {
       subscriptionId: string; 
       cancelAtPeriodEnd?: boolean;
     }) => {
-      return stripeService.cancelSubscription(subscriptionId, cancelAtPeriodEnd);
+      return withPerformanceTracking(
+        'subscription-cancel',
+        () => stripeService.cancelSubscription(subscriptionId, cancelAtPeriodEnd),
+        { subscriptionId, cancelAtPeriodEnd }
+      );
     },
     onSuccess: () => {
       // Comprehensive cache invalidation
@@ -470,7 +497,11 @@ export const useUpdateSubscription = () => {
       newPlanId: string; 
       billingCycle: 'monthly' | 'yearly';
     }) => {
-      return stripeService.updateSubscription(subscriptionId, newPlanId, billingCycle);
+      return withPerformanceTracking(
+        'subscription-update',
+        () => stripeService.updateSubscription(subscriptionId, newPlanId, billingCycle),
+        { subscriptionId, newPlanId, billingCycle }
+      );
     },
     onSuccess: () => {
       // Comprehensive cache invalidation
@@ -509,7 +540,11 @@ export const useCreateCheckoutSession = () => {
   
   return useMutation({
     mutationFn: async (params: CheckoutSessionParams) => {
-      return stripeService.createCheckoutSession(params);
+      return withPerformanceTracking(
+        'checkout-session-create',
+        () => stripeService.createCheckoutSession(params),
+        { planId: params.planId, billingCycle: params.billingCycle }
+      );
     },
     onSuccess: (session) => {
       // Redirect to Stripe Checkout
