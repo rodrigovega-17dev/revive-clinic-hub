@@ -12,9 +12,6 @@
 [dev]
   targetPort = 8080
 
-[dev]
-  targetPort = 8080
-
 # Handle client-side routing
 [[redirects]]
   from = "/*"
