@@ -35,7 +35,7 @@ Create a `.env` file in your project root with the following variables:
 ```env
 # Google Calendar API Configuration
 VITE_GOOGLE_CLIENT_ID=your_google_client_id_here
-VITE_GOOGLE_CLIENT_SECRET=your_google_client_secret_here
+GOOGLE_CLIENT_SECRET=your_google_client_secret_here
 VITE_GOOGLE_REDIRECT_URI=http://localhost:5173/google-auth-callback
 
 # Supabase Configuration (existing)

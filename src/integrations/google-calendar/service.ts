@@ -27,6 +27,15 @@ class GoogleCalendarService {
     localStorage.removeItem('googleCalendarAuth');
   }
 
+  private async getAuthToken(): Promise<string> {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      throw new Error('User session is required for Google Calendar operations');
+    }
+    return token;
+  }
+
   private async refreshTokenIfNeeded(): Promise<void> {
     if (!this.auth) return;
 
@@ -39,16 +48,19 @@ class GoogleCalendarService {
   private async refreshAccessToken(): Promise<void> {
     if (!this.auth) throw new Error('No auth data available');
 
-    const response = await fetch('https://oauth2.googleapis.com/token', {
+    const token = await this.getAuthToken();
+    const response = await fetch('/.netlify/functions/google-oauth', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
       },
-      body: new URLSearchParams({
-        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
-        client_secret: import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '',
-        refresh_token: this.auth.refreshToken,
-        grant_type: 'refresh_token',
+      body: JSON.stringify({
+        action: 'refresh_token',
+        payload: {
+          refreshToken: this.auth.refreshToken,
+          clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+        },
       }),
     });
 
@@ -220,17 +232,20 @@ class GoogleCalendarService {
   }
 
   public async authenticate(code: string): Promise<void> {
-    const response = await fetch('https://oauth2.googleapis.com/token', {
+    const token = await this.getAuthToken();
+    const response = await fetch('/.netlify/functions/google-oauth', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
       },
-      body: new URLSearchParams({
-        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
-        client_secret: import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '',
-        code,
-        grant_type: 'authorization_code',
-        redirect_uri: import.meta.env.VITE_GOOGLE_REDIRECT_URI || 'http://localhost:5173/google-auth-callback',
+      body: JSON.stringify({
+        action: 'exchange_code',
+        payload: {
+          code,
+          clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+          redirectUri: import.meta.env.VITE_GOOGLE_REDIRECT_URI || 'http://localhost:5173/google-auth-callback',
+        },
       }),
     });
 

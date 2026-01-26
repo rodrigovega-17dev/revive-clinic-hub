@@ -223,6 +223,10 @@ export const useClinicGoogleCalendar = () => {
       });
     },
     onError: (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('Not Found') || message.includes('notFound')) {
+        return;
+      }
       console.error('Google Calendar delete error:', error);
       toast({
         title: t('googleCalendar.deleteFailed'),

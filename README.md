@@ -72,7 +72,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 # Google Calendar
 VITE_GOOGLE_CLIENT_ID=your_google_client_id
-VITE_GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_CLIENT_SECRET=your_google_client_secret
 VITE_GOOGLE_REDIRECT_URI=http://localhost:5173/google-auth-callback
 ```
 

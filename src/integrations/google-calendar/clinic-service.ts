@@ -18,6 +18,15 @@ class ClinicGoogleCalendarService {
     this.clinicId = clinicId;
   }
 
+  private async getAuthToken(): Promise<string> {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      throw new Error('User session is required for Google Calendar operations');
+    }
+    return token;
+  }
+
   // Get clinic's Google Calendar authentication data
   private async getClinicAuth(): Promise<ClinicGoogleCalendarAuth | null> {
     try {
@@ -168,16 +177,19 @@ class ClinicGoogleCalendarService {
   // Refresh access token
   private async refreshAccessToken(auth: ClinicGoogleCalendarAuth): Promise<void> {
     try {
-      const response = await fetch('https://oauth2.googleapis.com/token', {
+      const token = await this.getAuthToken();
+      const response = await fetch('/.netlify/functions/google-oauth', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
-        body: new URLSearchParams({
-          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
-          client_secret: import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '',
-          refresh_token: auth.refreshToken,
-          grant_type: 'refresh_token',
+        body: JSON.stringify({
+          action: 'refresh_token',
+          payload: {
+            refreshToken: auth.refreshToken,
+            clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+          },
         }),
       });
 
@@ -315,6 +327,15 @@ class ClinicGoogleCalendarService {
       };
     }
 
+    // Tag events by therapist for shared-calendar filtering
+    if (appointment.therapist_id) {
+      event.extendedProperties = {
+        private: {
+          therapist_id: appointment.therapist_id,
+        },
+      };
+    }
+
     return event;
   }
 
@@ -358,17 +379,20 @@ class ClinicGoogleCalendarService {
 
   public async authenticate(code: string, userId: string): Promise<void> {
     try {
-      const response = await fetch('https://oauth2.googleapis.com/token', {
+      const token = await this.getAuthToken();
+      const response = await fetch('/.netlify/functions/google-oauth', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
-        body: new URLSearchParams({
-          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
-          client_secret: import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '',
-          code,
-          grant_type: 'authorization_code',
-          redirect_uri: import.meta.env.VITE_GOOGLE_REDIRECT_URI || 'http://localhost:5173/google-auth-callback',
+        body: JSON.stringify({
+          action: 'exchange_code',
+          payload: {
+            code,
+            clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+            redirectUri: import.meta.env.VITE_GOOGLE_REDIRECT_URI || 'http://localhost:5173/google-auth-callback',
+          },
         }),
       });
 
@@ -521,6 +545,27 @@ class ClinicGoogleCalendarService {
       'orderBy=startTime'
     );
 
+    return response.items || [];
+  }
+
+  public async listEventsForTherapist(
+    timeMin: Date,
+    timeMax: Date,
+    therapistId: string,
+    options: GoogleCalendarSyncOptions = {}
+  ): Promise<GoogleCalendarEvent[]> {
+    const calendarId = options.calendarId || await this.getSelectedCalendarId();
+    const params = new URLSearchParams({
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: 'true',
+      orderBy: 'startTime',
+    });
+
+    // Filter events on the shared calendar by therapist_id
+    params.append('privateExtendedProperty', `therapist_id=${therapistId}`);
+
+    const response = await this.makeRequest(`/calendars/${calendarId}/events?${params.toString()}`);
     return response.items || [];
   }
 

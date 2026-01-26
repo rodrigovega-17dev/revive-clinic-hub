@@ -378,8 +378,10 @@
     "schedulingConflict": "Scheduling Conflict",
     "therapistUnavailable": "The therapist is not available at the selected time.",
     "alternativeTimes": "Alternative Available Times",
+    "suggestedTimes": "Suggested Available Times",
     "nextAvailable": "Next Available",
     "available": "available",
+    "externalCalendarEvent": "External calendar event",
     "conflictDetected": "A scheduling conflict was detected. Please choose a different time.",
     "chooseDifferentTime": "Choose Different Time",
     "checkingAvailability": "Checking therapist availability...",
@@ -562,8 +564,21 @@
     "calendarIntegration": "Calendar Integration",
     "withCustomColors": "with custom colors",
     "calendarColor": "Calendar Color",
+    "selectCalendarColor": "Select calendar color",
     "commissionPercentage": "Commission Percentage",
-    "enterSpecialty": "Enter specialty name"
+    "enterSpecialty": "Enter specialty name",
+    "updateTherapistProfile": "Update therapist profile information",
+    "infoTab": "Therapist Info",
+    "scheduleTab": "Schedule Rules",
+    "workingHours": "Working Hours",
+    "workingHoursDescription": "Set availability, slot length, and buffer time for each day.",
+    "day": "Day",
+    "scheduleActive": "Active",
+    "scheduleStart": "Start",
+    "scheduleEnd": "End",
+    "slotMinutes": "Slot (min)",
+    "bufferMinutes": "Buffer (min)",
+    "invalidScheduleTime": "Start time must be before end time for active days."
   },
   "finance": {
     "title": "Finance",
@@ -912,7 +927,8 @@
     "passwordTooShort": "Password must be at least 8 characters long",
     "passwordsDoNotMatch": "Passwords do not match",
     "newPasswordSameAsCurrent": "New password must be different from current password",
-    "unexpectedError": "An unexpected error occurred"
+    "unexpectedError": "An unexpected error occurred",
+    "sessionManagement": "Session Management"
   },
   "subscription": {
     "title": "Subscription",
@@ -1024,7 +1040,21 @@
     "retrying": "Retrying...",
     "maxRetriesReached": "Unable to load after multiple attempts.",
     "refreshPage": "Refresh Page",
-    "loadingPlans": "Loading subscription plans..."
+    "loadingPlans": "Loading subscription plans...",
+    "checkoutSuccess": "Subscription activated",
+    "checkoutSuccessDescription": "Your plan is active. Redirecting to the dashboard.",
+    "checkoutCanceled": "Checkout canceled",
+    "checkoutCanceledDescription": "Your subscription was not completed. You can try again anytime.",
+    "checkoutFailed": "Checkout failed",
+    "status": {
+      "active": "Active",
+      "trial": "Trial",
+      "trialing": "Trialing",
+      "canceled": "Canceled",
+      "past_due": "Past due",
+      "incomplete": "Incomplete",
+      "incomplete_expired": "Expired"
+    }
   },
   "sidebar": {
     "fallbackClinic": "Revive Clinic",

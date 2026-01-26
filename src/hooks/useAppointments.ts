@@ -7,6 +7,9 @@ import { useClinicGoogleCalendar } from '@/hooks/useClinicGoogleCalendar';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from './useAuth';
+import { useClinic } from './useClinic';
+import { createClinicGoogleCalendarService } from '@/integrations/google-calendar/clinic-service';
+import type { GoogleCalendarEvent } from '@/integrations/google-calendar/types';
 
 type Appointment = Tables<'appointments'>;
 type AppointmentInsert = TablesInsert<'appointments'>;
@@ -127,6 +130,22 @@ export const useCreateAppointment = () => {
         ...appointment,
         clinic_id: clinicId,
       };
+
+      // Server-side conflict check to prevent double-booking races
+      const { data: hasConflict, error: conflictError } = await supabase.rpc(
+        'has_appointment_conflict',
+        {
+          therapist_id: appointmentWithClinic.therapist_id,
+          start_time: appointmentWithClinic.start_time,
+          end_time: appointmentWithClinic.end_time,
+          exclude_appointment_id: null,
+        }
+      );
+
+      if (conflictError) throw conflictError;
+      if (hasConflict) {
+        throw new Error('Appointment time conflicts with an existing booking');
+      }
       
       const { data, error } = await supabase
         .from('appointments')
@@ -163,7 +182,7 @@ export const useCreateAppointment = () => {
 
 export const useUpdateAppointment = () => {
   const queryClient = useQueryClient();
-  const { syncAppointment, isAuthenticated } = useClinicGoogleCalendar();
+  const { syncAppointment, deleteAppointment, isAuthenticated } = useClinicGoogleCalendar();
   
   return useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & Partial<AppointmentUpdate>) => {
@@ -182,7 +201,7 @@ export const useUpdateAppointment = () => {
       if (error) throw error;
       return { data, updates };
     },
-    onSuccess: ({ data: updatedAppointment, updates }) => {
+    onSuccess: async ({ data: updatedAppointment, updates }) => {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
       
@@ -213,12 +232,28 @@ export const useUpdateAppointment = () => {
         // Sync if appointment was rescheduled (start_time or end_time changed)
         'start_time' in updates || 
         'end_time' in updates ||
-        // Sync if appointment was cancelled
-        (updates.status === 'cancelled') ||
         // Sync if therapist was changed (might affect calendar)
         'therapist_id' in updates
       );
+
+      const shouldDeleteFromGoogle =
+        isAuthenticated &&
+        updates.status === 'cancelled' &&
+        !!updatedAppointment.google_calendar_event_id;
       
+      if (shouldDeleteFromGoogle) {
+        try {
+          await deleteAppointment({ googleEventId: updatedAppointment.google_calendar_event_id });
+          await supabase
+            .from('appointments')
+            .update({ google_calendar_event_id: null })
+            .eq('id', updatedAppointment.id);
+        } catch (error) {
+          console.error('Failed to delete appointment from Google Calendar:', error);
+        }
+        return;
+      }
+
       if (shouldSyncToGoogle) {
         try {
           syncAppointment({ appointment: updatedAppointment });
@@ -406,22 +441,58 @@ export const useTherapistAvailability = (
   t?: (key: string) => string,
   locale?: string
 ) => {
+  const { clinicId } = useAuth();
+  const { data: clinic } = useClinic();
+
   return useQuery({
-    queryKey: ['therapist-availability', therapistId, date, startTime, duration, excludeAppointmentId],
+    queryKey: [
+      'therapist-availability',
+      therapistId,
+      date,
+      startTime,
+      duration,
+      excludeAppointmentId,
+      clinicId,
+      clinic?.google_calendar_enabled,
+      clinic?.google_calendar_selected_id,
+    ],
     queryFn: async () => {
-      if (!therapistId || !date || !startTime) {
+      if (!therapistId || !date || !startTime || !clinicId) {
         return { hasConflict: false, conflicts: [], availableSlots: [] };
       }
 
+      // Load schedule rules (therapist-specific overrides clinic defaults)
+      const { data: rules, error: rulesError } = await supabase
+        .from('therapist_schedule_rules')
+        .select('therapist_id, weekday, start_time, end_time, slot_minutes, buffer_minutes, is_active')
+        .eq('clinic_id', clinicId)
+        .eq('is_active', true)
+        .or(`therapist_id.eq.${therapistId},therapist_id.is.null`);
+
+      if (rulesError) throw rulesError;
+
+      const rulesByWeekday = buildRulesByWeekday(rules || [], therapistId);
+
       // Parse the requested appointment time
       const [year, month, day] = date.split('-').map(Number);
-      const hour = startTime.includes(':') ? startTime.split(':')[0] : startTime;
-      const requestedStart = new Date(year, month - 1, day, parseInt(hour), 0, 0);
+      const [hourValue, minuteValue = '0'] = startTime.includes(':')
+        ? startTime.split(':')
+        : [startTime, '0'];
+      const requestedStart = new Date(
+        year,
+        month - 1,
+        day,
+        parseInt(hourValue, 10),
+        parseInt(minuteValue, 10),
+        0
+      );
       const requestedEnd = new Date(requestedStart.getTime() + duration * 60000);
+      const requestRule = rulesByWeekday[requestedStart.getDay()];
+      const bufferMinutes = requestRule?.buffer_minutes ?? 0;
 
       // Get all appointments for this therapist on the selected date
       const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
-      const endOfDay = new Date(year, month - 1, day, 23, 59, 59, 999);
+      const endOfRange = new Date(year, month - 1, day + MAX_SUGGESTION_DAYS, 23, 59, 59, 999);
 
       const { data: existingAppointments, error } = await supabase
         .from('appointments')
@@ -430,18 +501,39 @@ export const useTherapistAvailability = (
           start_time,
           end_time,
           status,
+          google_calendar_event_id,
           clients (first_name, last_name)
         `)
         .eq('therapist_id', therapistId)
         .gte('start_time', startOfDay.toISOString())
-        .lte('start_time', endOfDay.toISOString())
+        .lte('start_time', endOfRange.toISOString())
         .neq('status', 'cancelled')
         .order('start_time');
 
       if (error) throw error;
 
+      // Pull Google Calendar events (shared calendar filtered by therapist_id)
+      const googleEvents = await fetchGoogleEvents({
+        clinicId,
+        clinicEnabled: clinic?.google_calendar_enabled,
+        calendarId: clinic?.google_calendar_selected_id,
+        therapistId,
+        startTime: startOfDay,
+        endTime: endOfRange,
+      });
+
+      const existingGoogleEventIds = new Set(
+        (existingAppointments || [])
+          .map((appointment) => appointment.google_calendar_event_id)
+          .filter(Boolean)
+      );
+      const normalizedGoogleEvents = normalizeGoogleEvents(
+        googleEvents.filter((event) => !event.id || !existingGoogleEventIds.has(event.id))
+      );
+      const combinedAppointments = [...(existingAppointments || []), ...normalizedGoogleEvents];
+
       // Check for conflicts, excluding the specified appointment if provided
-      const conflicts = existingAppointments?.filter(appointment => {
+      const conflicts = combinedAppointments.filter(appointment => {
         // Skip the appointment being excluded (for rescheduling)
         if (excludeAppointmentId && appointment.id === excludeAppointmentId) {
           return false;
@@ -450,26 +542,33 @@ export const useTherapistAvailability = (
         const appointmentStart = new Date(appointment.start_time);
         const appointmentEnd = new Date(appointment.end_time);
         
-        // Check if there's any overlap
-        return (
-          (requestedStart < appointmentEnd && requestedEnd > appointmentStart) ||
-          (appointmentStart < requestedEnd && appointmentEnd > requestedStart)
-        );
+        // Check if there's any overlap (with buffer time)
+        return hasTimeConflict({
+          requestedStart,
+          requestedEnd,
+          existingStart: appointmentStart,
+          existingEnd: appointmentEnd,
+          bufferMinutes,
+        });
       }) || [];
 
-      const hasConflict = conflicts.length > 0;
+      const isWithinWorkingHours = requestRule
+        ? isWithinRuleWindow(requestedStart, requestedEnd, requestRule)
+        : true;
+      const hasConflict = conflicts.length > 0 || !isWithinWorkingHours;
 
-      // Generate alternative time slots if there's a conflict
-      const availableSlots = hasConflict ? generateAlternativeSlots(
-        existingAppointments || [],
+      // Generate alternative time slots to help guide scheduling
+      const availableSlots = generateAlternativeSlots(
+        combinedAppointments,
         requestedStart,
         duration,
         year,
         month - 1,
         day,
+        rulesByWeekday,
         t,
         locale
-      ) : [];
+      );
 
       return {
         hasConflict,
@@ -477,8 +576,142 @@ export const useTherapistAvailability = (
         availableSlots,
       };
     },
-    enabled: !!therapistId && !!date && !!startTime,
+    enabled: !!therapistId && !!date && !!startTime && !!clinicId,
   });
+};
+
+type ScheduleRule = {
+  therapist_id: string | null;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+  slot_minutes: number;
+  buffer_minutes: number;
+  is_active: boolean;
+};
+
+const DEFAULT_RULE: ScheduleRule = {
+  therapist_id: null,
+  weekday: 0,
+  start_time: '08:00:00',
+  end_time: '18:00:00',
+  slot_minutes: 60,
+  buffer_minutes: 0,
+  is_active: true,
+};
+
+const MAX_SUGGESTION_DAYS = 14;
+
+// Build weekday rules with therapist-specific overrides
+const buildRulesByWeekday = (rules: ScheduleRule[], therapistId: string) => {
+  const byWeekday: Record<number, ScheduleRule> = {};
+
+  for (let weekday = 0; weekday <= 6; weekday += 1) {
+    const therapistRule = rules.find(
+      (rule) => rule.weekday === weekday && rule.therapist_id === therapistId
+    );
+    const clinicRule = rules.find(
+      (rule) => rule.weekday === weekday && rule.therapist_id === null
+    );
+
+    byWeekday[weekday] = therapistRule || clinicRule || { ...DEFAULT_RULE, weekday };
+  }
+
+  return byWeekday;
+};
+
+const parseTimeParts = (timeValue: string) => {
+  const [hour, minute = '0', second = '0'] = timeValue.split(':');
+  return {
+    hour: parseInt(hour, 10),
+    minute: parseInt(minute, 10),
+    second: parseInt(second, 10),
+  };
+};
+
+const isWithinRuleWindow = (start: Date, end: Date, rule: ScheduleRule) => {
+  const { hour: startHour, minute: startMinute, second: startSecond } = parseTimeParts(rule.start_time);
+  const { hour: endHour, minute: endMinute, second: endSecond } = parseTimeParts(rule.end_time);
+
+  const dayStart = new Date(start.getFullYear(), start.getMonth(), start.getDate(), startHour, startMinute, startSecond);
+  const dayEnd = new Date(start.getFullYear(), start.getMonth(), start.getDate(), endHour, endMinute, endSecond);
+
+  return start >= dayStart && end <= dayEnd;
+};
+
+const hasTimeConflict = ({
+  requestedStart,
+  requestedEnd,
+  existingStart,
+  existingEnd,
+  bufferMinutes,
+}: {
+  requestedStart: Date;
+  requestedEnd: Date;
+  existingStart: Date;
+  existingEnd: Date;
+  bufferMinutes: number;
+}) => {
+  const bufferMs = bufferMinutes * 60 * 1000;
+  const bufferedStart = new Date(existingStart.getTime() - bufferMs);
+  const bufferedEnd = new Date(existingEnd.getTime() + bufferMs);
+
+  return requestedStart < bufferedEnd && requestedEnd > bufferedStart;
+};
+
+const fetchGoogleEvents = async ({
+  clinicId,
+  clinicEnabled,
+  calendarId,
+  therapistId,
+  startTime,
+  endTime,
+}: {
+  clinicId: string;
+  clinicEnabled?: boolean;
+  calendarId?: string | null;
+  therapistId: string;
+  startTime: Date;
+  endTime: Date;
+}): Promise<GoogleCalendarEvent[]> => {
+  if (!clinicEnabled) return [];
+
+  try {
+    const service = createClinicGoogleCalendarService(clinicId);
+    return await service.listEventsForTherapist(startTime, endTime, therapistId, {
+      calendarId: calendarId || undefined,
+    });
+  } catch (error) {
+    console.warn('Failed to fetch Google Calendar events for availability:', error);
+    return [];
+  }
+};
+
+const normalizeGoogleEvents = (events: GoogleCalendarEvent[]) => {
+  return events
+    .map((event) => {
+      const start = event.start?.dateTime || event.start?.date;
+      const end = event.end?.dateTime || event.end?.date;
+
+      if (!start || !end) {
+        return null;
+      }
+
+      return {
+        id: event.id || `google-${start}`,
+        start_time: start,
+        end_time: end,
+        status: 'external',
+        source: 'google',
+      };
+    })
+    .filter(Boolean) as Array<{
+      id: string;
+      start_time: string;
+      end_time: string;
+      status: string;
+      source: string;
+    }>;
 };
 
 // Helper function to generate alternative time slots
@@ -489,41 +722,64 @@ const generateAlternativeSlots = (
   year: number,
   month: number,
   day: number,
+  rulesByWeekday: Record<number, ScheduleRule>,
   t?: (key: string) => string,
   locale?: string
 ): Array<{ time: string; label: string }> => {
   const slots: Array<{ time: string; label: string }> = [];
   const now = new Date();
-  const businessHours = { start: 8, end: 18 }; // 8 AM to 6 PM
+  const maxDaysToSearch = 14;
   
-  // Generate slots for today and next 7 days
-  for (let dayOffset = 0; dayOffset <= 7; dayOffset++) {
+  // Generate slots for today and next days
+  for (let dayOffset = 0; dayOffset <= maxDaysToSearch; dayOffset++) {
     const currentDay = new Date(year, month, day + dayOffset);
+    const ruleForDay = rulesByWeekday[currentDay.getDay()] || DEFAULT_RULE;
     
     // Skip if this day is in the past
     if (currentDay < new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
       continue;
     }
     
-    // Determine start hour for this day
-    let startHour = businessHours.start;
-    if (dayOffset === 0) {
-      // For today, start from current hour + 1, but not before business hours
-      startHour = Math.max(businessHours.start, now.getHours() + 1);
-    }
-    
-    // Generate slots every hour from start hour to end of business hours
-    for (let hour = startHour; hour < businessHours.end; hour++) {
-      const slotStart = new Date(currentDay.getFullYear(), currentDay.getMonth(), currentDay.getDate(), hour, 0, 0);
+    const ruleStart = parseTimeParts(ruleForDay.start_time);
+    const ruleEnd = parseTimeParts(ruleForDay.end_time);
+    const slotIntervalMinutes = ruleForDay.slot_minutes || DEFAULT_RULE.slot_minutes;
+    const bufferMinutes = ruleForDay.buffer_minutes || 0;
+
+    let slotStart = new Date(
+      currentDay.getFullYear(),
+      currentDay.getMonth(),
+      currentDay.getDate(),
+      ruleStart.hour,
+      ruleStart.minute,
+      ruleStart.second
+    );
+    const ruleEndTime = new Date(
+      currentDay.getFullYear(),
+      currentDay.getMonth(),
+      currentDay.getDate(),
+      ruleEnd.hour,
+      ruleEnd.minute,
+      ruleEnd.second
+    );
+
+    // Generate slots in rule-based increments
+    while (slotStart < ruleEndTime) {
       const slotEnd = new Date(slotStart.getTime() + duration * 60000);
       
+      // Skip if slot falls outside the rule window
+      if (slotEnd > ruleEndTime) {
+        break;
+      }
+
       // Skip if slot is in the past
       if (slotStart <= now) {
+        slotStart = new Date(slotStart.getTime() + slotIntervalMinutes * 60000);
         continue;
       }
       
       // Skip the requested time
       if (Math.abs(slotStart.getTime() - requestedStart.getTime()) < 60000) {
+        slotStart = new Date(slotStart.getTime() + slotIntervalMinutes * 60000);
         continue;
       }
       
@@ -532,11 +788,13 @@ const generateAlternativeSlots = (
         const appointmentStart = new Date(appointment.start_time);
         const appointmentEnd = new Date(appointment.end_time);
         
-        // Check for any overlap
-        return (
-          (slotStart < appointmentEnd && slotEnd > appointmentStart) ||
-          (appointmentStart < slotEnd && appointmentEnd > slotStart)
-        );
+        return hasTimeConflict({
+          requestedStart: slotStart,
+          requestedEnd: slotEnd,
+          existingStart: appointmentStart,
+          existingEnd: appointmentEnd,
+          bufferMinutes,
+        });
       });
       
       if (!hasConflict) {
@@ -548,10 +806,14 @@ const generateAlternativeSlots = (
         });
         
         // Add day information with proper internationalization
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const tomorrowStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), todayStart.getDate() + 1);
+        const slotDayStart = new Date(slotStart.getFullYear(), slotStart.getMonth(), slotStart.getDate());
+
         let dayLabel = '';
-        if (dayOffset === 0) {
+        if (slotDayStart.getTime() === todayStart.getTime()) {
           dayLabel = t ? t('appointments.today') : 'Today';
-        } else if (dayOffset === 1) {
+        } else if (slotDayStart.getTime() === tomorrowStart.getTime()) {
           dayLabel = t ? t('appointments.tomorrow') : 'Tomorrow';
         } else {
           dayLabel = slotStart.toLocaleDateString(locale || 'en-US', { 
@@ -566,6 +828,8 @@ const generateAlternativeSlots = (
           label: `${dayLabel} ${timeString}`,
         });
       }
+
+      slotStart = new Date(slotStart.getTime() + slotIntervalMinutes * 60000);
     }
   }
 

@@ -69,7 +69,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const { data: therapists } = useTherapists();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { isAuthenticated, syncAppointment, deleteAppointment } = useClinicGoogleCalendar();
+  const { isAuthenticated, syncAppointment } = useClinicGoogleCalendar();
   const deleteAppointmentMutation = useDeleteAppointment();
   const { currency } = useClinicSettings();
   const { clinicId } = useAuth();
@@ -298,23 +298,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
 
   const handleDeleteAppointment = async () => {
     try {
-      // If appointment has a Google Calendar event ID, delete it first
-      if (appointment.google_calendar_event_id) {
-        try {
-          await deleteAppointment({ googleEventId: appointment.google_calendar_event_id });
-        } catch (error) {
-          console.warn('Failed to delete from Google Calendar, but continuing with local deletion:', error);
-          // Continue with local deletion even if Google Calendar fails
-        }
-      }
-      
-      // Delete from database
-      const { error } = await supabase
-        .from('appointments')
-        .delete()
-        .eq('id', appointment.id);
-      
-      if (error) throw error;
+      await deleteAppointmentMutation.mutateAsync(appointment);
 
       toast({
         title: t('appointments.success'),

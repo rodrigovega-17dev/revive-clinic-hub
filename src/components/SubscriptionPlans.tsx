@@ -38,8 +38,8 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({
 
     // Use current origin for URLs (works for both localhost and production)
     const baseUrl = window.location.origin;
-    const successUrl = `${baseUrl}/settings?tab=billing&success=true`;
-    const cancelUrl = `${baseUrl}/settings?tab=billing&canceled=true`;
+    const successUrl = `${baseUrl}/subscription?success=true`;
+    const cancelUrl = `${baseUrl}/subscription?canceled=true`;
 
     try {
       await createCheckoutSession.mutateAsync({

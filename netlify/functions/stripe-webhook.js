@@ -2,22 +2,22 @@ const Stripe = require('stripe');
 const { createClient } = require('@supabase/supabase-js');
 
 // Access environment variables directly (server-side)
-const stripe = new Stripe(process.env.VITE_STRIPE_SECRET_KEY, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2025-05-28.basil',
 });
 
 // Check if required environment variables are set
-if (!process.env.VITE_SUPABASE_URL) {
-  throw new Error('VITE_SUPABASE_URL environment variable is required');
+if (!process.env.SUPABASE_URL) {
+  throw new Error('SUPABASE_URL environment variable is required');
 }
 
-if (!process.env.VITE_SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('VITE_SUPABASE_SERVICE_ROLE_KEY environment variable is required');
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error('SUPABASE_SERVICE_ROLE_KEY environment variable is required');
 }
 
 const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.VITE_SUPABASE_SERVICE_ROLE_KEY
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 // Helper function to safely convert Stripe timestamps
@@ -52,7 +52,7 @@ exports.handler = async (event, context) => {
     stripeEvent = stripe.webhooks.constructEvent(
       body,
       sig,
-      process.env.VITE_STRIPE_WEBHOOK_SECRET
+      process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
     console.error('Webhook signature verification failed:', err.message);

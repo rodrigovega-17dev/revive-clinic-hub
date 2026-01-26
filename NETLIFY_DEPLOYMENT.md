@@ -52,14 +52,15 @@ In your Netlify dashboard, go to **Site settings** → **Environment variables**
 ```
 VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-VITE_SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
 ### Stripe Variables
 ```
 VITE_STRIPE_PUBLISHABLE_KEY=pk_test_your_publishable_key
-VITE_STRIPE_SECRET_KEY=sk_test_your_secret_key
-VITE_STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+STRIPE_SECRET_KEY=sk_test_your_secret_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
 ```
 
 **Important**: Get your Supabase service role key from:
@@ -78,7 +79,7 @@ VITE_STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
    - `customer.subscription.deleted`
    - `invoice.payment_succeeded`
    - `invoice.payment_failed`
-5. Copy the webhook signing secret and add it to your Netlify environment variables as `VITE_STRIPE_WEBHOOK_SECRET`
+5. Copy the webhook signing secret and add it to your Netlify environment variables as `STRIPE_WEBHOOK_SECRET`
 
 ## Step 5: Update Success/Cancel URLs
 

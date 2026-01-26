@@ -1,16 +1,21 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { CreditCard, Package, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import SubscriptionPlans from '@/components/SubscriptionPlans';
 import { useAuth } from '@/hooks/useAuth';
+import { useSubscriptionStatus } from '@/hooks/useSubscription';
+import { useToast } from '@/hooks/use-toast';
 
 const Subscription = (): JSX.Element => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { signOut } = useAuth();
+  const { data: subscriptionStatus, isLoading: subscriptionLoading, refetch } = useSubscriptionStatus();
+  const { toast } = useToast();
 
   // Ensure subscription back action logs the user out and returns to auth.
   const handleBackLogout = async () => {
@@ -19,6 +24,45 @@ const Subscription = (): JSX.Element => {
       navigate('/auth');
     }
   };
+
+  useEffect(() => {
+    const successParam = searchParams.get('success');
+    const isSuccess = typeof successParam === 'string' && successParam.startsWith('true');
+    const isCanceled = searchParams.get('canceled') === 'true';
+
+    if (isCanceled) {
+      toast({
+        title: t('subscription.checkoutCanceled'),
+        description: t('subscription.checkoutCanceledDescription'),
+        variant: 'destructive',
+      });
+    }
+
+    if (!isSuccess) {
+      return;
+    }
+
+    let attempts = 0;
+    const maxAttempts = 12;
+    const interval = setInterval(async () => {
+      attempts += 1;
+      const latest = await refetch();
+      const status = latest.data?.status;
+      if (status === 'active' || status === 'trialing') {
+        toast({
+          title: t('subscription.checkoutSuccess'),
+          description: t('subscription.checkoutSuccessDescription'),
+        });
+        navigate('/dashboard', { replace: true });
+      }
+
+      if (status === 'active' || status === 'trialing' || attempts >= maxAttempts) {
+        clearInterval(interval);
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [searchParams, subscriptionLoading, subscriptionStatus, toast, navigate, t, refetch]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">

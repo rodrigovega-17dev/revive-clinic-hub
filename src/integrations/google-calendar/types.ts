@@ -3,12 +3,14 @@ export interface GoogleCalendarEvent {
   summary: string;
   description?: string;
   start: {
-    dateTime: string;
-    timeZone: string;
+    dateTime?: string;
+    date?: string;
+    timeZone?: string;
   };
   end: {
-    dateTime: string;
-    timeZone: string;
+    dateTime?: string;
+    date?: string;
+    timeZone?: string;
   };
   attendees?: Array<{
     email: string;
@@ -22,6 +24,9 @@ export interface GoogleCalendarEvent {
     }>;
   };
   colorId?: string;
+  extendedProperties?: {
+    private?: Record<string, string>;
+  };
   conferenceData?: {
     createRequest: {
       requestId: string;

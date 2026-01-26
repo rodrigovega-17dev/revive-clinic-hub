@@ -21,8 +21,8 @@ Add these to your `.env` file:
 
 ```env
 VITE_STRIPE_PUBLISHABLE_KEY=pk_test_your_publishable_key_here
-VITE_STRIPE_SECRET_KEY=sk_test_your_secret_key_here
-VITE_STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here
+STRIPE_SECRET_KEY=sk_test_your_secret_key_here
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here
 ```
 
 ## Step 3: Create Stripe Products and Prices
@@ -81,7 +81,7 @@ This means the subscription plans in your database don't have Stripe price IDs. 
 
 ### "Neither apiKey nor config.authenticator provided" Error
 
-Check that your `VITE_STRIPE_SECRET_KEY` environment variable is set correctly.
+Check that your `STRIPE_SECRET_KEY` environment variable is set correctly.
 
 ### Webhook Events Not Working
 
