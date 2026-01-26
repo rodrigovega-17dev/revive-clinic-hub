@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,33 +8,63 @@ import { useClinicSettings } from '@/hooks/useClinic';
 import { DollarSign, TrendingUp, Minus, Receipt } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { es, enUS } from 'date-fns/locale';
+import { useLanguage } from '@/hooks/useLanguage';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import SearchInput from '@/components/SearchInput';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 const MonthlyFinanceSection = () => {
   const { t } = useTranslation();
+  const { currentLanguage } = useLanguage();
   const { clinicId } = useAuth();
   const { currency } = useClinicSettings();
-  const [selectedPeriod, setSelectedPeriod] = useState<'current' | 'previous'>('current');
+  const [selectedPeriod, setSelectedPeriod] = useState<'current' | 'previous' | 'custom'>('current');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Get current month range
   const currentMonth = new Date();
   const previousMonth = subMonths(currentMonth, 1);
+  const defaultCustomMonth = subMonths(currentMonth, 2);
+  const [customMonth, setCustomMonth] = useState(defaultCustomMonth.getMonth());
+  const [customYear, setCustomYear] = useState(defaultCustomMonth.getFullYear());
+  const locale = currentLanguage === 'es' ? es : enUS;
   
   const periodRanges = {
     current: { start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) },
     previous: { start: startOfMonth(previousMonth), end: endOfMonth(previousMonth) },
+    custom: { start: startOfMonth(new Date(customYear, customMonth, 1)), end: endOfMonth(new Date(customYear, customMonth, 1)) },
   };
 
   const currentRange = periodRanges[selectedPeriod as keyof typeof periodRanges];
 
+  const { previousMonthYear, previousMonthIndex } = useMemo(() => ({
+    previousMonthYear: previousMonth.getFullYear(),
+    previousMonthIndex: previousMonth.getMonth(),
+  }), [previousMonth]);
+
+  const isCustomMonthAllowed = (year: number, monthIndex: number) => {
+    if (year < previousMonthYear) return true;
+    if (year > previousMonthYear) return false;
+    return monthIndex < previousMonthIndex;
+  };
+
+  const availableYears = useMemo(() => {
+    const maxYear = previousMonthYear;
+    const years: number[] = [];
+    for (let year = maxYear; year >= 1980; year -= 1) {
+      years.push(year);
+    }
+    return years;
+  }, [previousMonthYear]);
+
   // Fetch financial data
   const { data: payments, isLoading: paymentsLoading } = useQuery({
-    queryKey: ['payments', selectedPeriod, clinicId],
+    queryKey: ['payments', selectedPeriod, customMonth, customYear, clinicId],
     queryFn: async () => {
       if (!clinicId) return [];
       
@@ -58,7 +88,7 @@ const MonthlyFinanceSection = () => {
 
   // Fetch expenses
   const { data: expenses, isLoading: expensesLoading } = useQuery({
-    queryKey: ['expenses', selectedPeriod, clinicId],
+    queryKey: ['expenses', selectedPeriod, customMonth, customYear, clinicId],
     queryFn: async () => {
       if (!clinicId) return [];
       
@@ -141,12 +171,62 @@ const MonthlyFinanceSection = () => {
   return (
     <div className="space-y-6">
       {/* Period Selector */}
-      <Tabs value={selectedPeriod} onValueChange={(value) => setSelectedPeriod(value as 'current' | 'previous')}>
+      <Tabs value={selectedPeriod} onValueChange={(value) => setSelectedPeriod(value as 'current' | 'previous' | 'custom')}>
         <TabsList className="bg-muted">
           <TabsTrigger value="current">{t('finance.currentMonth')}</TabsTrigger>
           <TabsTrigger value="previous">{t('finance.previousMonth')}</TabsTrigger>
+          <TabsTrigger value="custom">{t('finance.customMonth')}</TabsTrigger>
         </TabsList>
       </Tabs>
+
+      {selectedPeriod === 'custom' && (
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="custom-month">{t('finance.selectMonth')}</Label>
+            <Select
+              value={String(customMonth)}
+              onValueChange={(value) => setCustomMonth(Number(value))}
+            >
+              <SelectTrigger id="custom-month" className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 12 }, (_, monthIndex) => {
+                  const monthLabel = format(new Date(2000, monthIndex, 1), 'MMMM', { locale });
+                  return (
+                    <SelectItem
+                      key={monthIndex}
+                      value={String(monthIndex)}
+                      disabled={!isCustomMonthAllowed(customYear, monthIndex)}
+                    >
+                      {monthLabel}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="custom-year">{t('finance.selectYear')}</Label>
+            <Select
+              value={String(customYear)}
+              onValueChange={(value) => setCustomYear(Number(value))}
+            >
+              <SelectTrigger id="custom-year" className="w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {availableYears.map((year) => (
+                  <SelectItem key={year} value={String(year)}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
 
       {/* Monthly Financial Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

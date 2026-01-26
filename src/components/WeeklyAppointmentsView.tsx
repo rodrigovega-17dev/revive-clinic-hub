@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useClinicSettings } from '@/hooks/useClinic';
 import { Skeleton } from '@/components/ui/skeleton';
 import AppointmentDetails from './AppointmentDetails';
 
@@ -61,6 +62,7 @@ const GOOGLE_CALENDAR_COLORS = [
 
 // Time slots from 00:00 to 23:00 (24 hours total)
 const TIME_SLOTS = Array.from({ length: 24 }, (_, i) => i); // 00:00 to 23:00
+const INITIAL_SCROLL_HOUR = 7;
 const ALL_DAY_HEIGHT = 40;
 const TIME_SLOT_HEIGHT = 60;
 const DAY_COLUMN_WIDTH = 300; // Fixed width for each day column (increased by 35% from 200px)
@@ -158,9 +160,11 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect }: WeeklyAppointment
   const { t } = useTranslation();
   const { currentLanguage } = useLanguage();
   const { clinicId } = useAuth();
+  const { timezone } = useClinicSettings();
   const [selectedWeek, setSelectedWeek] = useState(currentDate);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showAppointmentDetails, setShowAppointmentDetails] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   
   const locale = currentLanguage === 'es' ? es : enUS;
   
@@ -224,6 +228,11 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect }: WeeklyAppointment
     setSelectedWeek(newWeek);
   };
 
+  useEffect(() => {
+    if (!scrollContainerRef.current) return;
+    scrollContainerRef.current.scrollTop = INITIAL_SCROLL_HOUR * TIME_SLOT_HEIGHT;
+  }, [selectedWeek]);
+
   const handleAppointmentClick = (appointment: Appointment) => {
     setSelectedAppointment(appointment);
     setShowAppointmentDetails(true);
@@ -233,10 +242,51 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect }: WeeklyAppointment
     return GOOGLE_CALENDAR_COLORS.find(color => color.id === colorId) || GOOGLE_CALENDAR_COLORS[0];
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400';
+      case 'cancelled':
+        return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400';
+      case 'no_show':
+        return 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400';
+      default:
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400';
+    }
+  };
+
+  const getClinicTimeParts = (date: Date) => {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(date);
+    const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? '0');
+    const minute = Number(parts.find((part) => part.type === 'minute')?.value ?? '0');
+    return { hour, minute };
+  };
+
+  const formatHourLabel = (hour: number) => {
+    const normalized = hour % 24;
+    const period = normalized >= 12 ? 'PM' : 'AM';
+    const displayHour = normalized % 12 === 0 ? 12 : normalized % 12;
+    return `${displayHour} ${period}`;
+  };
+
+  const formatClinicTime = (isoString: string) => {
+    const date = new Date(isoString);
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date);
+  };
+
   const getTimePosition = (startTime: string) => {
     const date = new Date(startTime);
-    const hour = date.getHours();
-    const minute = date.getMinutes();
+    const { hour, minute } = getClinicTimeParts(date);
     return hour * TIME_SLOT_HEIGHT + (minute / 60) * TIME_SLOT_HEIGHT; // 00:00 is the start time
   };
 
@@ -300,7 +350,11 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect }: WeeklyAppointment
       {/* Google Calendar Style Weekly View */}
       <div className="border rounded-lg overflow-hidden bg-card border-border">
         {/* Horizontal scrollable container for entire calendar */}
-        <div className="overflow-auto scrollbar-hide" style={{ height: '700px' }}>
+        <div
+          ref={scrollContainerRef}
+          className="overflow-auto scrollbar-hide"
+          style={{ height: '700px' }}
+        >
           <div style={{ width: `${80 + (7 * DAY_COLUMN_WIDTH)}px` }}>
             {/* Header with day names */}
             <div className="grid border-b border-border sticky top-0 z-40" style={{ gridTemplateColumns: `80px repeat(7, ${DAY_COLUMN_WIDTH}px)` }}>
@@ -350,7 +404,7 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect }: WeeklyAppointment
                       return (
                         <div
                           key={apt.id}
-                          className="absolute rounded text-xs cursor-pointer hover:shadow-md transition-all border border-border"
+                          className={`absolute rounded text-xs cursor-pointer hover:shadow-md transition-all border border-border ${getStatusColor(apt.status)}`}
                           style={{
                             width: `${width}%`,
                             left: `${left}%`,
@@ -360,7 +414,11 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect }: WeeklyAppointment
                           }}
                           onClick={() => handleAppointmentClick(apt)}
                         >
-                          <div className="text-white rounded px-2 py-1 h-full flex items-center overflow-hidden" style={{ backgroundColor: getTherapistColor(apt.therapists?.calendar_color_id).background }}>
+                          <div className="rounded px-2 py-1 h-full flex items-center gap-2 overflow-hidden">
+                            <span
+                              className="w-2 h-2 rounded-full border border-border"
+                              style={{ backgroundColor: getTherapistColor(apt.therapists?.calendar_color_id).background }}
+                            />
                             <div className="truncate font-medium">
                               {apt.clients?.first_name} {apt.clients?.last_name}
                             </div>
@@ -387,7 +445,7 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect }: WeeklyAppointment
                       backgroundColor: 'var(--time-column-bg, #f6f8fb)'
                     }}
                   >
-                    {format(new Date(2000, 0, 1, hour), 'h a')}
+                    {formatHourLabel(hour)}
                   </div>
                 ))}
               </div>
@@ -422,8 +480,7 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect }: WeeklyAppointment
                     {/* Current time indicator */}
                     {isCurrentDay && (() => {
                       const now = new Date();
-                      const currentHour = now.getHours();
-                      const currentMinute = now.getMinutes();
+                      const { hour: currentHour, minute: currentMinute } = getClinicTimeParts(now);
                       const currentPosition = currentHour * TIME_SLOT_HEIGHT + (currentMinute / 60) * TIME_SLOT_HEIGHT;
                       
                       if (currentHour >= 0 && currentHour <= 23) {
@@ -442,8 +499,8 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect }: WeeklyAppointment
 
                     {/* Timed appointments */}
                     {timedEvents.map((apt) => {
-                      const startTime = format(new Date(apt.start_time), 'HH:mm');
-                      const endTime = format(new Date(apt.end_time), 'HH:mm');
+                      const startTime = formatClinicTime(apt.start_time);
+                      const endTime = formatClinicTime(apt.end_time);
                       const top = getTimePosition(apt.start_time);
                       const height = getDuration(apt.start_time, apt.end_time);
                       const width = 100 / apt.columns;
@@ -452,7 +509,7 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect }: WeeklyAppointment
                       return (
                         <div
                           key={apt.id}
-                          className="absolute rounded text-xs cursor-pointer hover:shadow-lg transition-all border border-border"
+                          className={`absolute rounded text-xs cursor-pointer hover:shadow-lg transition-all border border-border ${getStatusColor(apt.status)}`}
                           style={{
                             width: `${width}%`,
                             left: `${left}%`,
@@ -463,8 +520,14 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect }: WeeklyAppointment
                           }}
                           onClick={() => handleAppointmentClick(apt)}
                         >
-                          <div className="text-white rounded p-1 h-full overflow-hidden" style={{ backgroundColor: getTherapistColor(apt.therapists?.calendar_color_id).background }}>
-                            <div className="font-medium text-xs mb-0.5">{startTime}</div>
+                          <div className="rounded p-1 h-full overflow-hidden">
+                            <div className="flex items-center gap-1">
+                              <span className="font-medium text-xs mb-0.5">{startTime}</span>
+                              <span
+                                className="w-2 h-2 rounded-full border border-border"
+                                style={{ backgroundColor: getTherapistColor(apt.therapists?.calendar_color_id).background }}
+                              />
+                            </div>
                             <div className="text-xs font-medium truncate">
                               {apt.clients?.first_name} {apt.clients?.last_name}
                             </div>

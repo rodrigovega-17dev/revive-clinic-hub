@@ -307,12 +307,12 @@ const Settings = (): JSX.Element => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="UTC">UTC</SelectItem>
-                    <SelectItem value="America/New_York">Eastern Time</SelectItem>
-                    <SelectItem value="America/Chicago">Central Time</SelectItem>
-                    <SelectItem value="America/Denver">Mountain Time</SelectItem>
-                    <SelectItem value="America/Los_Angeles">Pacific Time</SelectItem>
-                    <SelectItem value="America/Mexico_City">Mexico City</SelectItem>
+                    <SelectItem value="UTC">{t('settings.timezoneUTC')}</SelectItem>
+                    <SelectItem value="America/New_York">{t('settings.timezoneEastern')}</SelectItem>
+                    <SelectItem value="America/Chicago">{t('settings.timezoneCentral')}</SelectItem>
+                    <SelectItem value="America/Denver">{t('settings.timezoneMountain')}</SelectItem>
+                    <SelectItem value="America/Los_Angeles">{t('settings.timezonePacific')}</SelectItem>
+                    <SelectItem value="America/Mexico_City">{t('settings.timezoneMexicoCity')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -672,7 +672,7 @@ const Settings = (): JSX.Element => {
                 {t('settings.googleCalendar')}
               </CardTitle>
               <CardDescription>
-                Connect your Google Calendar
+                {t('googleCalendar.description')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

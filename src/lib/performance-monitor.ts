@@ -283,7 +283,7 @@ export const withPerformanceTracking = async <T>(
   } catch (error) {
     performanceMonitor.endTracking(trackingId, { 
       success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+      error: error instanceof Error ? error.message : 'unknown error' 
     });
     throw error;
   }

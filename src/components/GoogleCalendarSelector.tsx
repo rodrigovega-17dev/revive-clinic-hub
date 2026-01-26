@@ -29,11 +29,11 @@ const GoogleCalendarSelector: React.FC = () => {
   const getAccessRoleBadge = (accessRole: string) => {
     switch (accessRole) {
       case 'owner':
-        return <Badge variant="default" className="text-xs">Owner</Badge>;
+        return <Badge variant="default" className="text-xs">{t('googleCalendar.accessRoleOwner')}</Badge>;
       case 'writer':
-        return <Badge variant="secondary" className="text-xs">Writer</Badge>;
+        return <Badge variant="secondary" className="text-xs">{t('googleCalendar.accessRoleWriter')}</Badge>;
       case 'reader':
-        return <Badge variant="outline" className="text-xs">Reader</Badge>;
+        return <Badge variant="outline" className="text-xs">{t('googleCalendar.accessRoleReader')}</Badge>;
       default:
         return <Badge variant="outline" className="text-xs">{accessRole}</Badge>;
     }
@@ -59,7 +59,7 @@ const GoogleCalendarSelector: React.FC = () => {
           <div className="text-center py-4">
             <AlertCircle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
             <p className="text-sm text-muted-foreground">
-              No calendars available
+              {t('googleCalendar.noCalendarsAvailable')}
             </p>
             <Button 
               onClick={handleRefreshCalendars} 
@@ -116,7 +116,7 @@ const GoogleCalendarSelector: React.FC = () => {
                     {calendar.primary && (
                       <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/20 dark:text-yellow-300 dark:border-yellow-800">
                         <Star className="h-3 w-3 mr-1" />
-                        Primary
+                        {t('googleCalendar.primary')}
                       </Badge>
                     )}
                   </div>
@@ -129,7 +129,9 @@ const GoogleCalendarSelector: React.FC = () => {
                     onClick={() => handleCalendarChange(calendar.id)}
                     disabled={isSettingCalendar}
                   >
-                    {selectedCalendar?.id === calendar.id ? 'Selected' : 'Select'}
+                    {selectedCalendar?.id === calendar.id
+                      ? t('googleCalendar.selected')
+                      : t('googleCalendar.select')}
                   </Button>
                 ) : (
                   <Badge variant="outline" className="text-xs text-muted-foreground">

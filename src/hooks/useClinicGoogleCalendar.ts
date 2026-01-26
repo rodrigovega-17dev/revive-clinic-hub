@@ -224,7 +224,8 @@ export const useClinicGoogleCalendar = () => {
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : String(error);
-      if (message.includes('Not Found') || message.includes('notFound')) {
+      const normalizedMessage = message.toLowerCase();
+      if (normalizedMessage.includes('not found') || normalizedMessage.includes('notfound')) {
         return;
       }
       console.error('Google Calendar delete error:', error);

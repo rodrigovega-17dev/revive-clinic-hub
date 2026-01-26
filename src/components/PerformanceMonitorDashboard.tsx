@@ -105,23 +105,28 @@ const PerformanceMonitorDashboard: React.FC<PerformanceMonitorDashboardProps> = 
     return 'text-red-600';
   };
 
+  const alertSummary =
+    alerts.length === 1
+      ? `${alerts.length} ${t('performanceMonitor.alertsDetectedSingular')}`
+      : `${alerts.length} ${t('performanceMonitor.alertsDetectedPlural')}`;
+
   return (
     <div className={className}>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold">Performance Monitor</h2>
+          <h2 className="text-2xl font-bold">{t('performanceMonitor.title')}</h2>
           <p className="text-muted-foreground">
-            Subscription system performance metrics and alerts
+            {t('performanceMonitor.subtitle')}
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={refreshData}>
             <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
+            {t('performanceMonitor.refresh')}
           </Button>
           <Button variant="outline" onClick={handleExport}>
             <Download className="h-4 w-4 mr-2" />
-            Export Data
+            {t('performanceMonitor.exportData')}
           </Button>
         </div>
       </div>
@@ -131,18 +136,17 @@ const PerformanceMonitorDashboard: React.FC<PerformanceMonitorDashboardProps> = 
         <Alert className="mb-6">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            {alerts.length} performance alert{alerts.length !== 1 ? 's' : ''} detected. 
-            Check the Alerts tab for details.
+            {alertSummary} {t('performanceMonitor.alertsSummarySuffix')}
           </AlertDescription>
         </Alert>
       )}
 
       <Tabs defaultValue="overview" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="metrics">Metrics</TabsTrigger>
+          <TabsTrigger value="overview">{t('performanceMonitor.overviewTab')}</TabsTrigger>
+          <TabsTrigger value="metrics">{t('performanceMonitor.metricsTab')}</TabsTrigger>
           <TabsTrigger value="alerts">
-            Alerts
+            {t('performanceMonitor.alertsTab')}
             {alerts.length > 0 && (
               <Badge variant="destructive" className="ml-2">
                 {alerts.length}
@@ -168,17 +172,17 @@ const PerformanceMonitorDashboard: React.FC<PerformanceMonitorDashboardProps> = 
                   <CardContent>
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Avg Duration:</span>
+                        <span className="text-muted-foreground">{t('performanceMonitor.avgDuration')}</span>
                         <span className={getPerformanceColor(stat.averageDuration, 2000)}>
                           {formatDuration(stat.averageDuration)}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Operations:</span>
+                        <span className="text-muted-foreground">{t('performanceMonitor.operations')}</span>
                         <span>{stat.count}</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Slow Ops:</span>
+                        <span className="text-muted-foreground">{t('performanceMonitor.slowOps')}</span>
                         <span className={stat.slowOperationsCount > 0 ? 'text-red-600' : 'text-green-600'}>
                           {stat.slowOperationsCount} ({stat.slowOperationsPercentage.toFixed(1)}%)
                         </span>
@@ -195,7 +199,7 @@ const PerformanceMonitorDashboard: React.FC<PerformanceMonitorDashboardProps> = 
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BarChart3 className="h-5 w-5" />
-                Recent Performance Trends
+                {t('performanceMonitor.recentTrends')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -217,7 +221,7 @@ const PerformanceMonitorDashboard: React.FC<PerformanceMonitorDashboardProps> = 
                             {operation.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            Last {recentMetrics.length} operations
+                            {t('performanceMonitor.lastOperations', { count: recentMetrics.length })}
                           </div>
                         </div>
                       </div>
@@ -245,13 +249,13 @@ const PerformanceMonitorDashboard: React.FC<PerformanceMonitorDashboardProps> = 
         <TabsContent value="metrics" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Performance Metrics</CardTitle>
+              <CardTitle>{t('performanceMonitor.performanceMetrics')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {metrics.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">
-                    No performance metrics recorded yet.
+                    {t('performanceMonitor.noMetrics')}
                   </p>
                 ) : (
                   metrics.slice().reverse().map((metric, index) => (
@@ -273,10 +277,10 @@ const PerformanceMonitorDashboard: React.FC<PerformanceMonitorDashboardProps> = 
                             ? getPerformanceColor(metric.duration, metric.threshold || 2000)
                             : 'text-muted-foreground'
                         }>
-                          {metric.duration ? formatDuration(metric.duration) : 'In Progress'}
+                          {metric.duration ? formatDuration(metric.duration) : t('performanceMonitor.inProgress')}
                         </span>
                         {metric.isSlowOperation && (
-                          <Badge variant="destructive">Slow</Badge>
+                          <Badge variant="destructive">{t('performanceMonitor.slow')}</Badge>
                         )}
                       </div>
                     </div>
@@ -292,14 +296,14 @@ const PerformanceMonitorDashboard: React.FC<PerformanceMonitorDashboardProps> = 
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5" />
-                Performance Alerts
+                {t('performanceMonitor.performanceAlerts')}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {alerts.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">
-                    No performance alerts. Great job! 🎉
+                    {t('performanceMonitor.noAlerts')}
                   </p>
                 ) : (
                   alerts.map((alert, index) => (
@@ -312,7 +316,10 @@ const PerformanceMonitorDashboard: React.FC<PerformanceMonitorDashboardProps> = 
                               {alert.operation.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                             </div>
                             <div className="text-sm">
-                              Took {formatDuration(alert.duration)} (threshold: {formatDuration(alert.threshold)})
+                              {t('performanceMonitor.tookThreshold', {
+                                duration: formatDuration(alert.duration),
+                                threshold: formatDuration(alert.threshold),
+                              })}
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {new Date(alert.timestamp).toLocaleString()}

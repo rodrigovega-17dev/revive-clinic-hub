@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
 import { useAuth } from './useAuth';
@@ -8,6 +9,7 @@ type SecuritySettings = Database['public']['Tables']['security_settings']['Row']
 type UpdateSecuritySettingsData = Partial<Database['public']['Tables']['security_settings']['Update']>;
 
 export const useSecurity = () => {
+  const { t } = useTranslation();
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings | null>(null);
   const [currentSession, setCurrentSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -65,7 +67,7 @@ export const useSecurity = () => {
         setSecuritySettings(settings);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch security settings');
+      setError(err instanceof Error ? err.message : t('errors.fetchSecuritySettingsFailed'));
     } finally {
       setLoading(false);
     }
@@ -106,7 +108,7 @@ export const useSecurity = () => {
       setSecuritySettings(updatedSettings);
       return { data: updatedSettings, error: null };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update security settings';
+      const errorMessage = err instanceof Error ? err.message : t('errors.updateSecuritySettingsFailed');
       setError(errorMessage);
       return { data: null, error: { message: errorMessage } };
     }
@@ -133,7 +135,7 @@ export const useSecurity = () => {
 
   // Change password using Supabase Auth
   const changePassword = async (currentPassword: string, newPassword: string) => {
-    if (!user) return { error: { message: 'User not authenticated' } };
+    if (!user) return { error: { message: t('errors.userNotAuthenticated') } };
 
     try {
       // First, verify current password
@@ -143,7 +145,7 @@ export const useSecurity = () => {
       });
 
       if (signInError) {
-        return { error: { message: 'Current password is incorrect' } };
+        return { error: { message: t('errors.currentPasswordIncorrect') } };
       }
 
       // Update password
@@ -163,7 +165,7 @@ export const useSecurity = () => {
 
       return { data: null, error: null };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to change password';
+      const errorMessage = err instanceof Error ? err.message : t('errors.changePasswordFailed');
       return { data: null, error: { message: errorMessage } };
     }
   };
@@ -177,7 +179,7 @@ export const useSecurity = () => {
       }
       return { data: null, error: null };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to sign out';
+      const errorMessage = err instanceof Error ? err.message : t('errors.signOutFailed');
       return { data: null, error: { message: errorMessage } };
     }
   };
@@ -191,7 +193,7 @@ export const useSecurity = () => {
       }
       return { data: null, error: null };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to sign out from all devices';
+      const errorMessage = err instanceof Error ? err.message : t('errors.signOutAllFailed');
       return { data: null, error: { message: errorMessage } };
     }
   };

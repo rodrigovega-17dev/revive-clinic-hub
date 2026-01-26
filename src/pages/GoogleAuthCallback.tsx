@@ -40,7 +40,7 @@ const GoogleAuthCallback: React.FC = () => {
         }, 2000);
       } catch (error) {
         setStatus('error');
-        setErrorMessage(error instanceof Error ? error.message : 'Authentication failed');
+        setErrorMessage(error instanceof Error ? error.message : t('errors.authenticationFailed'));
       }
     };
 

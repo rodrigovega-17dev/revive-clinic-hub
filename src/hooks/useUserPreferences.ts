@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
 import { useAuth } from './useAuth';
@@ -8,6 +9,7 @@ type UserPreferences = Database['public']['Tables']['user_preferences']['Row'];
 type UpdateUserPreferencesData = Partial<Database['public']['Tables']['user_preferences']['Update']>;
 
 export const useUserPreferences = () => {
+  const { t } = useTranslation();
   const [data, setData] = useState<UserPreferences | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +68,7 @@ export const useUserPreferences = () => {
         setData(preferences);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch preferences');
+      setError(err instanceof Error ? err.message : t('errors.fetchPreferencesFailed'));
     } finally {
       setLoading(false);
     }
@@ -94,7 +96,7 @@ export const useUserPreferences = () => {
       setData(updatedPreferences);
       return { data: updatedPreferences, error: null };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update preferences';
+      const errorMessage = err instanceof Error ? err.message : t('errors.updatePreferencesFailed');
       setError(errorMessage);
       return { data: null, error: { message: errorMessage } };
     }
