@@ -8,14 +8,16 @@ import SubscriptionPlans from '@/components/SubscriptionPlans';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscriptionStatus } from '@/hooks/useSubscription';
 import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 
 const Subscription = (): JSX.Element => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { signOut } = useAuth();
+  const { signOut, clinicId } = useAuth();
   const { data: subscriptionStatus, isLoading: subscriptionLoading, refetch } = useSubscriptionStatus();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Ensure subscription back action logs the user out and returns to auth.
   const handleBackLogout = async () => {
@@ -44,25 +46,48 @@ const Subscription = (): JSX.Element => {
 
     let attempts = 0;
     const maxAttempts = 12;
+    let hasNavigated = false; // Prevent multiple navigations
+    
     const interval = setInterval(async () => {
+      if (hasNavigated) {
+        clearInterval(interval);
+        return;
+      }
+      
       attempts += 1;
+      
+      // Invalidate cache to ensure fresh data
+      if (clinicId) {
+        await queryClient.invalidateQueries({ queryKey: ['subscription-status', clinicId] });
+        await queryClient.invalidateQueries({ queryKey: ['clinic-subscription', clinicId] });
+      }
+      
       const latest = await refetch();
       const status = latest.data?.status;
+      
       if (status === 'active' || status === 'trialing') {
+        hasNavigated = true;
+        clearInterval(interval);
+        
         toast({
           title: t('subscription.checkoutSuccess'),
           description: t('subscription.checkoutSuccessDescription'),
         });
-        navigate('/dashboard', { replace: true });
+        
+        // Small delay to ensure toast shows and cache is updated
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 100);
+        return;
       }
 
-      if (status === 'active' || status === 'trialing' || attempts >= maxAttempts) {
+      if (attempts >= maxAttempts) {
         clearInterval(interval);
       }
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [searchParams, subscriptionLoading, subscriptionStatus, toast, navigate, t, refetch]);
+  }, [searchParams, subscriptionLoading, subscriptionStatus, toast, navigate, t, refetch, queryClient, clinicId]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">

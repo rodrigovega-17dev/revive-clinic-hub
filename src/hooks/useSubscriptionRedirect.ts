@@ -40,9 +40,9 @@ export const useSubscriptionRedirect = () => {
       return;
     }
 
-    // If subscription is active, allow access
-    if (subscriptionStatus.status === 'active') {
-      console.log('Subscription is active, allowing access');
+    // If subscription is active or trialing, allow access
+    if (subscriptionStatus.status === 'active' || subscriptionStatus.status === 'trialing') {
+      console.log('Subscription is active or trialing, allowing access');
       return;
     }
 
