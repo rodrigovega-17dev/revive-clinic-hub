@@ -4,6 +4,13 @@
 
 [build.environment]
   NODE_VERSION = "18"
+  # These are public client-side values (VITE_ prefix), not secrets
+  # They're intentionally bundled into the client code
+  # Include both VITE_ and non-VITE_ versions since Netlify detects the values
+  SECRETS_SCAN_OMIT_KEYS = "VITE_SUPABASE_URL,SUPABASE_URL,VITE_GOOGLE_CLIENT_ID,GOOGLE_CLIENT_ID,VITE_GOOGLE_REDIRECT_URI,GOOGLE_REDIRECT_URI"
+
+[dev]
+  targetPort = 8080
 
 [dev]
   targetPort = 8080
