@@ -45,7 +45,7 @@ const Auth = () => {
         title: t('notifications.success'),
         description: t('auth.loginSuccess'),
       });
-      navigate('/');
+      navigate('/dashboard');
     }
     
     setIsLoading(false);

@@ -29,7 +29,7 @@ const ComingSoon = ({ title, description }: ComingSoonProps) => {
           <p className="text-muted-foreground mb-6 max-w-md mx-auto">
             {t('comingSoon.workingHard')} {title.toLowerCase()} {t('comingSoon.withFullCrud')}
           </p>
-          <Button onClick={() => navigate("/")} variant="outline">
+          <Button onClick={() => navigate("/dashboard")} variant="outline">
             <ArrowLeft className="w-4 h-4 mr-2" />
             {t('comingSoon.backToDashboard')}
           </Button>
