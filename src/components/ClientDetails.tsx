@@ -1,19 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { User, Phone, Mail, MapPin, Calendar, DollarSign, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { User, Phone, Mail, MapPin, DollarSign, CheckCircle, AlertCircle, History, FileText, Upload } from 'lucide-react';
 import { useClientBalance } from '@/hooks/useClientBalance';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format, differenceInYears } from 'date-fns';
+import { format } from 'date-fns';
 import type { Tables } from '@/integrations/supabase/types';
 import { formatCurrency } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
 import { useClinicSettings } from '@/hooks/useClinic';
+import { hasCfdiData } from '@/lib/cfdi-catalogs';
+import { getCfdiFileUrl } from '@/hooks/useCfdiFileUrl';
+import { CfdiUploadModal } from '@/components/CfdiUploadModal';
+import { DocumentSection } from '@/components/DocumentSection';
 
 type Client = Tables<'clients'>;
 
@@ -21,9 +26,10 @@ interface ClientDetailsProps {
   client: Client;
   open: boolean;
   onClose: () => void;
+  onEdit?: (client: Client) => void;
 }
 
-export default function ClientDetails({ client, open, onClose }: ClientDetailsProps) {
+export default function ClientDetails({ client, open, onClose, onEdit }: ClientDetailsProps) {
   const { t } = useTranslation();
   const { clinicId } = useAuth();
   const { data: balance, isLoading: balanceLoading } = useClientBalance(client.id);
@@ -32,6 +38,7 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
   const [isAppointmentFormOpen, setIsAppointmentFormOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [isAppointmentDetailsOpen, setIsAppointmentDetailsOpen] = useState(false);
+  const [showCfdiUploadModal, setShowCfdiUploadModal] = useState(false);
   
   const { data: paymentHistory } = useQuery({
     queryKey: ['client-payments', client.id, clinicId],
@@ -46,7 +53,8 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
           description,
           payment_date,
           method,
-          appointment_id
+          appointment_id,
+          invoice_state
         `)
         .eq('client_id', client.id)
         .eq('clinic_id', clinicId)
@@ -62,7 +70,6 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
     queryKey: ['client-pending-appointments', client.id, clinicId],
     queryFn: async () => {
       if (!clinicId) return [];
-      
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -80,12 +87,78 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
         .eq('status', 'completed')
         .or('payment_status.is.null,payment_status.eq.pending')
         .order('start_time', { ascending: false });
-
       if (error) throw error;
       return data;
     },
     enabled: !!client.id && !!clinicId,
   });
+
+  /** All appointments for client (any status) for Appointments History tab */
+  const { data: appointmentsHistory } = useQuery({
+    queryKey: ['client-appointments-history', client.id, clinicId],
+    queryFn: async () => {
+      if (!clinicId) return [];
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          id,
+          start_time,
+          end_time,
+          payment_amount,
+          payment_status,
+          status,
+          treatments (name),
+          therapists (first_name, last_name, calendar_color_id, email)
+        `)
+        .eq('client_id', client.id)
+        .eq('clinic_id', clinicId)
+        .order('start_time', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!client.id && !!clinicId,
+  });
+
+  /** CFDI invoices linked to this client via payments */
+  const { data: cfdiInvoicePayments } = useQuery({
+    queryKey: ['client-cfdi-invoices', client.id, clinicId],
+    queryFn: async () => {
+      if (!clinicId) return [];
+      const { data, error } = await supabase
+        .from('cfdi_invoice_payments')
+        .select('cfdi_invoice_id, cfdi_invoices(*), payments!inner(client_id)')
+        .eq('payments.client_id', client.id);
+      if (error) throw error;
+      return data as { cfdi_invoice_id: string; cfdi_invoices: Tables<'cfdi_invoices'> | null; payments: { client_id: string } }[];
+    },
+    enabled: !!client.id && !!clinicId,
+  });
+
+  const clientCfdiInvoices = useMemo(() => {
+    const rows = cfdiInvoicePayments ?? [];
+    const seen = new Set<string>();
+    const list: Tables<'cfdi_invoices'>[] = [];
+    for (const r of rows) {
+      const inv = r.cfdi_invoices;
+      if (inv && !seen.has(inv.id)) {
+        seen.add(inv.id);
+        list.push(inv);
+      }
+    }
+    return list.sort((a, b) => {
+      const da = new Date(a.emitted_at || a.created_at).getTime();
+      const db = new Date(b.emitted_at || b.created_at).getTime();
+      return db - da;
+    });
+  }, [cfdiInvoicePayments]);
+
+  const nonInvoicedPaymentIds = useMemo(() => {
+    const payments = paymentHistory ?? [];
+    return payments
+      .filter((p) => (p as { invoice_state?: string }).invoice_state === 'non_invoiced')
+      .map((p) => p.id);
+  }, [paymentHistory]);
+
   const pendingPaymentsAmount = pendingAppointments?.reduce((sum, appointment) => {
     return sum + Number(appointment.payment_amount || 0);
   }, 0) || 0;
@@ -113,6 +186,54 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
     }
   };
 
+  const getAppointmentStatusText = (status: string) => {
+    switch (status) {
+      case 'completed': return t('appointments.completed');
+      case 'cancelled': return t('appointments.cancelled');
+      case 'no_show': return t('appointments.noShow');
+      default: return t('appointments.statusScheduled');
+    }
+  };
+
+  /** Status badge colors for appointments (matches AppointmentTable / other sections) */
+  const getAppointmentStatusColor = (status: string) => {
+    switch (status) {
+      case 'scheduled': return 'bg-primary/10 text-primary border-primary/20';
+      case 'completed': return 'bg-green-500/10 text-green-600 border-green-500/20 dark:text-green-400';
+      case 'cancelled': return 'bg-destructive/10 text-destructive border-destructive/20';
+      case 'no_show': return 'bg-orange-500/10 text-orange-600 border-orange-500/20 dark:text-orange-400';
+      default: return 'bg-muted text-muted-foreground border-border';
+    }
+  };
+
+  /** Payment status badge colors (matches AppointmentTable) */
+  const getPaymentStatusColor = (status: string) => {
+    switch (status) {
+      case 'paid': return 'bg-green-500/10 text-green-600 border-green-500/20 dark:text-green-400';
+      case 'pending': return 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20 dark:text-yellow-400';
+      case 'overdue': return 'bg-destructive/10 text-destructive border-destructive/20';
+      default: return 'bg-muted text-muted-foreground border-border';
+    }
+  };
+
+  const getCfdiTypeText = (type: string) => {
+    switch (type) {
+      case 'ingreso': return t('cfdi.typeIngreso');
+      case 'egreso': return t('cfdi.typeEgreso');
+      case 'pago': return t('cfdi.typePago');
+      default: return type;
+    }
+  };
+
+  const getCfdiStatusText = (status: string) => {
+    switch (status) {
+      case 'draft': return t('cfdi.statusDraft');
+      case 'issued': return t('cfdi.statusIssued');
+      case 'canceled': return t('cfdi.statusCanceled');
+      default: return status;
+    }
+  };
+
   const getPaymentMethodText = (method: string) => {
     switch (method) {
       case 'cash': return t('finance.cash');
@@ -130,6 +251,7 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -137,8 +259,17 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
             {t('clients.clientDetails')}
           </DialogTitle>
         </DialogHeader>
-        
-        <div className="space-y-6">
+
+        <Tabs defaultValue="overview" className="w-full">
+          {/* Tabs: Overview, Appointments, CFDI, Documents */}
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="overview">{t('clients.overview')}</TabsTrigger>
+            <TabsTrigger value="appointments">{t('clients.appointmentsHistory')}</TabsTrigger>
+            <TabsTrigger value="cfdi">{t('clients.cfdiInvoices')}</TabsTrigger>
+            <TabsTrigger value="documents">{t('documents.tabTitle', 'Documentos')}</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-6 mt-4">
           {/* Client Info */}
           <Card>
             <CardHeader>
@@ -179,6 +310,20 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
                 </div>
               </div>
               
+              <div className="border-t pt-4 flex items-center justify-between gap-2">
+                <div>
+                  <h4 className="font-medium mb-1">{t('cfdi.fiscalData')}</h4>
+                  <p className="text-sm text-muted-foreground">
+                    {hasCfdiData(client) ? t('cfdi.fiscalDataComplete') : t('cfdi.fiscalDataMissing')}
+                  </p>
+                </div>
+                {onEdit && (
+                  <Button variant="outline" size="sm" onClick={() => onEdit(client)}>
+                    {t('common.edit')}
+                  </Button>
+                )}
+              </div>
+
               {client.emergency_contact_name && (
                 <div className="border-t pt-4">
                   <h4 className="font-medium mb-2">{t('clients.emergencyContact')}</h4>
@@ -333,8 +478,190 @@ export default function ClientDetails({ client, open, onClose }: ClientDetailsPr
               {t('clients.close')}
             </Button>
           </div>
-        </div>
+          </TabsContent>
+
+          <TabsContent value="appointments" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <History className="h-5 w-5" />
+                  {t('clients.appointmentsHistory')}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!appointmentsHistory?.length ? (
+                  <p className="text-muted-foreground py-4">{t('clients.noAppointments')}</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t('clients.date')}</TableHead>
+                        <TableHead>{t('clients.treatment')}</TableHead>
+                        <TableHead>{t('clients.therapist')}</TableHead>
+                        <TableHead>{t('clients.amount')}</TableHead>
+                        <TableHead>{t('clients.status')}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {appointmentsHistory.map((apt) => (
+                        <TableRow key={apt.id}>
+                          <TableCell>{format(new Date(apt.start_time), 'MMM d, yyyy')}</TableCell>
+                          <TableCell>{apt.treatments?.name ?? 'N/A'}</TableCell>
+                          <TableCell>
+                            {apt.therapists
+                              ? `${apt.therapists.first_name} ${apt.therapists.last_name}`
+                              : 'N/A'}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {formatCurrencyWithClinic(apt.payment_amount ?? 0)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <Badge className={`${getAppointmentStatusColor(apt.status)} border`}>
+                                {getAppointmentStatusText(apt.status)}
+                              </Badge>
+                              {apt.status === 'completed' && (
+                                <Badge className={`${getPaymentStatusColor(apt.payment_status ?? 'pending')} border`}>
+                                  {getPaymentStatusText(apt.payment_status ?? 'pending')}
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={onClose}>
+                {t('clients.close')}
+              </Button>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="cfdi" className="mt-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  {t('clients.cfdiInvoices')}
+                </CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!clinicId || !nonInvoicedPaymentIds.length}
+                  onClick={() => setShowCfdiUploadModal(true)}
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  {t('cfdi.uploadCfdi')}
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {!clientCfdiInvoices.length ? (
+                  <p className="text-muted-foreground py-4">{t('clients.noCfdiInvoices')}</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t('clients.cfdiType')}</TableHead>
+                        <TableHead>{t('clients.cfdiFolio')}</TableHead>
+                        <TableHead>{t('clients.cfdiDate')}</TableHead>
+                        <TableHead>{t('clients.cfdiAmount')}</TableHead>
+                        <TableHead>{t('clients.cfdiStatus')}</TableHead>
+                        <TableHead className="text-right">{t('common.actions')}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {clientCfdiInvoices.map((inv) => (
+                        <TableRow key={inv.id}>
+                          <TableCell><Badge variant="outline">{getCfdiTypeText(inv.type)}</Badge></TableCell>
+                          <TableCell className="font-mono text-sm">{inv.folio || inv.uuid || '-'}</TableCell>
+                          <TableCell>
+                            {inv.emitted_at
+                              ? format(new Date(inv.emitted_at), 'MMM d, yyyy')
+                              : format(new Date(inv.created_at), 'MMM d, yyyy')}
+                          </TableCell>
+                          <TableCell className="font-medium">{formatCurrencyWithClinic(Number(inv.total))}</TableCell>
+                          <TableCell><Badge variant="secondary">{getCfdiStatusText(inv.status)}</Badge></TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              {inv.pdf_url && (
+                                inv.source === 'uploaded' ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={async () => {
+                                      const u = await getCfdiFileUrl(inv, 'pdf');
+                                      if (u) window.open(u, '_blank');
+                                    }}
+                                  >
+                                    {t('common.download')} PDF
+                                  </Button>
+                                ) : (
+                                  <Button variant="ghost" size="sm" asChild>
+                                    <a href={inv.pdf_url!} target="_blank" rel="noopener noreferrer">{t('common.download')} PDF</a>
+                                  </Button>
+                                )
+                              )}
+                              {inv.xml_url && (
+                                inv.source === 'uploaded' ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={async () => {
+                                      const u = await getCfdiFileUrl(inv, 'xml');
+                                      if (u) window.open(u, '_blank');
+                                    }}
+                                  >
+                                    XML
+                                  </Button>
+                                ) : (
+                                  <Button variant="ghost" size="sm" asChild>
+                                    <a href={inv.xml_url!} target="_blank" rel="noopener noreferrer">XML</a>
+                                  </Button>
+                                )
+                              )}
+                              {!inv.pdf_url && !inv.xml_url && <span className="text-muted-foreground">—</span>}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={onClose}>
+                {t('clients.close')}
+              </Button>
+            </div>
+          </TabsContent>
+
+          {/* Documents tab: client-level + appointment-attached documents */}
+          <TabsContent value="documents" className="mt-4 space-y-4">
+            <DocumentSection context="client" clientId={client.id} />
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={onClose}>
+                {t('clients.close')}
+              </Button>
+            </div>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
+    {clinicId && (
+      <CfdiUploadModal
+        open={showCfdiUploadModal}
+        onClose={() => setShowCfdiUploadModal(false)}
+        onSuccess={() => {}}
+        clinicId={clinicId}
+        mode="individual"
+        paymentIds={nonInvoicedPaymentIds}
+      />
+    )}
+    </>
   );
 } 

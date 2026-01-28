@@ -10,6 +10,7 @@ import { useCreateClient } from '@/hooks/useClients';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
+import { TAX_REGIMES, CFDI_USES, isValidRfcFormat } from '@/lib/cfdi-catalogs';
 
 type Gender = Database['public']['Enums']['gender'];
 
@@ -32,6 +33,10 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
     emergency_contact_phone: '',
     medical_notes: '',
     charge_amount: '',
+    rfc: '',
+    tax_regime: '',
+    cfdi_use: '',
+    cfdi_email: '',
   });
   
   const createClient = useCreateClient();
@@ -48,7 +53,25 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
       });
       return;
     }
-    
+    const rfc = formData.rfc.trim() || null;
+    if (rfc && !isValidRfcFormat(rfc)) {
+      toast({
+        title: t('common.validationError'),
+        description: t('clients.invalidRfc'),
+        variant: 'destructive',
+      });
+      return;
+    }
+    const cfdiEmail = formData.cfdi_email.trim() || formData.email.trim() || null;
+    if (rfc && !cfdiEmail) {
+      toast({
+        title: t('common.validationError'),
+        description: t('clients.emailRequiredForRfc'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       await createClient.mutateAsync({
         first_name: formData.first_name.trim(),
@@ -63,6 +86,10 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
         medical_notes: formData.medical_notes.trim() || null,
         charge_amount: formData.charge_amount ? parseFloat(formData.charge_amount) : 0,
         is_active: true,
+        rfc: rfc || undefined,
+        tax_regime: formData.tax_regime.trim() || undefined,
+        cfdi_use: formData.cfdi_use.trim() || undefined,
+        cfdi_email: cfdiEmail || undefined,
       });
 
       toast({
@@ -83,6 +110,10 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
         emergency_contact_phone: '',
         medical_notes: '',
         charge_amount: '',
+        rfc: '',
+        tax_regime: '',
+        cfdi_use: '',
+        cfdi_email: '',
       });
     } catch (error) {
       toast({
@@ -248,6 +279,63 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
               onChange={(e) => setFormData(prev => ({ ...prev, medical_notes: e.target.value }))}
               className="bg-input border-border text-foreground min-h-[100px]"
             />
+          </div>
+
+          {/* Optional CFDI / tax fields */}
+          <div className="border-t pt-4 space-y-4">
+            <h4 className="text-sm font-medium text-foreground">{t('clients.cfdiSection')}</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="rfc" className="text-sm font-medium text-foreground">{t('clients.rfc')}</Label>
+                <Input
+                  id="rfc"
+                  placeholder="XAXX010101000"
+                  value={formData.rfc}
+                  onChange={(e) => setFormData(prev => ({ ...prev, rfc: e.target.value.toUpperCase() }))}
+                  className="bg-input border-border text-foreground uppercase"
+                  maxLength={13}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cfdi_email" className="text-sm font-medium text-foreground">{t('clients.cfdiEmail')}</Label>
+                <Input
+                  id="cfdi_email"
+                  type="email"
+                  placeholder={t('common.enterEmail')}
+                  value={formData.cfdi_email}
+                  onChange={(e) => setFormData(prev => ({ ...prev, cfdi_email: e.target.value }))}
+                  className="bg-input border-border text-foreground"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="tax_regime" className="text-sm font-medium text-foreground">{t('clients.taxRegime')}</Label>
+                <Select value={formData.tax_regime} onValueChange={(v) => setFormData(prev => ({ ...prev, tax_regime: v }))}>
+                  <SelectTrigger className="bg-input border-border text-foreground">
+                    <SelectValue placeholder={t('common.optional')} />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border-border">
+                    {TAX_REGIMES.map((r) => (
+                      <SelectItem key={r.value} value={r.value} className="text-foreground">{t(r.labelKey)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cfdi_use" className="text-sm font-medium text-foreground">{t('clients.cfdiUse')}</Label>
+                <Select value={formData.cfdi_use} onValueChange={(v) => setFormData(prev => ({ ...prev, cfdi_use: v }))}>
+                  <SelectTrigger className="bg-input border-border text-foreground">
+                    <SelectValue placeholder={t('common.optional')} />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border-border">
+                    {CFDI_USES.map((u) => (
+                      <SelectItem key={u.value} value={u.value} className="text-foreground">{t(u.labelKey)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
 
           <div className="flex justify-end space-x-2">

@@ -13,11 +13,11 @@ import { useClientBalance } from '@/hooks/useClientBalance';
 import { useTherapists } from '@/hooks/useTherapists';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Calendar, User, Clock, DollarSign, CreditCard, CalendarDays, ExternalLink, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Loader2, Calendar, User, Clock, DollarSign, CreditCard, CalendarDays, ExternalLink, AlertTriangle, CheckCircle, FileText, Upload } from 'lucide-react';
 import { format } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatCurrency } from '@/lib/utils';
 import { useClinicGoogleCalendar } from '@/hooks/useClinicGoogleCalendar';
 import { useDeleteAppointment } from '@/hooks/useAppointments';
@@ -26,6 +26,12 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useClinicSettings } from '@/hooks/useClinic';
 import { useAuth } from '@/hooks/useAuth';
 import PaymentForm from './PaymentForm';
+import { facturapiService } from '@/integrations/facturapi/service';
+import { useUpdateClient } from '@/hooks/useClients';
+import { TAX_REGIMES, CFDI_USES, isValidRfcFormat } from '@/lib/cfdi-catalogs';
+import { useClinicFacturapiConfig } from '@/hooks/useClinicFacturapiConfig';
+import { CfdiUploadModal } from './CfdiUploadModal';
+import { DocumentSection } from '@/components/DocumentSection';
 
 interface AppointmentDetailsProps {
   appointment: any;
@@ -38,10 +44,10 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const { currentLanguage } = useLanguage();
   const locale = currentLanguage === 'es' ? es : enUS;
   const [activeTab, setActiveTab] = useState('details');
+  const [displayAppointment, setDisplayAppointment] = useState<any>(null);
   const [paymentData, setPaymentData] = useState({
     amount: appointment?.payment_amount || 0,
     method: appointment?.payment_method || '',
-    facturado: false,
   });
   const [useBalanceCredit, setUseBalanceCredit] = useState(false);
   const [balanceApplied, setBalanceApplied] = useState(0);
@@ -77,20 +83,51 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const { currency } = useClinicSettings();
   const { clinicId } = useAuth();
   const { data: clientBalance } = useClientBalance(appointment?.client_id || null);
+  const [requestingCfdi, setRequestingCfdi] = useState(false);
+  const [showInlineFiscalForm, setShowInlineFiscalForm] = useState(false);
+  const [showCfdiUploadModal, setShowCfdiUploadModal] = useState(false);
+  const [inlineFiscalData, setInlineFiscalData] = useState({ rfc: '', tax_regime: '', cfdi_use: '', cfdi_email: '' });
+  const updateClient = useUpdateClient();
+  const { configured: facturapiConfigured } = useClinicFacturapiConfig();
+
+  const apt = displayAppointment ?? appointment;
+  const { data: appointmentPayments } = useQuery({
+    queryKey: ['appointment-payments', appointment?.id, clinicId],
+    queryFn: async () => {
+      if (!clinicId || !appointment?.id) return [];
+      const { data, error } = await supabase
+        .from('payments')
+        .select('id, amount, facturado, invoice_state')
+        .eq('appointment_id', appointment.id)
+        .eq('clinic_id', clinicId)
+        .gte('amount', 0);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!appointment?.id && !!clinicId && apt?.payment_status === 'paid',
+  });
+
+  const cfdiEligiblePayments = (appointmentPayments || []).filter(
+    (p) => p.invoice_state === 'non_invoiced'
+  );
+
+  const registeredAmount = (appointmentPayments || [])
+    .filter((p) => p.amount > 0)
+    .reduce((sum, p) => sum + Number(p.amount), 0);
 
   // Clinic-aware currency formatting
   const formatCurrencyWithClinic = (value: number) => {
     return formatCurrency(value, 2, currency);
   };
 
-  const appointmentAmount = Number(appointment?.payment_amount || 0);
+  const appointmentAmount = Number(apt?.payment_amount || 0);
   const availableCredit = Math.max(0, Number(clientBalance?.balance || 0));
   const maxApplicableCredit = Math.min(availableCredit, appointmentAmount);
   const appliedCredit = useBalanceCredit ? maxApplicableCredit : 0;
   const amountDue = Math.max(0, appointmentAmount - appliedCredit);
   const effectiveAmount = useBalanceCredit ? amountDue : paymentData.amount;
-  // Calculate IVA amount (16%)
-  const ivaAmount = paymentData.facturado ? effectiveAmount * 0.16 : 0;
+  // Always charge IVA (16%)
+  const ivaAmount = effectiveAmount * 0.16;
   const totalWithIva = effectiveAmount + ivaAmount;
 
   const getStatusText = (status: string) => {
@@ -134,13 +171,13 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
     }
 
     try {
-      // Update appointment with payment information
-      await updateAppointment.mutateAsync({
+      const { data } = await updateAppointment.mutateAsync({
         id: appointment.id,
         payment_status: 'paid',
         payment_method: amountDue > 0 ? paymentData.method : 'balance',
         payment_date: new Date().toISOString(),
       });
+      setDisplayAppointment(data);
 
       let paymentError = null;
       const paymentDate = new Date().toISOString();
@@ -165,12 +202,12 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
           appointment_id: appointment.id,
           client_id: appointment.client_id,
           clinic_id: clinicId,
-          amount: paymentData.facturado ? totalWithIva : amountDue,
+          amount: totalWithIva,
           method: paymentData.method,
           payment_date: paymentDate,
-          description: `Payment for ${appointment.treatments?.name || 'appointment'} session${paymentData.facturado ? ' (Facturado + IVA 16%)' : ''}`,
-          facturado: paymentData.facturado,
-          iva_amount: paymentData.facturado ? ivaAmount : 0,
+          description: `Payment for ${appointment.treatments?.name || 'appointment'} session (IVA 16%)`,
+          facturado: true,
+          iva_amount: ivaAmount,
         });
       }
 
@@ -190,7 +227,6 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
           variant: 'destructive',
         });
       } else {
-        // Invalidate payments queries to refresh Finance page
         queryClient.invalidateQueries({ queryKey: ['daily-payments'] });
         queryClient.invalidateQueries({ queryKey: ['monthly-payments'] });
         queryClient.invalidateQueries({ queryKey: ['stats'] });
@@ -198,14 +234,12 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
         queryClient.invalidateQueries({ queryKey: ['all-client-balances'] });
         queryClient.invalidateQueries({ queryKey: ['client-pending-appointments'] });
         queryClient.invalidateQueries({ queryKey: ['client-payments', appointment.client_id, clinicId] });
-        
+        queryClient.invalidateQueries({ queryKey: ['appointment-payments', appointment.id, clinicId] });
         toast({
           title: t('appointments.success'),
           description: t('appointments.paymentRecorded'),
         });
       }
-      
-      onClose();
     } catch (error) {
       console.error('Error recording payment:', error);
       toast({
@@ -289,10 +323,11 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
 
   const handleMarkAsCompleted = async () => {
     try {
-      await updateAppointment.mutateAsync({
+      const { data } = await updateAppointment.mutateAsync({
         id: appointment.id,
         status: 'completed',
       });
+      setDisplayAppointment(data);
 
       toast({
         title: t('appointments.success'),
@@ -360,28 +395,110 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
 
   useEffect(() => {
     if (!appointment) return;
+    const keeping = displayAppointment?.id === appointment.id;
+    setDisplayAppointment((prev) => (prev?.id === appointment.id ? prev : appointment));
     setPaymentData({
       amount: appointment.payment_amount || 0,
       method: appointment.payment_method || '',
-      facturado: false,
     });
     setUseBalanceCredit(false);
     setBalanceApplied(0);
-    if (appointment.status === 'completed' && appointment.payment_status !== 'paid') {
-      setActiveTab('payment');
-    } else {
-      setActiveTab('details');
+    if (!keeping) {
+      if (appointment.status === 'completed' && appointment.payment_status !== 'paid') {
+        setActiveTab('payment');
+      } else {
+        setActiveTab('details');
+      }
     }
-  }, [appointment?.id]);
+  }, [appointment?.id, appointment, displayAppointment?.id]);
 
   useEffect(() => {
     if (!useBalanceCredit) return;
     setBalanceApplied(maxApplicableCredit);
   }, [useBalanceCredit, maxApplicableCredit]);
 
+  const handleRequestCfdi = async () => {
+    if (!clinicId || !appointment?.client_id || !cfdiEligiblePayments.length) return;
+    setRequestingCfdi(true);
+    setShowInlineFiscalForm(false);
+    try {
+      const { data: client } = await supabase
+        .from('clients')
+        .select('id, rfc, tax_regime, cfdi_use, cfdi_email, email')
+        .eq('id', appointment.client_id)
+        .eq('clinic_id', clinicId)
+        .single();
+      const hasRfc = !!(client?.rfc?.trim());
+      const hasRegime = !!(client?.tax_regime?.trim());
+      const hasUse = !!(client?.cfdi_use?.trim());
+      const email = (client?.cfdi_email || client?.email || '').trim();
+      const hasEmail = !!email;
+      if (!hasRfc || !hasRegime || !hasUse || !hasEmail) {
+        setInlineFiscalData({
+          rfc: client?.rfc || '',
+          tax_regime: client?.tax_regime || '',
+          cfdi_use: client?.cfdi_use || '',
+          cfdi_email: client?.cfdi_email || client?.email || '',
+        });
+        setShowInlineFiscalForm(true);
+        return;
+      }
+      const result = await facturapiService.issueIndividualInvoice({
+        clinicId,
+        clientId: appointment.client_id,
+        paymentIds: cfdiEligiblePayments.map((p) => p.id),
+      });
+      queryClient.invalidateQueries({ queryKey: ['appointment-payments', appointment.id, clinicId] });
+      queryClient.invalidateQueries({ queryKey: ['client-payments', appointment.client_id, clinicId] });
+      queryClient.invalidateQueries({ queryKey: ['client-cfdi-invoices', appointment.client_id, clinicId] });
+      toast({ title: t('common.success'), description: t('cfdi.requestCfdiSuccess') });
+      if (result.pdf_url) window.open(result.pdf_url, '_blank');
+    } catch (e) {
+      toast({
+        title: t('common.error'),
+        description: (e as Error).message || 'Failed to issue CFDI',
+        variant: 'destructive',
+      });
+    } finally {
+      setRequestingCfdi(false);
+    }
+  };
+
+  const handleSaveInlineFiscal = async () => {
+    const rfc = inlineFiscalData.rfc.trim() || null;
+    if (rfc && !isValidRfcFormat(rfc)) {
+      toast({ title: t('common.validationError'), description: t('clients.invalidRfc'), variant: 'destructive' });
+      return;
+    }
+    const cfdiEmail = inlineFiscalData.cfdi_email.trim() || null;
+    if (rfc && !cfdiEmail) {
+      toast({ title: t('common.validationError'), description: t('clients.emailRequiredForRfc'), variant: 'destructive' });
+      return;
+    }
+    if (!rfc || !inlineFiscalData.tax_regime.trim() || !inlineFiscalData.cfdi_use.trim()) {
+      toast({ title: t('common.validationError'), description: t('cfdi.clientMissingTaxInfo'), variant: 'destructive' });
+      return;
+    }
+    try {
+      await updateClient.mutateAsync({
+        id: appointment.client_id,
+        rfc: rfc || undefined,
+        tax_regime: inlineFiscalData.tax_regime.trim() || undefined,
+        cfdi_use: inlineFiscalData.cfdi_use.trim() || undefined,
+        cfdi_email: cfdiEmail || undefined,
+      });
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      setShowInlineFiscalForm(false);
+      toast({ title: t('common.success'), description: t('common.updatedSuccessfully', { item: t('clients.title').toLowerCase() }) });
+    } catch {
+      toast({ title: t('common.error'), description: t('common.failedToUpdate', { item: t('clients.title').toLowerCase() }), variant: 'destructive' });
+    }
+  };
+
   if (!appointment) return null;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-card border-border">
         <DialogHeader>
@@ -392,10 +509,11 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="details">{t('appointments.details')}</TabsTrigger>
             <TabsTrigger value="payment">{t('appointments.payment')}</TabsTrigger>
             <TabsTrigger value="reschedule">{t('appointments.reschedule')}</TabsTrigger>
+            <TabsTrigger value="documents">{t('documents.tabTitle', 'Documentos')}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="details" className="space-y-4">
@@ -408,37 +526,37 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   <div className="flex items-center space-x-2">
                     <User className="h-4 w-4 text-muted-foreground" />
                     <span className="text-foreground">
-                      {appointment.clients?.first_name} {appointment.clients?.last_name}
+                      {apt.clients?.first_name} {apt.clients?.last_name}
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     <span className="text-foreground">
-                      {format(new Date(appointment.start_time), 'PPP')}
+                      {format(new Date(apt.start_time), 'PPP')}
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <span className="text-foreground">
-                      {format(new Date(appointment.start_time), 'p')} - {format(new Date(appointment.end_time), 'p')}
+                      {format(new Date(apt.start_time), 'p')} - {format(new Date(apt.end_time), 'p')}
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <DollarSign className="h-4 w-4 text-muted-foreground" />
                     <span className="text-foreground">
-                      {formatCurrencyWithClinic(appointment.payment_amount || 0)}
+                      {formatCurrencyWithClinic(apt.payment_amount || 0)}
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <User className="h-4 w-4 text-muted-foreground" />
                     <span className="text-foreground">
-                      {t('appointments.therapist')}: {appointment.therapists?.first_name} {appointment.therapists?.last_name}
+                      {t('appointments.therapist')}: {apt.therapists?.first_name} {apt.therapists?.last_name}
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     <span className="text-foreground">
-                      {t('appointments.treatment')}: {appointment.treatments?.name}
+                      {t('appointments.treatment')}: {apt.treatments?.name}
                     </span>
                   </div>
                 </div>
@@ -446,16 +564,16 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                 <div className="flex items-center space-x-4">
                   <div className="flex items-center space-x-2">
                     <span className="text-muted-foreground">{t('appointments.status')}:</span>
-                    <Badge variant={appointment.status === 'completed' ? 'default' : 
-                                   appointment.status === 'cancelled' ? 'destructive' : 'secondary'}>
-                      {getStatusText(appointment.status)}
+                    <Badge variant={apt.status === 'completed' ? 'default' : 
+                                   apt.status === 'cancelled' ? 'destructive' : 'secondary'}>
+                      {getStatusText(apt.status)}
                     </Badge>
                   </div>
 
                   <div className="flex items-center space-x-2">
                     <span className="text-muted-foreground">{t('appointments.payment')}:</span>
-                    <Badge variant={appointment.payment_status === 'paid' ? 'default' : 'secondary'}>
-                      {getPaymentStatusText(appointment.payment_status || 'pending')}
+                    <Badge variant={apt.payment_status === 'paid' ? 'default' : 'secondary'}>
+                      {getPaymentStatusText(apt.payment_status || 'pending')}
                     </Badge>
                   </div>
                 </div>
@@ -466,7 +584,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                     <div className="flex items-center space-x-2">
                       <Calendar className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm text-muted-foreground">
-                        {appointment.google_calendar_event_id ? (
+                        {apt.google_calendar_event_id ? (
                           <span className="flex items-center space-x-1">
                             <span className="text-primary">✓</span>
                             <span>{t('appointments.syncedWithGoogleCalendar')}</span>
@@ -478,7 +596,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                       </span>
                     </div>
                     
-                    {!appointment.google_calendar_event_id && (
+                    {!apt.google_calendar_event_id && (
                       <Button 
                         size="sm" 
                         variant="outline" 
@@ -492,17 +610,17 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   </div>
                 )}
 
-                {appointment.notes && (
+                {apt.notes && (
                   <div className="pt-4 border-t border-border">
                     <h4 className="font-medium text-foreground mb-2">{t('appointments.notes')}</h4>
-                    <p className="text-muted-foreground">{appointment.notes}</p>
+                    <p className="text-muted-foreground">{apt.notes}</p>
                   </div>
                 )}
               </CardContent>
             </Card>
 
             <div className="flex justify-between space-x-3">
-              {appointment.status === 'cancelled' ? (
+              {apt.status === 'cancelled' ? (
                 <Button 
                   variant="destructive" 
                   onClick={handleDeleteAppointment}
@@ -510,7 +628,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                 >
                   {t('appointments.deleteAppointment')}
                 </Button>
-              ) : appointment.status === 'completed' ? (
+              ) : apt.status === 'completed' ? (
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="h-5 w-5 text-green-600" />
                   <span className="text-green-600 font-medium">{t('appointments.completed')}</span>
@@ -543,7 +661,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
           </TabsContent>
 
           <TabsContent value="payment" className="space-y-4">
-            {appointment.payment_status !== 'paid' && appointment.status !== 'cancelled' ? (
+            {apt.payment_status !== 'paid' && apt.status !== 'cancelled' ? (
               <Card className="bg-muted/20 border-border">
                 <CardHeader>
                   <CardTitle className="text-lg text-foreground">{t('appointments.recordPayment')}</CardTitle>
@@ -626,33 +744,20 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="facturado"
-                      checked={paymentData.facturado}
-                      onCheckedChange={(checked) => 
-                        setPaymentData(prev => ({ ...prev, facturado: checked as boolean }))
-                      }
-                    />
-                    <Label htmlFor="facturado" className="text-foreground">{t('appointments.facturado')}</Label>
-                  </div>
-
-                  {paymentData.facturado && (
-                    <div className="p-3 bg-muted/50 rounded-lg space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-foreground">{t('appointments.baseAmount')}:</span>
-                        <span className="text-foreground">{formatCurrencyWithClinic(effectiveAmount)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-foreground">{t('appointments.ivaAmount')}:</span>
-                        <span className="text-foreground">{formatCurrencyWithClinic(ivaAmount)}</span>
-                      </div>
-                      <div className="flex justify-between font-semibold border-t pt-2">
-                        <span className="text-foreground">{t('appointments.total')}:</span>
-                        <span className="text-foreground">{formatCurrencyWithClinic(totalWithIva)}</span>
-                      </div>
+                  <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-foreground">{t('appointments.baseAmount')}:</span>
+                      <span className="text-foreground">{formatCurrencyWithClinic(effectiveAmount)}</span>
                     </div>
-                  )}
+                    <div className="flex justify-between">
+                      <span className="text-foreground">{t('appointments.ivaAmount')}:</span>
+                      <span className="text-foreground">{formatCurrencyWithClinic(ivaAmount)}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold border-t pt-2">
+                      <span className="text-foreground">{t('appointments.total')}:</span>
+                      <span className="text-foreground">{formatCurrencyWithClinic(totalWithIva)}</span>
+                    </div>
+                  </div>
 
                   <Button 
                     onClick={handleMarkAsPaid} 
@@ -661,39 +766,26 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   >
                     {updateAppointment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     <CreditCard className="mr-2 h-4 w-4" />
-                    {t('appointments.markAsPaid')} {paymentData.facturado && `(${formatCurrencyWithClinic(totalWithIva)})`}
+                    {t('appointments.markAsPaid')} ({formatCurrencyWithClinic(totalWithIva)})
                   </Button>
-
-                  {/* Mark as Completed button for better workflow */}
-                  {appointment.status !== 'completed' && (
-                    <Button 
-                    variant="outline"
-                    onClick={handleMarkAsCompleted} 
-                    disabled={updateAppointment.isPending}
-                    className="w-full"
-                  >
-                    {updateAppointment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    {t('appointments.markAsCompleted')}
-                  </Button>
-                  )}
                 </CardContent>
               </Card>
             ) : (
               <Card className="bg-muted/20 border-border">
                 <CardContent className="pt-6 text-center">
                   <div className="text-lg font-medium text-foreground mb-2">
-                    {appointment.payment_status === 'paid' ? t('appointments.paymentCompleted') : t('appointments.paymentNotAvailable')}
+                    {apt.payment_status === 'paid'
+                      ? `${t('appointments.paymentCompleted')}${registeredAmount > 0 ? ` · ${formatCurrencyWithClinic(registeredAmount)}` : ''}`
+                      : t('appointments.paymentNotAvailable')}
                   </div>
                   <div className="text-muted-foreground mb-4">
-                    {appointment.payment_status === 'paid' 
-                      ? `${t('appointments.paidVia')} ${getPaymentMethodText(appointment.payment_method)} ${t('appointments.on')} ${format(new Date(appointment.payment_date), 'PPP')}`
+                    {apt.payment_status === 'paid'
+                      ? `${t('appointments.paidVia')} ${getPaymentMethodText(apt.payment_method)} ${t('appointments.on')} ${format(new Date(apt.payment_date), 'PPP')}`
                       : t('appointments.paymentCannotBeProcessed')
                     }
                   </div>
                   
-                  {/* Mark as Completed button for paid appointments */}
-                  {appointment.payment_status === 'paid' && appointment.status !== 'completed' && (
+                  {apt.payment_status === 'paid' && apt.status !== 'completed' && (
                     <Button 
                       variant="default"
                       onClick={handleMarkAsCompleted} 
@@ -705,13 +797,100 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                       {t('appointments.markAsCompleted')}
                     </Button>
                   )}
+                  {apt.payment_status === 'paid' && apt.status === 'completed' && cfdiEligiblePayments.length > 0 && (
+                    <>
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowCfdiUploadModal(true)}
+                        className="w-full mt-2"
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        {t('cfdi.uploadCfdi')}
+                      </Button>
+                      {facturapiConfigured ? (
+                        <Button
+                          variant="outline"
+                          onClick={handleRequestCfdi}
+                          disabled={requestingCfdi}
+                          className="w-full mt-2"
+                        >
+                          {requestingCfdi && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          <FileText className="mr-2 h-4 w-4" />
+                          {t('cfdi.requestCfdi')}
+                        </Button>
+                      ) : (
+                        <p className="text-sm text-muted-foreground mt-2">{t('cfdi.generateRequiresFacturapi')}</p>
+                      )}
+                    </>
+                  )}
+                  {showInlineFiscalForm && (
+                    <div className="mt-4 p-4 border border-border rounded-lg space-y-4 text-left">
+                      <h4 className="text-sm font-medium text-foreground">{t('cfdi.addFiscalDataForCfdi')}</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-foreground">{t('clients.rfc')}</Label>
+                          <Input
+                            value={inlineFiscalData.rfc}
+                            onChange={(e) => setInlineFiscalData((p) => ({ ...p, rfc: e.target.value.toUpperCase() }))}
+                            placeholder="XAXX010101000"
+                            className="uppercase"
+                            maxLength={13}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-foreground">{t('clients.cfdiEmail')}</Label>
+                          <Input
+                            type="email"
+                            value={inlineFiscalData.cfdi_email}
+                            onChange={(e) => setInlineFiscalData((p) => ({ ...p, cfdi_email: e.target.value }))}
+                            placeholder={t('common.enterEmail')}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-foreground">{t('clients.taxRegime')}</Label>
+                          <Select value={inlineFiscalData.tax_regime} onValueChange={(v) => setInlineFiscalData((p) => ({ ...p, tax_regime: v }))}>
+                            <SelectTrigger className="bg-input border-border text-foreground">
+                              <SelectValue placeholder={t('common.optional')} />
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover border-border">
+                              {TAX_REGIMES.map((r) => (
+                                <SelectItem key={r.value} value={r.value} className="text-foreground">{t(r.labelKey)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-foreground">{t('clients.cfdiUse')}</Label>
+                          <Select value={inlineFiscalData.cfdi_use} onValueChange={(v) => setInlineFiscalData((p) => ({ ...p, cfdi_use: v }))}>
+                            <SelectTrigger className="bg-input border-border text-foreground">
+                              <SelectValue placeholder={t('common.optional')} />
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover border-border">
+                              {CFDI_USES.map((u) => (
+                                <SelectItem key={u.value} value={u.value} className="text-foreground">{t(u.labelKey)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button variant="outline" size="sm" onClick={() => setShowInlineFiscalForm(false)}>
+                          {t('common.cancel')}
+                        </Button>
+                        <Button size="sm" onClick={handleSaveInlineFiscal} disabled={updateClient.isPending}>
+                          {updateClient.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          {t('common.save')}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
           </TabsContent>
 
           <TabsContent value="reschedule" className="space-y-4">
-            {appointment.status !== 'cancelled' && appointment.status !== 'completed' ? (
+            {apt.status !== 'cancelled' && apt.status !== 'completed' ? (
               <Card className="bg-muted/20 border-border">
                 <CardHeader>
                   <CardTitle className="text-lg text-foreground">{t('appointments.rescheduleAppointment')}</CardTitle>
@@ -868,7 +1047,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                     {t('appointments.reschedulingNotAvailable')}
                   </div>
                   <div className="text-muted-foreground">
-                    {appointment.status === 'completed' 
+                    {apt.status === 'completed' 
                       ? t('appointments.completedCannotReschedule')
                       : t('appointments.cancelledCannotReschedule')
                     }
@@ -877,9 +1056,35 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
               </Card>
             )}
           </TabsContent>
+
+          <TabsContent value="documents" className="space-y-4">
+            <DocumentSection
+              context="appointment"
+              clientId={apt.client_id}
+              appointmentId={apt.id}
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={onClose}>
+                {t('appointments.close')}
+              </Button>
+            </div>
+          </TabsContent>
         </Tabs>
       </DialogContent>
     </Dialog>
+    {clinicId && (
+      <CfdiUploadModal
+        open={showCfdiUploadModal}
+        onClose={() => setShowCfdiUploadModal(false)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['appointment-payments', appointment?.id, clinicId] });
+        }}
+        clinicId={clinicId}
+        mode="individual"
+        paymentIds={cfdiEligiblePayments.map((p) => p.id)}
+      />
+    )}
+    </>
   );
 };
 

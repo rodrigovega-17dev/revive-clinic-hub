@@ -143,6 +143,10 @@ export type Database = {
           trial_ends_at: string | null
           subscription_plan_id: string | null
           stripe_customer_id: string | null
+          facturapi_test_secret: string | null
+          facturapi_live_secret: string | null
+          facturapi_use_live: boolean
+          facturapi_webhook_secret: string | null
         }
         Insert: {
           id?: string
@@ -166,6 +170,10 @@ export type Database = {
           trial_ends_at?: string | null
           subscription_plan_id?: string | null
           stripe_customer_id?: string | null
+          facturapi_test_secret?: string | null
+          facturapi_live_secret?: string | null
+          facturapi_use_live?: boolean
+          facturapi_webhook_secret?: string | null
         }
         Update: {
           id?: string
@@ -189,6 +197,10 @@ export type Database = {
           trial_ends_at?: string | null
           subscription_plan_id?: string | null
           stripe_customer_id?: string | null
+          facturapi_test_secret?: string | null
+          facturapi_live_secret?: string | null
+          facturapi_use_live?: boolean
+          facturapi_webhook_secret?: string | null
         }
         Relationships: [
           {
@@ -219,6 +231,11 @@ export type Database = {
           phone: string | null
           tags: string[] | null
           updated_at: string
+          rfc: string | null
+          tax_regime: string | null
+          cfdi_use: string | null
+          cfdi_email: string | null
+          facturapi_customer_id: string | null
         }
         Insert: {
           address?: string | null
@@ -238,6 +255,11 @@ export type Database = {
           phone?: string | null
           tags?: string[] | null
           updated_at?: string
+          rfc?: string | null
+          tax_regime?: string | null
+          cfdi_use?: string | null
+          cfdi_email?: string | null
+          facturapi_customer_id?: string | null
         }
         Update: {
           address?: string | null
@@ -257,6 +279,11 @@ export type Database = {
           phone?: string | null
           tags?: string[] | null
           updated_at?: string
+          rfc?: string | null
+          tax_regime?: string | null
+          cfdi_use?: string | null
+          cfdi_email?: string | null
+          facturapi_customer_id?: string | null
         }
         Relationships: [
           {
@@ -381,6 +408,9 @@ export type Database = {
           shift_id: string | null
           facturado: boolean | null
           iva_amount: number | null
+          invoice_state: Database["public"]["Enums"]["invoice_state_type"]
+          refunded_at: string | null
+          refund_amount: number | null
         }
         Insert: {
           amount: number
@@ -396,6 +426,9 @@ export type Database = {
           shift_id?: string | null
           facturado?: boolean | null
           iva_amount?: number | null
+          invoice_state?: Database["public"]["Enums"]["invoice_state_type"]
+          refunded_at?: string | null
+          refund_amount?: number | null
         }
         Update: {
           amount?: number
@@ -411,6 +444,9 @@ export type Database = {
           shift_id?: string | null
           facturado?: boolean | null
           iva_amount?: number | null
+          invoice_state?: Database["public"]["Enums"]["invoice_state_type"]
+          refunded_at?: string | null
+          refund_amount?: number | null
         }
         Relationships: [
           {
@@ -446,6 +482,135 @@ export type Database = {
             columns: ["shift_id"]
             isOneToOne: false
             referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cfdi_invoices: {
+        Row: {
+          id: string
+          clinic_id: string
+          facturapi_id: string | null
+          uuid: string | null
+          type: Database["public"]["Enums"]["cfdi_type"]
+          status: Database["public"]["Enums"]["cfdi_status"]
+          folio: string | null
+          total: number
+          subtotal: number
+          tax: number
+          currency: string
+          emitted_at: string | null
+          related_cfdi_id: string | null
+          global_period_start: string | null
+          global_period_end: string | null
+          created_at: string
+          updated_at: string
+          canceled_at: string | null
+          pdf_url: string | null
+          xml_url: string | null
+          raw_response: Json | null
+          source: string | null
+        }
+        Insert: {
+          id?: string
+          clinic_id: string
+          facturapi_id?: string | null
+          uuid?: string | null
+          type: Database["public"]["Enums"]["cfdi_type"]
+          status?: Database["public"]["Enums"]["cfdi_status"]
+          folio?: string | null
+          total?: number
+          subtotal?: number
+          tax?: number
+          currency?: string
+          emitted_at?: string | null
+          related_cfdi_id?: string | null
+          global_period_start?: string | null
+          global_period_end?: string | null
+          created_at?: string
+          updated_at?: string
+          canceled_at?: string | null
+          pdf_url?: string | null
+          xml_url?: string | null
+          raw_response?: Json | null
+          source?: string | null
+        }
+        Update: {
+          id?: string
+          clinic_id?: string
+          facturapi_id?: string | null
+          uuid?: string | null
+          type?: Database["public"]["Enums"]["cfdi_type"]
+          status?: Database["public"]["Enums"]["cfdi_status"]
+          folio?: string | null
+          total?: number
+          subtotal?: number
+          tax?: number
+          currency?: string
+          emitted_at?: string | null
+          related_cfdi_id?: string | null
+          global_period_start?: string | null
+          global_period_end?: string | null
+          created_at?: string
+          updated_at?: string
+          canceled_at?: string | null
+          pdf_url?: string | null
+          xml_url?: string | null
+          raw_response?: Json | null
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cfdi_invoices_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cfdi_invoices_related_cfdi_id_fkey"
+            columns: ["related_cfdi_id"]
+            isOneToOne: false
+            referencedRelation: "cfdi_invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cfdi_invoice_payments: {
+        Row: {
+          id: string
+          cfdi_invoice_id: string
+          payment_id: string
+          amount: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          cfdi_invoice_id: string
+          payment_id: string
+          amount: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          cfdi_invoice_id?: string
+          payment_id?: string
+          amount?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cfdi_invoice_payments_cfdi_invoice_id_fkey"
+            columns: ["cfdi_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "cfdi_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cfdi_invoice_payments_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
             referencedColumns: ["id"]
           },
         ]
@@ -687,6 +852,9 @@ export type Database = {
           name: string
           price: number | null
           updated_at: string
+          sat_product_service_code: string | null
+          sat_unit_code: string | null
+          vat_exempt: boolean
         }
         Insert: {
           clinic_id?: string
@@ -698,6 +866,9 @@ export type Database = {
           name: string
           price?: number | null
           updated_at?: string
+          sat_product_service_code?: string | null
+          sat_unit_code?: string | null
+          vat_exempt?: boolean
         }
         Update: {
           clinic_id?: string
@@ -709,6 +880,9 @@ export type Database = {
           name?: string
           price?: number | null
           updated_at?: string
+          sat_product_service_code?: string | null
+          sat_unit_code?: string | null
+          vat_exempt?: boolean
         }
         Relationships: [
           {
@@ -1242,6 +1416,139 @@ export type Database = {
           }
         ]
       }
+      document_templates: {
+        Row: {
+          id: string
+          clinic_id: string
+          slug: string
+          name: string
+          description: string | null
+          type: string
+          category: string | null
+          language: string
+          version: number
+          is_active: boolean
+          schema: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          clinic_id?: string
+          slug: string
+          name: string
+          description?: string | null
+          type: string
+          category?: string | null
+          language?: string
+          version?: number
+          is_active?: boolean
+          schema: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          clinic_id?: string
+          slug?: string
+          name?: string
+          description?: string | null
+          type?: string
+          category?: string | null
+          language?: string
+          version?: number
+          is_active?: boolean
+          schema?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_templates_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      document_instances: {
+        Row: {
+          id: string
+          clinic_id: string
+          template_id: string
+          template_version: number
+          client_id: string
+          appointment_id: string | null
+          status: string
+          data: Json
+          rendered_pdf_url: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+          finalized_at: string | null
+        }
+        Insert: {
+          id?: string
+          clinic_id: string
+          template_id: string
+          template_version: number
+          client_id: string
+          appointment_id?: string | null
+          status?: string
+          data: Json
+          rendered_pdf_url?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+          finalized_at?: string | null
+        }
+        Update: {
+          id?: string
+          clinic_id?: string
+          template_id?: string
+          template_version?: number
+          client_id?: string
+          appointment_id?: string | null
+          status?: string
+          data?: Json
+          rendered_pdf_url?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+          finalized_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_instances_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_instances_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "document_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_instances_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_instances_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1285,7 +1592,10 @@ export type Database = {
     }
     Enums: {
       appointment_status: "scheduled" | "completed" | "cancelled" | "no_show"
+      cfdi_status: "draft" | "issued" | "canceled"
+      cfdi_type: "ingreso" | "egreso" | "pago"
       gender: "male" | "female" | "other" | "prefer_not_to_say"
+      invoice_state_type: "non_invoiced" | "individually_invoiced" | "globally_invoiced"
       payment_method: "cash" | "card" | "transfer" | "insurance"
       user_role: "admin" | "therapist" | "reception"
     }
@@ -1404,7 +1714,10 @@ export const Constants = {
   public: {
     Enums: {
       appointment_status: ["scheduled", "completed", "cancelled", "no_show"],
+      cfdi_status: ["draft", "issued", "canceled"],
+      cfdi_type: ["ingreso", "egreso", "pago"],
       gender: ["male", "female", "other", "prefer_not_to_say"],
+      invoice_state_type: ["non_invoiced", "individually_invoiced", "globally_invoiced"],
       payment_method: ["cash", "card", "transfer", "insurance"],
       user_role: ["admin", "therapist", "reception"],
     },

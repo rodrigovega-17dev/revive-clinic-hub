@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, User, Phone, Mail, Calendar, Edit, MapPin, Heart, DollarSign, Eye } from 'lucide-react';
+import { Plus, User, Phone, Mail, Calendar, Edit, MapPin, Heart, DollarSign, Eye, FileText } from 'lucide-react';
 import { useClients } from '@/hooks/useClients';
 import { useAllClientBalances } from '@/hooks/useClientBalance';
 import ClientForm from '@/components/ClientForm';
@@ -17,6 +17,8 @@ import { useSearchParams } from 'react-router-dom';
 import type { Tables } from '@/integrations/supabase/types';
 import { formatCurrency } from '@/lib/utils';
 import { useClinicSettings } from '@/hooks/useClinic';
+import { hasCfdiData } from '@/lib/cfdi-catalogs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 type Client = Tables<'clients'>;
 
@@ -235,6 +237,7 @@ const Clients = () => {
                   <TableHead className="text-foreground">{t('clients.charge')}</TableHead>
                   <TableHead className="text-foreground">{t('common.status')}</TableHead>
                   <TableHead className="text-foreground">{t('clients.balance')}</TableHead>
+                  <TableHead className="text-foreground">{t('cfdi.fiscalData')}</TableHead>
                   <TableHead className="text-right text-foreground">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -319,6 +322,25 @@ const Clients = () => {
                         return <span className="text-muted-foreground">{formatCurrencyWithClinic(0)}</span>;
                       })()}
                     </TableCell>
+                    <TableCell>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center gap-1">
+                            {hasCfdiData(client) ? (
+                              <Badge variant="secondary" className="gap-1">
+                                <FileText className="h-3 w-3" />
+                                {t('cfdi.fiscalDataComplete')}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">{t('cfdi.fiscalDataMissing')}</span>
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {hasCfdiData(client) ? t('cfdi.fiscalDataComplete') : t('cfdi.fiscalDataMissing')}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button 
@@ -389,6 +411,10 @@ const Clients = () => {
           client={selectedClient}
           open={!!selectedClient}
           onClose={() => setSelectedClient(null)}
+          onEdit={(c) => {
+            setSelectedClient(null);
+            setEditingClient(c);
+          }}
         />
       )}
     </div>

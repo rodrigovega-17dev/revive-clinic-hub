@@ -13,12 +13,17 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Settings as SettingsIcon, Globe, Bell, Shield, Building2, Palette, Database, Zap, Loader2, AlertTriangle, CreditCard } from 'lucide-react';
+import { Settings as SettingsIcon, Globe, Bell, Shield, Building2, Palette, Database, Zap, Loader2, AlertTriangle, CreditCard, FileText, Pencil } from 'lucide-react';
 import ClinicGoogleCalendarConnect from '@/components/ClinicGoogleCalendarConnect';
+import ClinicFacturapiConnect from '@/components/ClinicFacturapiConnect';
 import { PasswordChangeDialog } from '@/components/PasswordChangeDialog';
 import { SessionManagement } from '@/components/SessionManagement';
 import { Badge } from '@/components/ui/badge';
 import SubscriptionManagement from '@/components/SubscriptionManagement';
+import { useTreatments } from '@/hooks/useTreatments';
+import EditTreatmentTaxForm from '@/components/EditTreatmentTaxForm';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import type { Tables } from '@/integrations/supabase/types';
 
 const Settings = (): JSX.Element => {
   const { t } = useTranslation();
@@ -70,6 +75,10 @@ const Settings = (): JSX.Element => {
 
   // Form state for security settings
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+
+  // Treatment tax (CFDI) editor
+  const [editingTreatment, setEditingTreatment] = useState<Tables<'treatments'> | null>(null);
+  const { data: treatments } = useTreatments();
   const [twoFactorMethod, setTwoFactorMethod] = useState<'email' | 'sms' | 'app'>('email');
   const [loginNotifications, setLoginNotifications] = useState(true);
   const [suspiciousActivityAlerts, setSuspiciousActivityAlerts] = useState(true);
@@ -478,6 +487,58 @@ const Settings = (): JSX.Element => {
               </div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                {t('settings.treatmentTaxCodes')}
+              </CardTitle>
+              <CardDescription>
+                {t('settings.treatmentTaxCodesDesc')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!treatments?.length ? (
+                <p className="text-muted-foreground text-sm">{t('common.noResults')}</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t('common.name')}</TableHead>
+                      <TableHead>{t('settings.satProductCode')}</TableHead>
+                      <TableHead>{t('settings.satUnitCode')}</TableHead>
+                      <TableHead>{t('settings.vatExempt')}</TableHead>
+                      <TableHead className="w-[80px]">{t('common.actions')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {treatments.map((tr) => (
+                      <TableRow key={tr.id}>
+                        <TableCell className="font-medium">{tr.name}</TableCell>
+                        <TableCell className="font-mono text-sm">{tr.sat_product_service_code ?? '—'}</TableCell>
+                        <TableCell className="font-mono text-sm">{tr.sat_unit_code ?? '—'}</TableCell>
+                        <TableCell>
+                          {tr.vat_exempt ? <Badge variant="secondary">{t('common.yes')}</Badge> : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm" onClick={() => setEditingTreatment(tr)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          <EditTreatmentTaxForm
+            open={!!editingTreatment}
+            onClose={() => setEditingTreatment(null)}
+            treatment={editingTreatment}
+          />
         </TabsContent>
 
         {/* Notifications Settings Tab */}
@@ -679,6 +740,7 @@ const Settings = (): JSX.Element => {
               <ClinicGoogleCalendarConnect />
             </CardContent>
           </Card>
+          <ClinicFacturapiConnect />
         </TabsContent>
 
         {/* Data & Export Tab */}
