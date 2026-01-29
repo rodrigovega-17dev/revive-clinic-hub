@@ -7,21 +7,22 @@ type Client = Tables<'clients'>;
 type ClientInsert = TablesInsert<'clients'>;
 type ClientUpdate = TablesUpdate<'clients'>;
 
-export const useClients = () => {
+export const useClients = (opts?: { includeArchived?: boolean }) => {
   const { clinicId } = useAuth();
-  
+  const includeArchived = opts?.includeArchived ?? false;
+
   return useQuery({
-    queryKey: ['clients', clinicId],
+    queryKey: ['clients', clinicId, includeArchived],
     queryFn: async () => {
       if (!clinicId) return [];
-      
-      const { data, error } = await supabase
+      let q = supabase
         .from('clients')
         .select('*')
         .eq('clinic_id', clinicId)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
-      
+      if (!includeArchived) q = q.eq('archived', false);
+      const { data, error } = await q;
       if (error) throw error;
       return data;
     },
@@ -59,7 +60,8 @@ export const useCreateClient = () => {
 
 export const useUpdateClient = () => {
   const queryClient = useQueryClient();
-  
+  const { clinicId } = useAuth();
+
   return useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & Partial<ClientUpdate>) => {
       const { data, error } = await supabase
@@ -68,12 +70,13 @@ export const useUpdateClient = () => {
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
+      if (clinicId) queryClient.invalidateQueries({ queryKey: ['subscription-status', clinicId] });
     },
   });
 };

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar, Clock, User, Phone, Plus } from 'lucide-react';
-import { useAppointmentsByDate } from '@/hooks/useAppointments';
+import { useAppointmentsByDate, useAppointmentsByWeek, useAppointmentsByMonth } from '@/hooks/useAppointments';
 import { useClients } from '@/hooks/useClients';
 import { format } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
@@ -32,8 +32,33 @@ const Appointments = () => {
   
   const locale = currentLanguage === 'es' ? es : enUS;
   
-  const { data: groupedAppointments, isLoading: appointmentsLoading } = useAppointmentsByDate(format(selectedDate, 'yyyy-MM-dd'));
+  const useDaily = selectedView === 'daily';
+  const useWeekly = selectedView === 'weekly';
+  const useMonthly = selectedView === 'monthly';
+
+  const { data: groupedAppointments, isLoading: dailyLoading } = useAppointmentsByDate(
+    format(selectedDate, 'yyyy-MM-dd'),
+    useDaily
+  );
+  const { data: weekAppointments, isLoading: weeklyLoading } = useAppointmentsByWeek(selectedDate, useWeekly);
+  const { data: monthGrouped, isLoading: monthlyLoading } = useAppointmentsByMonth(
+    selectedDate.getFullYear(),
+    selectedDate.getMonth() + 1,
+    useMonthly
+  );
+
+  const appointmentsLoading = (useDaily && dailyLoading) || (useWeekly && weeklyLoading) || (useMonthly && monthlyLoading);
   const { data: clients } = useClients();
+
+  // Stats for current view (day / week / month)
+  const statsSource = useDaily
+    ? Object.values(groupedAppointments || {}).flatMap((g) => g.appointments)
+    : useWeekly
+      ? weekAppointments || []
+      : Object.values(monthGrouped || {}).flat();
+  const totalAppointments = statsSource.length;
+  const completedToday = statsSource.filter((a) => a.status === 'completed').length;
+  const pendingToday = statsSource.filter((a) => a.status === 'scheduled').length;
 
   // Check URL parameters to auto-open form
   useEffect(() => {
@@ -59,18 +84,6 @@ const Appointments = () => {
   const handleMonthlyDateSelect = (date: Date) => {
     setSelectedDate(date);
   };
-
-  const totalAppointments = Object.values(groupedAppointments || {}).reduce(
-    (total, group) => total + group.appointments.length, 0
-  );
-
-  const completedToday = Object.values(groupedAppointments || {}).reduce(
-    (total, group) => total + group.appointments.filter(apt => apt.status === 'completed').length, 0
-  );
-
-  const pendingToday = Object.values(groupedAppointments || {}).reduce(
-    (total, group) => total + group.appointments.filter(apt => apt.status === 'scheduled').length, 0
-  );
 
   const filteredGroupedAppointments = useMemo(() => {
     if (!groupedAppointments || !searchTerm.trim()) {

@@ -240,79 +240,6 @@ const MonthlyFinanceSection = () => {
         </div>
       )}
 
-      {/* Upload / Issue global CFDI for selected period */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            {t('cfdi.issueGlobalCfdi')}
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            {format(currentRange.start, 'd MMM yyyy', { locale })} – {format(currentRange.end, 'd MMM yyyy', { locale })}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!clinicId}
-            onClick={() => setShowCfdiUploadModal(true)}
-          >
-            <Upload className="mr-2 h-4 w-4" />
-            {t('cfdi.uploadGlobalCfdi')}
-          </Button>
-          {facturapiConfigured ? (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={issuingGlobalCfdi || !clinicId}
-              onClick={async () => {
-                if (!clinicId) return;
-                setIssuingGlobalCfdi(true);
-                try {
-                  const result = await facturapiService.issueGlobalInvoice({
-                    clinicId,
-                    periodStart: format(currentRange.start, 'yyyy-MM-dd'),
-                    periodEnd: format(currentRange.end, 'yyyy-MM-dd'),
-                  });
-                  queryClient.invalidateQueries({ queryKey: ['monthly-payments'] });
-                  queryClient.invalidateQueries({ queryKey: ['payments'] });
-                  toast({ title: t('common.success'), description: t('cfdi.issueGlobalCfdiSuccess') });
-                  if (result.pdf_url) window.open(result.pdf_url, '_blank');
-                } catch (e) {
-                  toast({
-                    title: t('common.error'),
-                    description: (e as Error).message || 'Failed to issue global CFDI',
-                    variant: 'destructive',
-                  });
-                } finally {
-                  setIssuingGlobalCfdi(false);
-                }
-              }}
-            >
-              {issuingGlobalCfdi && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {t('cfdi.issueGlobalCfdi')}
-            </Button>
-          ) : (
-            <p className="text-sm text-muted-foreground">{t('cfdi.generateRequiresFacturapi')}</p>
-          )}
-        </CardContent>
-      </Card>
-      {clinicId && (
-        <CfdiUploadModal
-          open={showCfdiUploadModal}
-          onClose={() => setShowCfdiUploadModal(false)}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['monthly-payments'] });
-            queryClient.invalidateQueries({ queryKey: ['payments'] });
-          }}
-          clinicId={clinicId}
-          mode="global"
-          periodStart={format(currentRange.start, 'yyyy-MM-dd')}
-          periodEnd={format(currentRange.end, 'yyyy-MM-dd')}
-        />
-      )}
-
       {/* Monthly Financial Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-card border-border">
@@ -500,6 +427,79 @@ const MonthlyFinanceSection = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Global CFDI – at bottom */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            {t('cfdi.issueGlobalCfdi')}
+          </CardTitle>
+          <CardDescription className="text-muted-foreground">
+            {format(currentRange.start, 'd MMM yyyy', { locale })} – {format(currentRange.end, 'd MMM yyyy', { locale })}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!clinicId}
+            onClick={() => setShowCfdiUploadModal(true)}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            {t('cfdi.uploadGlobalCfdi')}
+          </Button>
+          {facturapiConfigured ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={issuingGlobalCfdi || !clinicId}
+              onClick={async () => {
+                if (!clinicId) return;
+                setIssuingGlobalCfdi(true);
+                try {
+                  const result = await facturapiService.issueGlobalInvoice({
+                    clinicId,
+                    periodStart: format(currentRange.start, 'yyyy-MM-dd'),
+                    periodEnd: format(currentRange.end, 'yyyy-MM-dd'),
+                  });
+                  queryClient.invalidateQueries({ queryKey: ['monthly-payments'] });
+                  queryClient.invalidateQueries({ queryKey: ['payments'] });
+                  toast({ title: t('common.success'), description: t('cfdi.issueGlobalCfdiSuccess') });
+                  if (result.pdf_url) window.open(result.pdf_url, '_blank');
+                } catch (e) {
+                  toast({
+                    title: t('common.error'),
+                    description: (e as Error).message || 'Failed to issue global CFDI',
+                    variant: 'destructive',
+                  });
+                } finally {
+                  setIssuingGlobalCfdi(false);
+                }
+              }}
+            >
+              {issuingGlobalCfdi && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {t('cfdi.issueGlobalCfdi')}
+            </Button>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t('cfdi.generateRequiresFacturapi')}</p>
+          )}
+        </CardContent>
+      </Card>
+      {clinicId && (
+        <CfdiUploadModal
+          open={showCfdiUploadModal}
+          onClose={() => setShowCfdiUploadModal(false)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['monthly-payments'] });
+            queryClient.invalidateQueries({ queryKey: ['payments'] });
+          }}
+          clinicId={clinicId}
+          mode="global"
+          periodStart={format(currentRange.start, 'yyyy-MM-dd')}
+          periodEnd={format(currentRange.end, 'yyyy-MM-dd')}
+        />
+      )}
     </div>
   );
 };

@@ -150,7 +150,8 @@ export const useSubscriptionStatus = () => {
             .from('therapists')
             .select('*', { count: 'exact', head: true })
             .eq('clinic_id', clinicId)
-            .eq('is_active', true),
+            .eq('is_active', true)
+            .eq('archived', false),
           supabase
             .from('appointments')
             .select('*', { count: 'exact', head: true })
@@ -162,6 +163,7 @@ export const useSubscriptionStatus = () => {
             .select('*', { count: 'exact', head: true })
             .eq('clinic_id', clinicId)
             .eq('is_active', true)
+            .eq('archived', false)
         ]);
         
         const usage = {
@@ -302,7 +304,8 @@ export const useTherapistCount = () => {
         .from('therapists')
         .select('*', { count: 'exact', head: true })
         .eq('clinic_id', clinicId)
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .eq('archived', false);
       
       if (error) throw error;
       return count || 0;

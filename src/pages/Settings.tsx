@@ -13,7 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Settings as SettingsIcon, Globe, Bell, Shield, Building2, Palette, Database, Zap, Loader2, AlertTriangle, CreditCard, FileText, Pencil } from 'lucide-react';
+import { Settings as SettingsIcon, Globe, Bell, Shield, Building2, Palette, Database, Zap, Loader2, AlertTriangle, CreditCard, FileText, Pencil, Plus } from 'lucide-react';
 import ClinicGoogleCalendarConnect from '@/components/ClinicGoogleCalendarConnect';
 import ClinicFacturapiConnect from '@/components/ClinicFacturapiConnect';
 import { PasswordChangeDialog } from '@/components/PasswordChangeDialog';
@@ -22,7 +22,9 @@ import { Badge } from '@/components/ui/badge';
 import SubscriptionManagement from '@/components/SubscriptionManagement';
 import { useTreatments } from '@/hooks/useTreatments';
 import EditTreatmentTaxForm from '@/components/EditTreatmentTaxForm';
+import AddTreatmentForm from '@/components/AddTreatmentForm';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { formatCurrency } from '@/lib/utils';
 import type { Tables } from '@/integrations/supabase/types';
 
 const Settings = (): JSX.Element => {
@@ -78,6 +80,7 @@ const Settings = (): JSX.Element => {
 
   // Treatment tax (CFDI) editor
   const [editingTreatment, setEditingTreatment] = useState<Tables<'treatments'> | null>(null);
+  const [showAddTreatment, setShowAddTreatment] = useState(false);
   const { data: treatments } = useTreatments();
   const [twoFactorMethod, setTwoFactorMethod] = useState<'email' | 'sms' | 'app'>('email');
   const [loginNotifications, setLoginNotifications] = useState(true);
@@ -253,11 +256,11 @@ const Settings = (): JSX.Element => {
           </TabsTrigger>
           <TabsTrigger value="integrations" className="flex items-center gap-2">
             <Zap className="h-4 w-4" />
-            Integrations
+            {t('settings.integrations')}
           </TabsTrigger>
           <TabsTrigger value="subscription" className="flex items-center gap-2">
             <CreditCard className="h-4 w-4" />
-            Subscription
+            {t('settings.subscription')}
           </TabsTrigger>
           <TabsTrigger value="data" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
@@ -489,14 +492,20 @@ const Settings = (): JSX.Element => {
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                {t('settings.treatmentTaxCodes')}
-              </CardTitle>
-              <CardDescription>
-                {t('settings.treatmentTaxCodesDesc')}
-              </CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  {t('settings.clinicTreatments')}
+                </CardTitle>
+                <CardDescription>
+                  {t('settings.treatmentTaxCodesDesc')}
+                </CardDescription>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setShowAddTreatment(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                {t('settings.addTreatment')}
+              </Button>
             </CardHeader>
             <CardContent>
               {!treatments?.length ? (
@@ -506,6 +515,8 @@ const Settings = (): JSX.Element => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>{t('common.name')}</TableHead>
+                      <TableHead>{t('common.price')}</TableHead>
+                      <TableHead>{t('settings.treatmentDurationMinutes')}</TableHead>
                       <TableHead>{t('settings.satProductCode')}</TableHead>
                       <TableHead>{t('settings.satUnitCode')}</TableHead>
                       <TableHead>{t('settings.vatExempt')}</TableHead>
@@ -516,6 +527,8 @@ const Settings = (): JSX.Element => {
                     {treatments.map((tr) => (
                       <TableRow key={tr.id}>
                         <TableCell className="font-medium">{tr.name}</TableCell>
+                        <TableCell>{formatCurrency(tr.price ?? 0, 2, clinic?.currency ?? 'USD')}</TableCell>
+                        <TableCell>{tr.duration_minutes}</TableCell>
                         <TableCell className="font-mono text-sm">{tr.sat_product_service_code ?? '—'}</TableCell>
                         <TableCell className="font-mono text-sm">{tr.sat_unit_code ?? '—'}</TableCell>
                         <TableCell>
@@ -534,6 +547,7 @@ const Settings = (): JSX.Element => {
             </CardContent>
           </Card>
 
+          <AddTreatmentForm open={showAddTreatment} onClose={() => setShowAddTreatment(false)} />
           <EditTreatmentTaxForm
             open={!!editingTreatment}
             onClose={() => setEditingTreatment(null)}

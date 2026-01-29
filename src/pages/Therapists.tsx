@@ -4,14 +4,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, User, Phone, Mail, Calendar, Edit, Award, DollarSign, Palette, AlertTriangle } from 'lucide-react';
-import { useTherapists } from '@/hooks/useTherapists';
+import { Plus, User, Mail, Edit, Award, DollarSign, Archive, ArchiveRestore } from 'lucide-react';
+import { useTherapists, useUpdateTherapist } from '@/hooks/useTherapists';
 import { useSubscriptionLimits, useCanAddTherapist } from '@/hooks/useSubscription';
 import TherapistForm from '@/components/TherapistForm';
 import EditTherapistForm from '@/components/EditTherapistForm';
 import SearchInput from '@/components/SearchInput';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
@@ -33,7 +34,9 @@ const GOOGLE_CALENDAR_COLORS = [
 const Therapists = () => {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { data: therapists, isLoading } = useTherapists();
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const { data: therapists, isLoading } = useTherapists({ includeArchived });
+  const updateTherapist = useUpdateTherapist();
   const subscriptionLimits = useSubscriptionLimits();
   const canAddTherapist = useCanAddTherapist();
   const [showForm, setShowForm] = useState(false);
@@ -81,6 +84,15 @@ const Therapists = () => {
 
   const getCalendarColor = (colorId: string) => {
     return GOOGLE_CALENDAR_COLORS.find(color => color.id === colorId) || GOOGLE_CALENDAR_COLORS[0];
+  };
+
+  const handleArchive = async (id: string, archive: boolean) => {
+    try {
+      await updateTherapist.mutateAsync({ id, archived: archive });
+      toast({ title: t('common.success'), description: archive ? t('therapists.archivedSuccess') : t('therapists.unarchivedSuccess') });
+    } catch (e) {
+      toast({ title: t('common.error'), description: (e as Error).message, variant: 'destructive' });
+    }
   };
 
   if (isLoading) {
@@ -134,7 +146,7 @@ const Therapists = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('therapists.totalTherapists')}</CardTitle>
@@ -157,7 +169,7 @@ const Therapists = () => {
             <div className="text-2xl font-bold">{averageCommission.toFixed(1)}%</div>
             <p className="text-xs text-muted-foreground">
               {t('therapists.perAppointment')}
-                </p>
+            </p>
           </CardContent>
         </Card>
         
@@ -168,37 +180,26 @@ const Therapists = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-                  {therapists?.filter(t => t.license_number).length || 0}
+              {therapists?.filter(t => t.license_number).length || 0}
             </div>
             <p className="text-xs text-muted-foreground">
               {t('therapists.withLicense')}
             </p>
           </CardContent>
         </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t('therapists.calendarIntegration')}</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {therapists?.filter(t => t.calendar_color_id && t.calendar_color_id !== '1').length || 0}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {t('therapists.withCustomColors')}
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
-      {/* Search */}
-      <div className="flex items-center space-x-2">
+      {/* Search + Include archived */}
+      <div className="flex flex-wrap items-center gap-4">
         <SearchInput
           placeholder={t('therapists.searchTherapists')}
           value={searchTerm}
           onChange={setSearchTerm}
         />
+        <div className="flex items-center gap-2">
+          <Switch id="include-archived" checked={includeArchived} onCheckedChange={setIncludeArchived} />
+          <Label htmlFor="include-archived" className="text-sm text-muted-foreground">{t('common.showArchived')}</Label>
+        </div>
       </div>
 
       {/* Therapists Table */}
@@ -256,22 +257,36 @@ const Therapists = () => {
                         </div>
                       </TableCell>
                     <TableCell>
-                      <Badge variant={therapist.is_active ? 'default' : 'secondary'}>
+                      <div className="flex flex-wrap gap-1">
+                        {therapist.archived && (
+                          <Badge variant="outline">{t('common.archived')}</Badge>
+                        )}
+                        <Badge variant={therapist.is_active ? 'default' : 'secondary'}>
                           {therapist.is_active ? t('common.active') : t('common.inactive')}
-                      </Badge>
+                        </Badge>
+                      </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {format(new Date(therapist.created_at), 'MMM d, yyyy')}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => setEditingTherapist(therapist)}
-                      >
-                        <Edit className="h-4 w-4 mr-1" />
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => setEditingTherapist(therapist)}>
+                          <Edit className="h-4 w-4 mr-1" />
                           {t('common.edit')}
-                      </Button>
+                        </Button>
+                        {therapist.archived ? (
+                          <Button variant="ghost" size="sm" onClick={() => handleArchive(therapist.id, false)}>
+                            <ArchiveRestore className="h-4 w-4 mr-1" />
+                            {t('common.unarchive')}
+                          </Button>
+                        ) : (
+                          <Button variant="ghost" size="sm" onClick={() => handleArchive(therapist.id, true)}>
+                            <Archive className="h-4 w-4 mr-1" />
+                            {t('common.archive')}
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                   );

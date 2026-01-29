@@ -234,7 +234,9 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
         queryClient.invalidateQueries({ queryKey: ['all-client-balances'] });
         queryClient.invalidateQueries({ queryKey: ['client-pending-appointments'] });
         queryClient.invalidateQueries({ queryKey: ['client-payments', appointment.client_id, clinicId] });
+        queryClient.invalidateQueries({ queryKey: ['client-appointments-history', appointment.client_id, clinicId] });
         queryClient.invalidateQueries({ queryKey: ['appointment-payments', appointment.id, clinicId] });
+        queryClient.invalidateQueries({ queryKey: ['payroll'] });
         toast({
           title: t('appointments.success'),
           description: t('appointments.paymentRecorded'),
@@ -337,6 +339,10 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       queryClient.invalidateQueries({ queryKey: ['client-balance'] });
       queryClient.invalidateQueries({ queryKey: ['all-client-balances'] });
       queryClient.invalidateQueries({ queryKey: ['client-pending-appointments'] });
+      if (appointment?.client_id && clinicId) {
+        queryClient.invalidateQueries({ queryKey: ['client-appointments-history', appointment.client_id, clinicId] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['payroll'] });
 
       setActiveTab('payment');
     } catch (error) {

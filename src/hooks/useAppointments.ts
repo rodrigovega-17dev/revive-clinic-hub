@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 import { useClinicGoogleCalendar } from '@/hooks/useClinicGoogleCalendar';
 import { useTranslation } from 'react-i18next';
@@ -44,9 +44,9 @@ export const useUpcomingAppointments = () => {
   });
 };
 
-export const useAppointmentsByDate = (selectedDate: string) => {
+export const useAppointmentsByDate = (selectedDate: string, enabled = true) => {
   const { clinicId } = useAuth();
-  
+
   return useQuery({
     queryKey: ['appointments', 'by-date', selectedDate, clinicId],
     queryFn: async () => {
@@ -88,7 +88,38 @@ export const useAppointmentsByDate = (selectedDate: string) => {
 
       return groupedAppointments || {};
     },
-    enabled: !!clinicId,
+    enabled: !!clinicId && enabled,
+  });
+};
+
+/** Appointments for the week (Mon–Sun) containing date. For stats when view is weekly. */
+export const useAppointmentsByWeek = (date: Date, enabled = true) => {
+  const { clinicId } = useAuth();
+  const weekStart = startOfWeek(date, { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(date, { weekStartsOn: 1 });
+
+  return useQuery({
+    queryKey: ['appointments', 'by-week', format(weekStart, 'yyyy-MM-dd'), clinicId],
+    queryFn: async () => {
+      if (!clinicId) return [];
+
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          *,
+          clients (first_name, last_name, phone),
+          therapists (id, first_name, last_name, calendar_color_id),
+          treatments (name, duration_minutes, price)
+        `)
+        .eq('clinic_id', clinicId)
+        .gte('start_time', weekStart.toISOString())
+        .lte('start_time', weekEnd.toISOString())
+        .order('start_time', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!clinicId && enabled,
   });
 };
 
@@ -161,27 +192,29 @@ export const useCreateAppointment = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (createdAppointment) => {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
-      
-      // Invalidate all monthly view queries to ensure calendar updates
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: ['appointments-by-month'],
-        exact: false 
+        exact: false,
       });
-      
-      // Invalidate weekly appointments queries to ensure weekly view updates
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: ['weekly-appointments'],
-        exact: false 
+        exact: false,
       });
+      const cid = createdAppointment?.client_id;
+      if (cid && clinicId) {
+        queryClient.invalidateQueries({ queryKey: ['client-appointments-history', cid, clinicId] });
+        queryClient.invalidateQueries({ queryKey: ['client-pending-appointments', cid, clinicId] });
+      }
     },
   });
 };
 
 export const useUpdateAppointment = () => {
   const queryClient = useQueryClient();
+  const { clinicId } = useAuth();
   const { syncAppointment, deleteAppointment, isAuthenticated } = useClinicGoogleCalendar();
   
   return useMutation({
@@ -204,19 +237,20 @@ export const useUpdateAppointment = () => {
     onSuccess: async ({ data: updatedAppointment, updates }) => {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
-      
-      // Invalidate all monthly view queries to ensure calendar updates
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: ['appointments-by-month'],
-        exact: false 
+        exact: false,
       });
-      
-      // Invalidate weekly appointments queries to ensure weekly view updates
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: ['weekly-appointments'],
-        exact: false 
+        exact: false,
       });
-      
+      const cid = updatedAppointment?.client_id;
+      if (cid && clinicId) {
+        queryClient.invalidateQueries({ queryKey: ['client-appointments-history', cid, clinicId] });
+        queryClient.invalidateQueries({ queryKey: ['client-pending-appointments', cid, clinicId] });
+      }
+
       // Debug: Log the updated appointment data
       console.log('Updated appointment data:', {
         id: updatedAppointment.id,
@@ -270,8 +304,9 @@ export const useUpdateAppointment = () => {
 
 export const useDeleteAppointment = () => {
   const queryClient = useQueryClient();
+  const { clinicId } = useAuth();
   const { deleteAppointment: deleteGoogleEvent } = useClinicGoogleCalendar();
-  
+
   return useMutation({
     mutationFn: async (appointment: any) => {
       // Delete from Google Calendar first if event exists
@@ -293,21 +328,22 @@ export const useDeleteAppointment = () => {
       if (error) throw error;
       return appointment;
     },
-    onSuccess: () => {
+    onSuccess: (deletedAppointment) => {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
-      
-      // Invalidate all monthly view queries to ensure calendar updates
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: ['appointments-by-month'],
-        exact: false 
+        exact: false,
       });
-      
-      // Invalidate weekly appointments queries to ensure weekly view updates
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: ['weekly-appointments'],
-        exact: false 
+        exact: false,
       });
+      const cid = deletedAppointment?.client_id;
+      if (cid && clinicId) {
+        queryClient.invalidateQueries({ queryKey: ['client-appointments-history', cid, clinicId] });
+        queryClient.invalidateQueries({ queryKey: ['client-pending-appointments', cid, clinicId] });
+      }
     },
   });
 };
@@ -322,17 +358,17 @@ export const useTodayStats = () => {
         totalAppointments: 0,
         completedAppointments: 0,
         todayRevenue: 0,
-        totalClients: 0,
+        clientsWithAppointmentsToday: 0,
       };
 
       const today = new Date();
       const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
       const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
 
-      // Get today's appointments
+      // Get today's appointments (status + client_id for unique clients count)
       const { data: appointments, error: appointmentsError } = await supabase
         .from('appointments')
-        .select('status')
+        .select('status, client_id')
         .eq('clinic_id', clinicId)
         .gte('start_time', startOfDay)
         .lte('start_time', endOfDay);
@@ -349,33 +385,26 @@ export const useTodayStats = () => {
 
       if (paymentsError) throw paymentsError;
 
-      // Get total clients
-      const { count: totalClients, error: clientsError } = await supabase
-        .from('clients')
-        .select('*', { count: 'exact', head: true })
-        .eq('clinic_id', clinicId)
-        .eq('is_active', true);
-
-      if (clientsError) throw clientsError;
-
       const totalAppointments = appointments?.length || 0;
       const completedAppointments = appointments?.filter(a => a.status === 'completed').length || 0;
       const todayRevenue = payments?.reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
+      const uniqueClientIds = new Set((appointments || []).map((a) => a.client_id).filter(Boolean));
+      const clientsWithAppointmentsToday = uniqueClientIds.size;
 
       return {
         totalAppointments,
         completedAppointments,
         todayRevenue,
-        totalClients: totalClients || 0,
+        clientsWithAppointmentsToday,
       };
     },
     enabled: !!clinicId,
   });
 };
 
-export const useAppointmentsByMonth = (year: number, month: number) => {
+export const useAppointmentsByMonth = (year: number, month: number, enabled = true) => {
   const { clinicId } = useAuth();
-  
+
   return useQuery({
     queryKey: ['appointments-by-month', year, month, clinicId],
     queryFn: async () => {
@@ -428,7 +457,7 @@ export const useAppointmentsByMonth = (year: number, month: number) => {
 
       return groupedByDate;
     },
-    enabled: !!clinicId,
+    enabled: !!clinicId && enabled,
   });
 };
 

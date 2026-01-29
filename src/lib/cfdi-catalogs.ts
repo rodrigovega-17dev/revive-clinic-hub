@@ -25,6 +25,27 @@ export const TAX_REGIMES: { value: string; labelKey: string }[] = [
   { value: '626', labelKey: 'cfdi.regime626' },
 ];
 
+/** SAT product/service codes (clinic-relevant). Default: 85122101 (physiotherapy). */
+export const SAT_PRODUCT_SERVICE: { value: string; labelKey: string }[] = [
+  { value: '85122101', labelKey: 'cfdi.satProduct.85122101' },
+  { value: '85121608', labelKey: 'cfdi.satProduct.85121608' },
+  { value: '85121801', labelKey: 'cfdi.satProduct.85121801' },
+  { value: '85121901', labelKey: 'cfdi.satProduct.85121901' },
+];
+
+/** Default SAT product/service code (physiotherapy). */
+export const SAT_PRODUCT_SERVICE_DEFAULT = '85122101';
+
+/** SAT unit-of-measure codes. Default: E48 (unidad de servicio). */
+export const SAT_UNIT: { value: string; labelKey: string }[] = [
+  { value: 'E48', labelKey: 'cfdi.satUnit.E48' },
+  { value: 'H87', labelKey: 'cfdi.satUnit.H87' },
+  { value: 'EA', labelKey: 'cfdi.satUnit.EA' },
+];
+
+/** Default SAT unit code. */
+export const SAT_UNIT_DEFAULT = 'E48';
+
 /** CFDI use (uso CFDI) code + label */
 export const CFDI_USES: { value: string; labelKey: string }[] = [
   { value: 'G01', labelKey: 'cfdi.useG01' },

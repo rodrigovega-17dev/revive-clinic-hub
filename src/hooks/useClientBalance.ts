@@ -44,13 +44,13 @@ export function useClientBalance(clientId: string | null) {
 
       if (pendingError) throw pendingError;
 
+      // Total payments = all real money received (exclude 'balance' = applying existing credit)
       const totalPayments = payments?.reduce((sum, payment) => {
-        const isBalanceAdjustment = payment.method === 'balance';
-        const isAdvancePayment = !payment.appointment_id;
-        return (isBalanceAdjustment || isAdvancePayment) ? sum + (payment.amount || 0) : sum;
+        if (payment.method === 'balance') return sum;
+        return sum + (payment.amount || 0);
       }, 0) || 0;
       const pendingPayments = pendingAppointments?.reduce((sum, apt) => sum + (apt.payment_amount || 0), 0) || 0;
-      // Balance represents available credit only (payments minus applied credit entries)
+      // Balance = total paid minus applied credit (balance payments); for now same as totalPayments
       const balance = totalPayments;
       
       const lastPaymentDate = payments && payments.length > 0 
@@ -111,9 +111,8 @@ export function useAllClientBalances() {
         const clientPending = pendingAppointments?.filter(a => a.client_id === client.id) || [];
         
         const totalPayments = clientPayments.reduce((sum, p) => {
-          const isBalanceAdjustment = p.method === 'balance';
-          const isAdvancePayment = !p.appointment_id;
-          return (isBalanceAdjustment || isAdvancePayment) ? sum + (p.amount || 0) : sum;
+          if (p.method === 'balance') return sum;
+          return sum + (p.amount || 0);
         }, 0);
         const pendingPayments = clientPending.reduce((sum, a) => sum + (a.payment_amount || 0), 0);
         const balance = totalPayments;

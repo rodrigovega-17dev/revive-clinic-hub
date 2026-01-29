@@ -4,14 +4,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, User, Phone, Mail, Calendar, Edit, MapPin, Heart, DollarSign, Eye, FileText } from 'lucide-react';
-import { useClients } from '@/hooks/useClients';
+import { Plus, User, Phone, Mail, Edit, MapPin, DollarSign, Eye, FileText, Archive, ArchiveRestore } from 'lucide-react';
+import { useClients, useUpdateClient } from '@/hooks/useClients';
 import { useAllClientBalances } from '@/hooks/useClientBalance';
 import ClientForm from '@/components/ClientForm';
 import EditClientForm from '@/components/EditClientForm';
 import ClientDetails from '@/components/ClientDetails';
 import SearchInput from '@/components/SearchInput';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 import { format, differenceInYears } from 'date-fns';
 import { useSearchParams } from 'react-router-dom';
 import type { Tables } from '@/integrations/supabase/types';
@@ -24,11 +27,14 @@ type Client = Tables<'clients'>;
 
 const Clients = () => {
   const { t } = useTranslation();
+  const { toast } = useToast();
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const { data: clients, isLoading } = useClients({ includeArchived });
+  const updateClient = useUpdateClient();
   const [showForm, setShowForm] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const { data: clients, isLoading } = useClients();
   const { data: clientBalances } = useAllClientBalances();
   const [searchParams] = useSearchParams();
   const { currency } = useClinicSettings();
@@ -75,6 +81,15 @@ const Clients = () => {
   const getAge = (birthDate: string | null) => {
     if (!birthDate) return null;
     return differenceInYears(new Date(), new Date(birthDate));
+  };
+
+  const handleArchive = async (id: string, archive: boolean) => {
+    try {
+      await updateClient.mutateAsync({ id, archived: archive });
+      toast({ title: t('common.success'), description: archive ? t('clients.archivedSuccess') : t('clients.unarchivedSuccess') });
+    } catch (e) {
+      toast({ title: t('common.error'), description: (e as Error).message, variant: 'destructive' });
+    }
   };
 
   // Check URL parameters to auto-open form
@@ -132,7 +147,7 @@ const Clients = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
@@ -144,21 +159,7 @@ const Clients = () => {
             </div>
           </CardContent>
         </Card>
-        
-        <Card className="bg-card border-border">
-          <CardContent className="pt-6">
-            <div className="flex items-center space-x-2">
-              <Calendar className="h-4 w-4 text-green-400" />
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">{t('clients.activeClients')}</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {clients?.filter(c => c.is_active).length || 0}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
+
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
@@ -172,15 +173,15 @@ const Clients = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
-              <Heart className="h-4 w-4 text-red-400" />
+              <FileText className="h-4 w-4 text-amber-400" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">{t('clients.emergencyContact')}</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('cfdi.fiscalData')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {clients?.filter(c => c.emergency_contact_name).length || 0}
+                  {clients?.filter((c) => hasCfdiData(c)).length || 0}
                 </p>
               </div>
             </div>
@@ -210,14 +211,18 @@ const Clients = () => {
         </Card>
       </div>
 
-      {/* Search */}
-      <div className="flex items-center space-x-4">
+      {/* Search + Include archived */}
+      <div className="flex flex-wrap items-center gap-4">
         <SearchInput
           value={searchTerm}
           onChange={setSearchTerm}
           placeholder={t('clients.searchClients')}
           className="max-w-md"
         />
+        <div className="flex items-center gap-2">
+          <Switch id="include-archived-clients" checked={includeArchived} onCheckedChange={setIncludeArchived} />
+          <Label htmlFor="include-archived-clients" className="text-sm text-muted-foreground">{t('common.showArchived')}</Label>
+        </div>
         <div className="text-sm text-muted-foreground">
           {filteredClients.length} {t('common.of')} {clients?.length || 0} {t('clients.title').toLowerCase()}
         </div>
@@ -233,8 +238,18 @@ const Clients = () => {
                   <TableHead className="text-foreground">{t('common.name')}</TableHead>
                   <TableHead className="text-foreground">{t('clients.contact')}</TableHead>
                   <TableHead className="text-foreground">{t('clients.age')}</TableHead>
-                  <TableHead className="text-foreground">{t('clients.emergencyContact')}</TableHead>
-                  <TableHead className="text-foreground">{t('clients.charge')}</TableHead>
+                  <TableHead className="text-foreground">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="cursor-help underline decoration-dotted decoration-muted-foreground">
+                          {t('clients.charge')}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="max-w-xs">{t('clients.chargeTooltip')}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TableHead>
                   <TableHead className="text-foreground">{t('common.status')}</TableHead>
                   <TableHead className="text-foreground">{t('clients.balance')}</TableHead>
                   <TableHead className="text-foreground">{t('cfdi.fiscalData')}</TableHead>
@@ -281,18 +296,6 @@ const Clients = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      {client.emergency_contact_name ? (
-                        <div className="text-sm">
-                          <div className="text-foreground">{client.emergency_contact_name}</div>
-                          {client.emergency_contact_phone && (
-                            <div className="text-muted-foreground">{client.emergency_contact_phone}</div>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
                       {client.charge_amount ? (
                         <div className="text-sm font-medium text-foreground">
                           {formatCurrencyWithClinic(client.charge_amount)}
@@ -302,9 +305,14 @@ const Clients = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={client.is_active ? 'default' : 'secondary'}>
-                        {client.is_active ? t('common.active') : t('common.inactive')}
-                      </Badge>
+                      <div className="flex flex-wrap gap-1">
+                        {client.archived && (
+                          <Badge variant="outline">{t('common.archived')}</Badge>
+                        )}
+                        <Badge variant={client.is_active ? 'default' : 'secondary'}>
+                          {client.is_active ? t('common.active') : t('common.inactive')}
+                        </Badge>
+                      </div>
                     </TableCell>
                     <TableCell>
                       {(() => {
@@ -342,23 +350,26 @@ const Clients = () => {
                       </Tooltip>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => setSelectedClient(client)}
-                        >
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => setSelectedClient(client)}>
                           <Eye className="h-4 w-4 mr-1" />
                           {t('common.details')}
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => setEditingClient(client)}
-                        >
+                        <Button variant="ghost" size="sm" onClick={() => setEditingClient(client)}>
                           <Edit className="h-4 w-4 mr-1" />
                           {t('common.edit')}
                         </Button>
+                        {client.archived ? (
+                          <Button variant="ghost" size="sm" onClick={() => handleArchive(client.id, false)}>
+                            <ArchiveRestore className="h-4 w-4 mr-1" />
+                            {t('common.unarchive')}
+                          </Button>
+                        ) : (
+                          <Button variant="ghost" size="sm" onClick={() => handleArchive(client.id, true)}>
+                            <Archive className="h-4 w-4 mr-1" />
+                            {t('common.archive')}
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

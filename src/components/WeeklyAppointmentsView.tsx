@@ -66,7 +66,10 @@ const TIME_SLOTS = Array.from({ length: 24 }, (_, i) => i); // 00:00 to 23:00
 const INITIAL_SCROLL_HOUR = 7;
 const ALL_DAY_HEIGHT = 40;
 const TIME_SLOT_HEIGHT = 60;
-const DAY_COLUMN_WIDTH = 300; // Fixed width for each day column (increased by 35% from 200px)
+const DAY_COLUMN_WIDTH = 160; // Day column width; horizontal scroll on narrow viewports
+// Offset before time grid (header + all-day) – used so initial scroll shows 7am at top
+const HEADER_ESTIMATE_PX = 52;
+const SCROLL_OFFSET_TO_7AM = HEADER_ESTIMATE_PX + ALL_DAY_HEIGHT + INITIAL_SCROLL_HOUR * TIME_SLOT_HEIGHT;
 
 function computePositionedAppointments(dayAppointments: Appointment[]): PositionedAppointment[] {
   // Separate all-day and timed appointments
@@ -239,8 +242,14 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
   };
 
   useEffect(() => {
-    if (!scrollContainerRef.current) return;
-    scrollContainerRef.current.scrollTop = INITIAL_SCROLL_HOUR * TIME_SLOT_HEIGHT;
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const scrollTo7am = () => {
+      el.scrollTop = SCROLL_OFFSET_TO_7AM;
+    };
+    requestAnimationFrame(() => {
+      requestAnimationFrame(scrollTo7am);
+    });
   }, [selectedWeek]);
 
   const handleAppointmentClick = (appointment: Appointment) => {
@@ -358,14 +367,14 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
       </div>
 
       {/* Google Calendar Style Weekly View */}
-      <div className="border rounded-lg overflow-hidden bg-card border-border">
-        {/* Horizontal scrollable container for entire calendar */}
+      <div className="border rounded-lg overflow-hidden bg-card border-border max-w-full">
+        {/* Scrollable container: vertical (time) + horizontal (days). Initial scroll shows 7am. */}
         <div
           ref={scrollContainerRef}
-          className="overflow-auto scrollbar-hide"
-          style={{ height: '700px' }}
+          className="overflow-auto scrollbar-hide w-full"
+          style={{ height: '700px', maxWidth: '100%' }}
         >
-          <div style={{ width: `${80 + (7 * DAY_COLUMN_WIDTH)}px` }}>
+          <div style={{ width: `${80 + 7 * DAY_COLUMN_WIDTH}px` }}>
             {/* Header with day names */}
             <div className="grid border-b border-border sticky top-0 z-40" style={{ gridTemplateColumns: `80px repeat(7, ${DAY_COLUMN_WIDTH}px)` }}>
               <div className="w-20 border-r border-border sticky left-0 z-30" style={{ backgroundColor: 'var(--time-column-bg, #f6f8fb)' }}></div> {/* Time column header */}

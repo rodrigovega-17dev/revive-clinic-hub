@@ -6,7 +6,11 @@ import { useUpcomingAppointments } from "@/hooks/useAppointments";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "react-i18next";
 
-const UpcomingAppointments = () => {
+interface UpcomingAppointmentsProps {
+  onAppointmentClick?: (appointment: any) => void;
+}
+
+const UpcomingAppointments = ({ onAppointmentClick }: UpcomingAppointmentsProps) => {
   const { t } = useTranslation();
   const { data: appointments, isLoading } = useUpcomingAppointments();
 
@@ -83,7 +87,23 @@ const UpcomingAppointments = () => {
       <CardContent>
         <div className="space-y-4">
           {appointments.map((appointment) => (
-            <div key={appointment.id} className="flex items-center space-x-4 p-4 rounded-lg border">
+            <div
+              key={appointment.id}
+              role={onAppointmentClick ? 'button' : undefined}
+              tabIndex={onAppointmentClick ? 0 : undefined}
+              onClick={onAppointmentClick ? () => onAppointmentClick(appointment) : undefined}
+              onKeyDown={
+                onAppointmentClick
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onAppointmentClick(appointment);
+                      }
+                    }
+                  : undefined
+              }
+              className={`flex items-center space-x-4 p-4 rounded-lg border ${onAppointmentClick ? 'cursor-pointer hover:bg-muted/50 transition-colors' : ''}`}
+            >
               <div className="flex-shrink-0">
                 <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
                   <User className="h-6 w-6 text-blue-600" />

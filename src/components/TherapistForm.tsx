@@ -103,9 +103,10 @@ const TherapistForm = ({ open, onClose }: TherapistFormProps) => {
       setCalendarColorId('1');
       setScheduleRules(scheduleRulesQuery.data || createDefaultScheduleRules());
     } catch (error) {
+      const msg = (error as Error)?.message;
       toast({
         title: t('common.error'),
-        description: t('common.failedToCreate', { item: t('therapists.title').toLowerCase() }),
+        description: msg || t('common.failedToCreate', { item: t('therapists.title').toLowerCase() }),
         variant: 'destructive',
       });
     } finally {

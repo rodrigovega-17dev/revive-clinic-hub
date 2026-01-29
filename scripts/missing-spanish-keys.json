@@ -1,24 +1,3 @@
 {
-  "finance.insurance": "Insurance",
-  "finance.syncDescription": "Automatically sync your appointments with Google Calendar for better organization and client communication.",
-  "finance.oauthRedirect": "Redirecting to Google...",
-  "finance.oauthSuccess": "Successfully authenticated with Google",
-  "finance.oauthError": "Failed to authenticate with Google",
-  "finance.selectCalendar": "Select Calendar",
-  "finance.calendarSelection": "Calendar Selection",
-  "finance.selectCalendarDescription": "Choose which Google Calendar to sync appointments with",
-  "finance.calendarSelected": "Calendar Selected",
-  "finance.calendarSelectedSuccess": "Calendar selection updated successfully",
-  "finance.calendarSelectionFailed": "Calendar Selection Failed",
-  "finance.calendarSelectionError": "Failed to update calendar selection. Please try again.",
-  "finance.noWriteAccess": "No write access to this calendar",
-  "finance.primaryCalendar": "Primary Calendar",
-  "finance.otherCalendars": "Other Calendars",
-  "finance.refreshCalendars": "Refresh Calendars",
-  "finance.syncingTo": "Syncing to",
-  "finance.notConnected": "Not connected to Google Calendar",
-  "finance.calendarsRefreshed": "Calendars Refreshed",
-  "finance.calendarsRefreshedSuccess": "Calendar list updated successfully",
-  "finance.calendarsRefreshFailed": "Calendar Refresh Failed",
-  "finance.calendarsRefreshError": "Failed to refresh calendar list. Please try again."
+  "common.balance": "Balance"
 }

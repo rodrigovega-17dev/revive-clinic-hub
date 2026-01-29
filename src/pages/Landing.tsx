@@ -216,15 +216,15 @@ const Landing = () => {
                 {/* Stats Cards */}
                 <div className="col-span-12 grid grid-cols-3 gap-3">
                   <div className="rounded-lg border border-border/50 bg-card p-4 shadow-sm">
-                    <div className="text-xs text-muted-foreground">Today's Appointments</div>
+                    <div className="text-xs text-muted-foreground">{t("landing.todaysAppointments")}</div>
                     <div className="mt-1 text-2xl font-bold text-foreground">12</div>
                   </div>
                   <div className="rounded-lg border border-border/50 bg-card p-4 shadow-sm">
-                    <div className="text-xs text-muted-foreground">Monthly Revenue</div>
+                    <div className="text-xs text-muted-foreground">{t("landing.monthlyRevenue")}</div>
                     <div className="mt-1 text-2xl font-bold text-green-600">$8,450</div>
                   </div>
                   <div className="rounded-lg border border-border/50 bg-card p-4 shadow-sm">
-                    <div className="text-xs text-muted-foreground">Active Clients</div>
+                    <div className="text-xs text-muted-foreground">{t("landing.activeClients")}</div>
                     <div className="mt-1 text-2xl font-bold text-foreground">142</div>
                   </div>
                 </div>
@@ -232,7 +232,7 @@ const Landing = () => {
                 {/* Calendar Preview */}
                 <div className="col-span-8 rounded-lg border border-border/50 bg-card p-4 shadow-sm">
                   <div className="mb-3 flex items-center justify-between">
-                    <div className="text-sm font-semibold text-foreground">Calendar View</div>
+                    <div className="text-sm font-semibold text-foreground">{t("landing.calendarView")}</div>
                     <div className="flex gap-1">
                       {[...Array(7)].map((_, i) => (
                         <div key={i} className="h-2 w-2 rounded-full bg-primary/30" />

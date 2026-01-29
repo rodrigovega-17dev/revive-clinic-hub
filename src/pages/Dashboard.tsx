@@ -1,10 +1,13 @@
-import { useTranslation } from "react-i18next";
-import DashboardStats from "@/components/DashboardStats";
-import UpcomingAppointments from "@/components/UpcomingAppointments";
-import { QuickActions } from "@/components/QuickActions";
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import DashboardStats from '@/components/DashboardStats';
+import UpcomingAppointments from '@/components/UpcomingAppointments';
+import { QuickActions } from '@/components/QuickActions';
+import AppointmentDetails from '@/components/AppointmentDetails';
 
 const Dashboard = () => {
   const { t } = useTranslation();
+  const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
 
   return (
     <div className="space-y-6">
@@ -20,12 +23,20 @@ const Dashboard = () => {
       {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <UpcomingAppointments />
+          <UpcomingAppointments onAppointmentClick={setSelectedAppointment} />
         </div>
         <div>
           <QuickActions />
         </div>
       </div>
+
+      {selectedAppointment && (
+        <AppointmentDetails
+          appointment={selectedAppointment}
+          open={!!selectedAppointment}
+          onClose={() => setSelectedAppointment(null)}
+        />
+      )}
     </div>
   );
 };

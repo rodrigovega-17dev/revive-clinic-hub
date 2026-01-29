@@ -1,25 +1,23 @@
 import React from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTranslation } from 'react-i18next';
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency } from '@/lib/utils';
 import { useClinicSettings } from '@/hooks/useClinic';
-import { TrendingUp, TrendingDown, DollarSign, Users, Calendar, Clock } from 'lucide-react';
+import { useTodayStats, useUpcomingAppointments } from '@/hooks/useAppointments';
+import { DollarSign, Users, Calendar, Clock } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const DashboardStats: React.FC = () => {
   const { t } = useTranslation();
   const { currency } = useClinicSettings();
-
-  // Mock data for now - in a real app this would come from hooks
-  const stats = {
-    todayRevenue: 0,
-    totalClients: 0,
-    todayAppointments: 0,
-    pendingAppointments: 0,
-  };
+  const { data: todayStats, isLoading: todayLoading } = useTodayStats();
+  const { data: upcoming, isLoading: upcomingLoading } = useUpcomingAppointments();
 
   const formatCurrencyWithClinic = (value: number) => {
     return formatCurrency(value, 2, currency);
   };
+
+  const isLoading = todayLoading;
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -31,7 +29,11 @@ const DashboardStats: React.FC = () => {
           <DollarSign className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{formatCurrencyWithClinic(stats?.todayRevenue)}</div>
+          {isLoading ? (
+            <Skeleton className="h-8 w-24" />
+          ) : (
+            <div className="text-2xl font-bold">{formatCurrencyWithClinic(todayStats?.todayRevenue ?? 0)}</div>
+          )}
           <p className="text-xs text-muted-foreground">
             {t('dashboard.totalPaymentsReceived')}
           </p>
@@ -41,14 +43,18 @@ const DashboardStats: React.FC = () => {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">
-            {t('dashboard.totalClientsTitle')}
+            {t('dashboard.clientsWithAppointmentsToday')}
           </CardTitle>
           <Users className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{stats?.totalClients || 0}</div>
+          {isLoading ? (
+            <Skeleton className="h-8 w-12" />
+          ) : (
+            <div className="text-2xl font-bold">{todayStats?.clientsWithAppointmentsToday ?? 0}</div>
+          )}
           <p className="text-xs text-muted-foreground">
-            {t('dashboard.activeClientRecords')}
+            {t('dashboard.clientsWithAppointmentsTodayDesc')}
           </p>
         </CardContent>
       </Card>
@@ -61,7 +67,11 @@ const DashboardStats: React.FC = () => {
           <Calendar className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{stats?.todayAppointments || 0}</div>
+          {isLoading ? (
+            <Skeleton className="h-8 w-12" />
+          ) : (
+            <div className="text-2xl font-bold">{todayStats?.totalAppointments ?? 0}</div>
+          )}
           <p className="text-xs text-muted-foreground">
             {t('dashboard.scheduledForToday')}
           </p>
@@ -76,7 +86,11 @@ const DashboardStats: React.FC = () => {
           <Clock className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{stats?.pendingAppointments || 0}</div>
+          {upcomingLoading ? (
+            <Skeleton className="h-8 w-12" />
+          ) : (
+            <div className="text-2xl font-bold">{upcoming?.length ?? 0}</div>
+          )}
           <p className="text-xs text-muted-foreground">
             {t('dashboard.nextScheduledSessions')}
           </p>

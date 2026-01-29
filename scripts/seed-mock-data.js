@@ -11,7 +11,6 @@ const getArgValue = (name, fallback) => {
 
 const targetEmail = getArgValue('--email', 'rodrigo.medina+sebastian1@arcus.mx');
 const clientCount = Number(getArgValue('--clients', '30'));
-const therapistCount = Number(getArgValue('--therapists', '5'));
 const appointmentCount = Number(getArgValue('--appointments', '90'));
 const monthsBack = Number(getArgValue('--months', '3'));
 const force = args.has('--force');
@@ -43,6 +42,16 @@ const specialties = ['Physio', 'Sports Rehab', 'Massage', 'Post-Op', 'Neuro'];
 const paymentMethods = ['cash', 'card', 'transfer', 'insurance'];
 const durations = [30, 60, 90, 120];
 const slotMinutesOptions = [30, 60, 90];
+const chargeAmounts = [1000, 1500, 2000];
+
+/** Fixed therapists to seed: name + commission %. */
+const FIXED_THERAPISTS = [
+  { first_name: 'Sergio', last_name: 'Vega', commission_percentage: 100 },
+  { first_name: 'Sebastian', last_name: 'Medina', commission_percentage: 20 },
+  { first_name: 'Diego', last_name: 'Murillo', commission_percentage: 25 },
+  { first_name: 'Carlos', last_name: 'Cisneros', commission_percentage: 45 },
+  { first_name: 'Sergio', last_name: 'Moreno', commission_percentage: 20 },
+];
 
 const randomFrom = (list) => list[Math.floor(Math.random() * list.length)];
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -180,17 +189,15 @@ const main = async () => {
 
   await ensureNoExistingSeed(clinicId);
 
-  // 2) Create therapists.
-  const therapistPayload = Array.from({ length: therapistCount }).map((_, index) => {
-    const name = buildName();
-    return {
-      clinic_id: clinicId,
-      first_name: name.first,
-      last_name: name.last,
-      email: buildEmail('therapist', index),
-      is_active: true,
-    };
-  });
+  // 2) Create fixed therapists (Sergio Vega, Sebastian Medina, etc.).
+  const therapistPayload = FIXED_THERAPISTS.map((t, index) => ({
+    clinic_id: clinicId,
+    first_name: t.first_name,
+    last_name: t.last_name,
+    email: buildEmail('therapist', index),
+    is_active: true,
+    commission_percentage: t.commission_percentage,
+  }));
 
   const { data: therapists, error: therapistError } = await supabase
     .from('therapists')
@@ -215,7 +222,7 @@ const main = async () => {
     if (rulesError) throw rulesError;
   }
 
-  // 4) Create clients.
+  // 4) Create clients (charge_amount random: 1000, 1500, or 2000).
   const clientPayload = Array.from({ length: clientCount }).map((_, index) => {
     const name = buildName();
     return {
@@ -225,6 +232,7 @@ const main = async () => {
       email: buildEmail('client', index),
       phone: `+52${randomInt(1000000000, 9999999999)}`,
       is_active: true,
+      charge_amount: randomFrom(chargeAmounts),
       medical_notes: `Seeded client for testing [seed:${seedId}]`,
     };
   });

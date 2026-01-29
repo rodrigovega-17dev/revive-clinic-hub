@@ -356,6 +356,8 @@ const Payroll = () => {
       queryClient.invalidateQueries({ queryKey: ['therapist-payouts'] });
       queryClient.invalidateQueries({ queryKey: ['payroll'] });
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['daily-expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['monthly-expenses'] });
     } catch (error) {
       console.error('Error registering payout:', error);
       toast({

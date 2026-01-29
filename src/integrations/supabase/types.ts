@@ -215,6 +215,7 @@ export type Database = {
       clients: {
         Row: {
           address: string | null
+          archived: boolean
           birth_date: string | null
           charge_amount: number | null
           clinic_id: string
@@ -239,6 +240,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          archived?: boolean
           birth_date?: string | null
           charge_amount?: number | null
           clinic_id?: string
@@ -263,6 +265,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          archived?: boolean
           birth_date?: string | null
           charge_amount?: number | null
           clinic_id?: string
@@ -777,6 +780,7 @@ export type Database = {
       }
       therapists: {
         Row: {
+          archived: boolean
           calendar_color_id: string | null
           clinic_id: string
           commission_percentage: number | null
@@ -793,6 +797,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          archived?: boolean
           calendar_color_id?: string | null
           clinic_id?: string
           commission_percentage?: number | null
@@ -809,6 +814,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          archived?: boolean
           calendar_color_id?: string | null
           clinic_id?: string
           commission_percentage?: number | null

@@ -114,9 +114,10 @@ const EditTherapistForm = ({ therapist, open, onClose }: EditTherapistFormProps)
       
       onClose();
     } catch (error) {
+      const msg = (error as Error)?.message;
       toast({
         title: t('common.error'),
-        description: t('common.failedToUpdate', { item: t('therapists.title').toLowerCase() }),
+        description: msg || t('common.failedToUpdate', { item: t('therapists.title').toLowerCase() }),
         variant: 'destructive',
       });
     }

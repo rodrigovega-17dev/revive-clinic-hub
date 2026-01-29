@@ -37,6 +37,21 @@ const normalizeTimeForSave = (value: string) => {
   return value.length === 5 ? `${value}:00` : value;
 };
 
+/** Ensure start < end for DB CHECK. Use 08:00–18:00 if invalid. */
+const sanitizeRuleForDb = (rule: TherapistScheduleRuleInput) => {
+  let start = normalizeTimeForSave(rule.start_time);
+  let end = normalizeTimeForSave(rule.end_time);
+  if (start >= end) {
+    start = '08:00:00';
+    end = '18:00:00';
+  }
+  return {
+    ...rule,
+    start_time: start,
+    end_time: end,
+  };
+};
+
 const buildRulesByWeekday = (
   rules: Array<{
     therapist_id: string | null;
@@ -71,20 +86,21 @@ const buildRulesByWeekday = (
   });
 };
 
-export const useTherapists = () => {
+export const useTherapists = (opts?: { includeArchived?: boolean }) => {
   const { clinicId } = useAuth();
-  
+  const includeArchived = opts?.includeArchived ?? false;
+
   return useQuery({
-    queryKey: ['therapists', clinicId],
+    queryKey: ['therapists', clinicId, includeArchived],
     queryFn: async () => {
       if (!clinicId) return [];
-      
-      const { data, error } = await supabase
+      let q = supabase
         .from('therapists')
         .select('*')
         .eq('clinic_id', clinicId)
         .order('created_at', { ascending: false });
-      
+      if (!includeArchived) q = q.eq('archived', false);
+      const { data, error } = await q;
       if (error) throw error;
       return data;
     },
@@ -133,22 +149,33 @@ export const useUpsertTherapistScheduleRules = () => {
     }) => {
       if (!clinicId) throw new Error('No clinic ID available');
 
-      const payload = rules.map((rule) => ({
-        clinic_id: clinicId,
-        therapist_id: therapistId,
-        weekday: rule.weekday,
-        start_time: normalizeTimeForSave(rule.start_time),
-        end_time: normalizeTimeForSave(rule.end_time),
-        slot_minutes: rule.slot_minutes,
-        buffer_minutes: rule.buffer_minutes,
-        is_active: rule.is_active,
-      }));
+      const payload = rules.map((r) => {
+        const sane = sanitizeRuleForDb(r);
+        return {
+          clinic_id: clinicId,
+          therapist_id: therapistId,
+          weekday: sane.weekday,
+          start_time: sane.start_time,
+          end_time: sane.end_time,
+          slot_minutes: sane.slot_minutes,
+          buffer_minutes: sane.buffer_minutes,
+          is_active: sane.is_active,
+        };
+      });
 
-      const { error } = await supabase
+      const { error: delErr } = await supabase
         .from('therapist_schedule_rules')
-        .upsert(payload, { onConflict: 'clinic_id,therapist_id,weekday' });
+        .delete()
+        .eq('clinic_id', clinicId)
+        .eq('therapist_id', therapistId);
 
-      if (error) throw error;
+      if (delErr) throw delErr;
+
+      const { error: insErr } = await supabase
+        .from('therapist_schedule_rules')
+        .insert(payload);
+
+      if (insErr) throw insErr;
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
@@ -188,7 +215,8 @@ export const useCreateTherapist = () => {
 
 export const useUpdateTherapist = () => {
   const queryClient = useQueryClient();
-  
+  const { clinicId } = useAuth();
+
   return useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & Partial<TherapistUpdate>) => {
       const { data, error } = await supabase
@@ -197,12 +225,14 @@ export const useUpdateTherapist = () => {
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['therapists'] });
+      queryClient.invalidateQueries({ queryKey: ['therapist-count'] });
+      if (clinicId) queryClient.invalidateQueries({ queryKey: ['subscription-status', clinicId] });
     },
   });
 };

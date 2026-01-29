@@ -503,29 +503,29 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
       </CardContent>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-hidden">
-          <DialogHeader>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-hidden flex flex-col gap-4">
+          <DialogHeader className="shrink-0">
             <DialogTitle>{t('documents.createDocument', 'Crear documento')}</DialogTitle>
           </DialogHeader>
-          <ScrollArea className="mt-2 max-h-[60vh] pr-2">
-            <div className="space-y-4">
+          <ScrollArea className="shrink-0 h-[min(60vh,480px)] w-full">
+            <div className="space-y-6 pr-3 pb-2 pt-0.5">
               {templates.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground py-4">
                   {t(
                     'documents.noTemplates',
                     'No templates are configured yet for this clinic.'
                   )}
                 </p>
               ) : (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">
+                <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+                  <label className="text-sm font-medium text-foreground block">
                     {t('documents.template', 'Plantilla')}
                   </label>
                   <Select
                     value={selectedTemplateId ?? ''}
                     onValueChange={handleTemplateChange}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-11 min-h-11 px-3.5 py-2.5 text-left [&>span]:pr-6">
                       <SelectValue
                         placeholder={t('documents.selectTemplate', 'Selecciona una plantilla')}
                       />
@@ -542,7 +542,7 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
               )}
 
               {selectedTemplate && sections.length > 0 && (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {sections
                     .filter((section) => section.id !== 'header')
                     .map((section) => {
@@ -551,55 +551,58 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                       return (
                         <div
                           key={section.id}
-                          className="space-y-2 rounded-md border border-border p-3"
+                          className="space-y-3 rounded-lg border border-border bg-muted/30 p-4"
                         >
                           {section.label && (
-                            <p className="text-sm font-semibold text-foreground">
+                            <p className="text-sm font-semibold text-foreground pb-0.5">
                               {section.label}
                             </p>
                           )}
-                          {section.fields
-                            .filter((field) => !field.readonly)
-                            .map((field) => {
-                              const value = fieldValues[field.id] ?? '';
-                            const commonProps = {
-                              id: field.id,
-                              value,
-                              onChange: (
-                                e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-                              ) => handleFieldChange(field.id, e.target.value),
-                              placeholder: field.placeholder || '',
-                            };
+                          <div className="space-y-4">
+                            {section.fields
+                              .filter((field) => !field.readonly)
+                              .map((field) => {
+                                const value = fieldValues[field.id] ?? '';
+                                const commonProps = {
+                                  id: field.id,
+                                  value,
+                                  onChange: (
+                                    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+                                  ) => handleFieldChange(field.id, e.target.value),
+                                  placeholder: field.placeholder || '',
+                                };
+                                const fieldType = field.type || 'textarea';
+                                const isReadonly = field.readonly === true;
 
-                            const fieldType = field.type || 'textarea';
-                            const isReadonly = field.readonly === true;
-
-                              return (
-                                <div key={field.id} className="space-y-1">
-                                  <label
-                                    htmlFor={field.id}
-                                    className="text-sm font-medium text-foreground"
-                                  >
-                                    {field.label}
-                                  </label>
-                                  {fieldType === 'text' ||
-                                  fieldType === 'date' ||
-                                  fieldType === 'number' ? (
-                                    <Input
-                                      {...commonProps}
-                                      type={fieldType === 'text' ? 'text' : fieldType}
-                                      disabled={isReadonly}
-                                    />
-                                  ) : (
-                                    <Textarea
-                                      {...commonProps}
-                                      rows={3}
-                                      disabled={isReadonly}
-                                    />
-                                  )}
-                                </div>
-                              );
-                            })}
+                                return (
+                                  <div key={field.id} className="space-y-2">
+                                    <label
+                                      htmlFor={field.id}
+                                      className="text-sm font-medium text-foreground"
+                                    >
+                                      {field.label}
+                                    </label>
+                                    {fieldType === 'text' ||
+                                    fieldType === 'date' ||
+                                    fieldType === 'number' ? (
+                                      <Input
+                                        {...commonProps}
+                                        type={fieldType === 'text' ? 'text' : fieldType}
+                                        disabled={isReadonly}
+                                        className="h-10"
+                                      />
+                                    ) : (
+                                      <Textarea
+                                        {...commonProps}
+                                        rows={3}
+                                        disabled={isReadonly}
+                                        className="resize-y min-h-[4.5rem]"
+                                      />
+                                    )}
+                                  </div>
+                                );
+                              })}
+                          </div>
                         </div>
                       );
                     }
@@ -617,7 +620,10 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                     };
 
                     return (
-                      <div key={section.id} className="space-y-1">
+                      <div
+                        key={section.id}
+                        className="space-y-2 rounded-lg border border-border bg-muted/30 p-4"
+                      >
                         <label
                           htmlFor={section.id}
                           className="text-sm font-medium text-foreground"
@@ -628,9 +634,10 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                           <Input
                             {...commonProps}
                             type={fieldType === 'text' ? 'text' : fieldType}
+                            className="h-10"
                           />
                         ) : (
-                          <Textarea {...commonProps} rows={3} />
+                          <Textarea {...commonProps} rows={3} className="resize-y min-h-[4.5rem]" />
                         )}
                       </div>
                     );
@@ -640,7 +647,7 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
             </div>
           </ScrollArea>
 
-          <div className="mt-4 flex justify-end gap-2">
+          <div className="flex shrink-0 justify-end gap-2 pt-2 border-t border-border">
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               {t('common.cancel')}
             </Button>
@@ -656,13 +663,13 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
 
       {/* Edit document dialog (values only, using snapshot schema) */}
       <Dialog open={!!editingInstance} onOpenChange={(open) => !open && setEditingInstance(null)}>
-        <DialogContent className="max-w-xl max-h-[80vh] overflow-hidden">
-          <DialogHeader>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-hidden flex flex-col gap-4">
+          <DialogHeader className="shrink-0">
             <DialogTitle>{t('common.edit')}</DialogTitle>
           </DialogHeader>
-          <ScrollArea className="mt-2 max-h-[60vh] pr-2">
+          <ScrollArea className="shrink-0 h-[min(60vh,480px)] w-full">
             {editingInstance && (
-              <div className="space-y-3">
+              <div className="space-y-6 pr-3 pb-2 pt-0.5">
                 {(() => {
                   const data = (editingInstance.data || {}) as any;
                   const schema = (data.schema || {}) as ParsedTemplateSchema;
@@ -671,95 +678,103 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                   return sections
                     .filter((section) => section.id !== 'header')
                     .map((section) => {
-                    if (section.type === 'group' && Array.isArray(section.fields)) {
+                      if (section.type === 'group' && Array.isArray(section.fields)) {
+                        return (
+                          <div
+                            key={section.id}
+                            className="space-y-3 rounded-lg border border-border bg-muted/30 p-4"
+                          >
+                            {section.label && (
+                              <p className="text-sm font-semibold text-foreground pb-0.5">
+                                {section.label}
+                              </p>
+                            )}
+                            <div className="space-y-4">
+                              {section.fields.map((field) => {
+                                const value = editFieldValues[field.id] ?? '';
+                                const commonProps = {
+                                  id: field.id,
+                                  value,
+                                  onChange: (
+                                    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+                                  ) => handleEditFieldChange(field.id, e.target.value),
+                                  placeholder: field.placeholder || '',
+                                };
+                                const fieldType = field.type || 'textarea';
+                                const isReadonly = field.readonly === true;
+
+                                return (
+                                  <div key={field.id} className="space-y-2">
+                                    <label
+                                      htmlFor={field.id}
+                                      className="text-sm font-medium text-foreground"
+                                    >
+                                      {field.label}
+                                    </label>
+                                    {fieldType === 'text' ||
+                                    fieldType === 'date' ||
+                                    fieldType === 'number' ? (
+                                      <Input
+                                        {...commonProps}
+                                        type={fieldType === 'text' ? 'text' : fieldType}
+                                        disabled={isReadonly}
+                                        className="h-10"
+                                      />
+                                    ) : (
+                                      <Textarea
+                                        {...commonProps}
+                                        rows={3}
+                                        disabled={isReadonly}
+                                        className="resize-y min-h-[4.5rem]"
+                                      />
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      const fieldType = (section.type as FieldType) || 'textarea';
+                      const value = editFieldValues[section.id] ?? '';
+                      const commonProps = {
+                        id: section.id,
+                        value,
+                        onChange: (
+                          e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+                        ) => handleEditFieldChange(section.id, e.target.value),
+                        placeholder: section.placeholder || '',
+                      };
+
                       return (
                         <div
                           key={section.id}
-                          className="space-y-2 rounded-md border border-border p-3"
+                          className="space-y-2 rounded-lg border border-border bg-muted/30 p-4"
                         >
-                          {section.label && (
-                            <p className="text-sm font-semibold text-foreground">
-                              {section.label}
-                            </p>
+                          <label
+                            htmlFor={section.id}
+                            className="text-sm font-medium text-foreground"
+                          >
+                            {section.label || section.id}
+                          </label>
+                          {fieldType === 'text' || fieldType === 'date' || fieldType === 'number' ? (
+                            <Input
+                              {...commonProps}
+                              type={fieldType === 'text' ? 'text' : fieldType}
+                              className="h-10"
+                            />
+                          ) : (
+                            <Textarea {...commonProps} rows={3} className="resize-y min-h-[4.5rem]" />
                           )}
-                          {section.fields.map((field) => {
-                            const value = editFieldValues[field.id] ?? '';
-                            const commonProps = {
-                              id: field.id,
-                              value,
-                              onChange: (
-                                e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-                              ) => handleEditFieldChange(field.id, e.target.value),
-                              placeholder: field.placeholder || '',
-                            };
-                            const fieldType = field.type || 'textarea';
-                            const isReadonly = field.readonly === true;
-
-                            return (
-                              <div key={field.id} className="space-y-1">
-                                <label
-                                  htmlFor={field.id}
-                                  className="text-sm font-medium text-foreground"
-                                >
-                                  {field.label}
-                                </label>
-                                {fieldType === 'text' ||
-                                fieldType === 'date' ||
-                                fieldType === 'number' ? (
-                                  <Input
-                                    {...commonProps}
-                                    type={fieldType === 'text' ? 'text' : fieldType}
-                                    disabled={isReadonly}
-                                  />
-                                ) : (
-                                  <Textarea
-                                    {...commonProps}
-                                    rows={3}
-                                    disabled={isReadonly}
-                                  />
-                                )}
-                              </div>
-                            );
-                          })}
                         </div>
                       );
-                    }
-
-                    const fieldType = (section.type as FieldType) || 'textarea';
-                    const value = editFieldValues[section.id] ?? '';
-                    const commonProps = {
-                      id: section.id,
-                      value,
-                      onChange: (
-                        e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-                      ) => handleEditFieldChange(section.id, e.target.value),
-                      placeholder: section.placeholder || '',
-                    };
-
-                    return (
-                      <div key={section.id} className="space-y-1">
-                        <label
-                          htmlFor={section.id}
-                          className="text-sm font-medium text-foreground"
-                        >
-                          {section.label || section.id}
-                        </label>
-                        {fieldType === 'text' || fieldType === 'date' || fieldType === 'number' ? (
-                          <Input
-                            {...commonProps}
-                            type={fieldType === 'text' ? 'text' : fieldType}
-                          />
-                        ) : (
-                          <Textarea {...commonProps} rows={3} />
-                        )}
-                      </div>
-                    );
-                  });
+                    });
                 })()}
               </div>
             )}
           </ScrollArea>
-          <div className="mt-4 flex justify-end gap-2">
+          <div className="flex shrink-0 justify-end gap-2 pt-2 border-t border-border">
             <Button variant="outline" onClick={() => setEditingInstance(null)}>
               {t('common.cancel')}
             </Button>

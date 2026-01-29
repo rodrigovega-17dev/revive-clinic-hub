@@ -204,7 +204,7 @@ async function issueIndividualInvoice(payload) {
   for (const pay of payments) {
     const apt = appointments.find((a) => a.id === pay.appointment_id);
     const t = getTreatment(apt);
-    const code = t?.sat_product_service_code || '85121608';
+    const code = t?.sat_product_service_code || '85122101';
     const unit = t?.sat_unit_code || 'E48';
     const description = t ? t.name : 'Servicio';
     const unitPrice = Number(pay.amount);
@@ -342,7 +342,7 @@ async function issueGlobalInvoice(payload) {
       use: 'P01',
     },
     items: [{
-      product: '85121608',
+      product: '85122101',
       description: `Servicios ${periodStart} a ${periodEnd}`,
       quantity: 1,
       unit: 'E48',
@@ -476,7 +476,7 @@ async function issueCreditNote(payload) {
       uuid: orig.uuid,
     }],
     items: [{
-      product: '85121608',
+      product: '85122101',
       description: reason || 'Devolución',
       quantity: 1,
       unit: 'E48',

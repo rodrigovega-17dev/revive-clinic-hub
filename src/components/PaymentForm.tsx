@@ -76,13 +76,18 @@ export default function PaymentForm({ open, onClose }: PaymentFormProps) {
     setIsSubmitting(true);
 
     try {
+      // Use selected date with current time (not 00:00) so Finance reflects actual recording time
+      const d = new Date(paymentDate + 'T00:00:00');
+      const now = new Date();
+      d.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+
       const paymentData = {
         amount: numAmount,
         description,
         client_id: clientId === 'none' ? null : clientId,
         clinic_id: clinicId,
         method: paymentMethod,
-        payment_date: new Date(paymentDate + 'T00:00:00').toISOString(),
+        payment_date: d.toISOString(),
         received_by: user?.id || null,
       };
 
@@ -106,11 +111,15 @@ export default function PaymentForm({ open, onClose }: PaymentFormProps) {
       
       onClose();
 
-      // Invalidate queries related to balance data
+      // Invalidate client-scoped, finance, and payroll queries so ClientDetails / Finance / Payroll refresh
       queryClient.invalidateQueries({ queryKey: ['client-balance'] });
       queryClient.invalidateQueries({ queryKey: ['all-client-balances'] });
+      queryClient.invalidateQueries({ queryKey: ['client-payments'] });
+      queryClient.invalidateQueries({ queryKey: ['client-pending-appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['client-appointments-history'] });
       queryClient.invalidateQueries({ queryKey: ['daily-payments'] });
       queryClient.invalidateQueries({ queryKey: ['monthly-payments'] });
+      queryClient.invalidateQueries({ queryKey: ['payroll'] });
     } catch (error) {
       console.error('Error recording payment:', error);
       toast({

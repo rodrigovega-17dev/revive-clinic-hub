@@ -1,5 +1,6 @@
 /**
  * Modal to edit treatment CFDI/tax fields: SAT code, unit code, VAT-exempt.
+ * Product and unit are dropdowns from SAT catalogs; default product = physiotherapy.
  */
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,12 +12,18 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUpdateTreatment } from '@/hooks/useTreatments';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import {
+  SAT_PRODUCT_SERVICE,
+  SAT_PRODUCT_SERVICE_DEFAULT,
+  SAT_UNIT,
+  SAT_UNIT_DEFAULT,
+} from '@/lib/cfdi-catalogs';
 import type { Tables } from '@/integrations/supabase/types';
 
 type Treatment = Tables<'treatments'>;
@@ -35,14 +42,16 @@ export default function EditTreatmentTaxForm({
   const { t } = useTranslation();
   const { toast } = useToast();
   const updateTreatment = useUpdateTreatment();
-  const [satCode, setSatCode] = useState('');
-  const [unitCode, setUnitCode] = useState('');
+  const [satCode, setSatCode] = useState(SAT_PRODUCT_SERVICE_DEFAULT);
+  const [unitCode, setUnitCode] = useState(SAT_UNIT_DEFAULT);
   const [vatExempt, setVatExempt] = useState(false);
 
   useEffect(() => {
     if (treatment && open) {
-      setSatCode(treatment.sat_product_service_code ?? '85121608');
-      setUnitCode(treatment.sat_unit_code ?? 'E48');
+      const rawProduct = treatment.sat_product_service_code ?? SAT_PRODUCT_SERVICE_DEFAULT;
+      const rawUnit = treatment.sat_unit_code ?? SAT_UNIT_DEFAULT;
+      setSatCode(SAT_PRODUCT_SERVICE.some((x) => x.value === rawProduct) ? rawProduct : SAT_PRODUCT_SERVICE_DEFAULT);
+      setUnitCode(SAT_UNIT.some((x) => x.value === rawUnit) ? rawUnit : SAT_UNIT_DEFAULT);
       setVatExempt(treatment.vat_exempt ?? false);
     }
   }, [treatment, open]);
@@ -53,8 +62,8 @@ export default function EditTreatmentTaxForm({
     try {
       await updateTreatment.mutateAsync({
         id: treatment.id,
-        sat_product_service_code: satCode.trim() || null,
-        sat_unit_code: unitCode.trim() || null,
+        sat_product_service_code: satCode || null,
+        sat_unit_code: unitCode || null,
         vat_exempt: vatExempt,
       });
       toast({ title: t('common.success'), description: t('common.updatedSuccessfully', { item: treatment.name }) });
@@ -80,19 +89,33 @@ export default function EditTreatmentTaxForm({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>{t('settings.satProductCode')}</Label>
-            <Input
-              value={satCode}
-              onChange={(e) => setSatCode(e.target.value)}
-              placeholder="85121608"
-            />
+            <Select value={satCode} onValueChange={setSatCode}>
+              <SelectTrigger>
+                <SelectValue placeholder={t('settings.satProductCode')} />
+              </SelectTrigger>
+              <SelectContent>
+                {SAT_PRODUCT_SERVICE.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {t(opt.labelKey)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label>{t('settings.satUnitCode')}</Label>
-            <Input
-              value={unitCode}
-              onChange={(e) => setUnitCode(e.target.value)}
-              placeholder="E48"
-            />
+            <Select value={unitCode} onValueChange={setUnitCode}>
+              <SelectTrigger>
+                <SelectValue placeholder={t('settings.satUnitCode')} />
+              </SelectTrigger>
+              <SelectContent>
+                {SAT_UNIT.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {t(opt.labelKey)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex items-center justify-between">
             <Label>{t('settings.vatExempt')}</Label>
