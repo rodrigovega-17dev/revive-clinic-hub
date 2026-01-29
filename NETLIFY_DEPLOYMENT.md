@@ -1,6 +1,6 @@
 # Netlify Deployment Guide
 
-This guide will help you deploy Revive Clinic Hub to Netlify with Stripe webhook support.
+This guide will help you deploy Cliniker Hub to Netlify with Stripe webhook support.
 
 ## Prerequisites
 

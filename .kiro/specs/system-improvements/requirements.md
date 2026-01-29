@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This specification addresses critical system improvements for Revive Clinic Hub, focusing on database schema cleanup, internationalization completeness, authentication UX enhancements, and subscription flow performance optimization. These improvements will enhance system reliability, user experience, and maintainability.
+This specification addresses critical system improvements for Cliniker Hub, focusing on database schema cleanup, internationalization completeness, authentication UX enhancements, and subscription flow performance optimization. These improvements will enhance system reliability, user experience, and maintainability.
 
 ## Requirements
 

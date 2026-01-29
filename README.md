@@ -1,4 +1,4 @@
-# Revive Clinic Hub
+# Cliniker Hub
 
 A comprehensive clinic management system built with React, TypeScript, and Supabase.
 

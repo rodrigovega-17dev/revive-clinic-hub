@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🚀 Deploying Revive Clinic Hub to Netlify..."
+echo "🚀 Deploying Cliniker Hub to Netlify..."
 
 # Check if Netlify CLI is installed
 if ! command -v netlify &> /dev/null; then

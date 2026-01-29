@@ -2,7 +2,7 @@
 
 ## Overview
 
-This design document outlines the technical approach for implementing critical system improvements to Revive Clinic Hub. The improvements focus on four key areas: database schema optimization, internationalization completeness, authentication UX enhancements, and subscription flow performance optimization.
+This design document outlines the technical approach for implementing critical system improvements to Cliniker Hub. The improvements focus on four key areas: database schema optimization, internationalization completeness, authentication UX enhancements, and subscription flow performance optimization.
 
 ## Architecture
 

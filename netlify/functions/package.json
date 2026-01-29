@@ -1,7 +1,7 @@
 {
-  "name": "revive-clinic-hub-functions",
+  "name": "cliniker-hub-functions",
   "version": "1.0.0",
-  "description": "Netlify functions for Revive Clinic Hub",
+  "description": "Netlify functions for Cliniker Hub",
   "main": "index.js",
   "dependencies": {
     "stripe": "^18.2.1",
