@@ -88,7 +88,7 @@ npm run dev
 
 ## Google Calendar Setup
 
-See [GOOGLE_CALENDAR_SETUP.md](./GOOGLE_CALENDAR_SETUP.md) for detailed setup instructions.
+See [GOOGLE_CALENDAR_SETUP.md](./docs/GOOGLE_CALENDAR_SETUP.md) for detailed setup instructions.
 
 ## Usage
 

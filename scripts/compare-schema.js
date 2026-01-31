@@ -16,15 +16,15 @@ const __dirname = path.dirname(__filename);
 async function compareSchemas() {
     console.log('🔍 Comparing current schema with migrations...\n');
     
-    // Use the existing current_schema.sql file
-    const currentSchemaPath = 'current_schema.sql';
+    // Use the existing current_schema.sql file (in sql/)
+    const currentSchemaPath = path.join(__dirname, '..', 'sql', 'current_schema.sql');
     if (!fs.existsSync(currentSchemaPath)) {
-        console.error('❌ Current schema file not found. Please ensure current_schema.sql exists in the project root.');
-        console.log('💡 You can get it by running: supabase db dump --linked -f current_schema.sql');
+        console.error('❌ Current schema file not found. Please ensure sql/current_schema.sql exists.');
+        console.log('💡 You can get it by running: supabase db dump --linked -f sql/current_schema.sql');
         return;
     }
     
-    console.log('📊 Using existing current_schema.sql file...');
+    console.log('📊 Using existing sql/current_schema.sql file...');
     
     const currentSchema = fs.readFileSync(currentSchemaPath, 'utf8');
     

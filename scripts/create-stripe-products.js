@@ -123,7 +123,7 @@ async function createStripeProducts() {
   console.log('\nNext steps:');
   console.log('1. Copy the SQL statements above');
   console.log('2. Run them in your Supabase SQL editor');
-  console.log('3. Or use the setup_stripe_prices.sql file and replace the placeholder IDs');
+  console.log('3. Or use the sql/setup_stripe_prices.sql file and replace the placeholder IDs');
 }
 
 // Run the script

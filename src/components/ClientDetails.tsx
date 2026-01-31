@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { User, Phone, Mail, MapPin, DollarSign, CheckCircle, AlertCircle, History, FileText, Upload } from 'lucide-react';
+import { User, Phone, Mail, MapPin, DollarSign, CheckCircle, AlertCircle, History, FileText, Upload, MessageCircle } from 'lucide-react';
 import { useClientBalance } from '@/hooks/useClientBalance';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,6 +19,7 @@ import { hasCfdiData } from '@/lib/cfdi-catalogs';
 import { getCfdiFileUrl } from '@/hooks/useCfdiFileUrl';
 import { CfdiUploadModal } from '@/components/CfdiUploadModal';
 import { DocumentSection } from '@/components/DocumentSection';
+import { openWhatsApp } from '@/lib/whatsapp';
 
 type Client = Tables<'clients'>;
 
@@ -299,6 +300,16 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
                     <div className="flex items-center gap-2">
                       <Phone className="h-4 w-4 text-muted-foreground" />
                       <span>{client.phone}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-green-600 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950/50"
+                        onClick={() => openWhatsApp(client.phone!, t('whatsapp.messageGreeting', { name: `${client.first_name || ''} ${client.last_name || ''}`.trim() || t('common.name') }))}
+                        title={t('whatsapp.send')}
+                        aria-label={t('whatsapp.send')}
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                      </Button>
                     </div>
                   )}
                   {client.address && (
@@ -642,7 +653,12 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
 
           {/* Documents tab: client-level + appointment-attached documents */}
           <TabsContent value="documents" className="mt-4 space-y-4">
-            <DocumentSection context="client" clientId={client.id} />
+            <DocumentSection
+              context="client"
+              clientId={client.id}
+              clientPhone={client.phone}
+              clientName={`${client.first_name || ''} ${client.last_name || ''}`.trim()}
+            />
             <div className="flex justify-end gap-2 mt-4">
               <Button variant="outline" onClick={onClose}>
                 {t('clients.close')}

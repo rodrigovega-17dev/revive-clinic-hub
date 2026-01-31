@@ -13,7 +13,7 @@ import { useClientBalance } from '@/hooks/useClientBalance';
 import { useTherapists } from '@/hooks/useTherapists';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Calendar, User, Clock, DollarSign, CreditCard, CalendarDays, ExternalLink, AlertTriangle, CheckCircle, FileText, Upload } from 'lucide-react';
+import { Loader2, Calendar, User, Clock, DollarSign, CreditCard, CalendarDays, ExternalLink, AlertTriangle, CheckCircle, FileText, Upload, MessageCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
@@ -32,6 +32,14 @@ import { TAX_REGIMES, CFDI_USES, isValidRfcFormat } from '@/lib/cfdi-catalogs';
 import { useClinicFacturapiConfig } from '@/hooks/useClinicFacturapiConfig';
 import { CfdiUploadModal } from './CfdiUploadModal';
 import { DocumentSection } from '@/components/DocumentSection';
+import { openWhatsApp, formatPhoneForWhatsApp } from '@/lib/whatsapp';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface AppointmentDetailsProps {
   appointment: any;
@@ -626,39 +634,128 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
             </Card>
 
             <div className="flex justify-between space-x-3">
-              {apt.status === 'cancelled' ? (
-                <Button 
-                  variant="destructive" 
-                  onClick={handleDeleteAppointment}
-                  disabled={updateAppointment.isPending}
-                >
-                  {t('appointments.deleteAppointment')}
-                </Button>
-              ) : apt.status === 'completed' ? (
-                <div className="flex items-center space-x-2">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                  <span className="text-green-600 font-medium">{t('appointments.completed')}</span>
-                </div>
-              ) : (
-                <div className="flex space-x-2">
-                  <Button 
-                    variant="default" 
-                    onClick={handleMarkAsCompleted}
-                    disabled={updateAppointment.isPending}
-                  >
-                    {updateAppointment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    {t('appointments.markAsCompleted')}
-                  </Button>
+              <div className="flex items-center gap-2">
+                {apt.status === 'cancelled' ? (
                   <Button 
                     variant="destructive" 
-                    onClick={handleCancelAppointment}
+                    onClick={handleDeleteAppointment}
                     disabled={updateAppointment.isPending}
                   >
-                    {t('appointments.cancelAppointment')}
+                    {t('appointments.deleteAppointment')}
                   </Button>
-                </div>
-              )}
+                ) : apt.status === 'completed' ? (
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <span className="text-green-600 font-medium">{t('appointments.completed')}</span>
+                  </div>
+                ) : (
+                  <div className="flex space-x-2">
+                    <Button 
+                      variant="default" 
+                      onClick={handleMarkAsCompleted}
+                      disabled={updateAppointment.isPending}
+                    >
+                      {updateAppointment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      {t('appointments.markAsCompleted')}
+                    </Button>
+                    <Button 
+                      variant="destructive" 
+                      onClick={handleCancelAppointment}
+                      disabled={updateAppointment.isPending}
+                    >
+                      {t('appointments.cancelAppointment')}
+                    </Button>
+                  </div>
+                )}
+                {formatPhoneForWhatsApp(apt.clients?.phone || '') && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700 dark:border-green-800 dark:hover:bg-green-950/50">
+                        <MessageCircle className="h-4 w-4 mr-2" />
+                        {t('whatsapp.send')}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      {/* Confirmation: for scheduled, completed, or no_show */}
+                      {(apt.status === 'scheduled' || apt.status === 'completed' || apt.status === 'no_show') && (
+                        <DropdownMenuItem
+                          onClick={() => {
+                            const msg = t('whatsapp.messageConfirmation', {
+                              name: `${apt.clients?.first_name || ''} ${apt.clients?.last_name || ''}`.trim(),
+                              date: format(new Date(apt.start_time), 'PPP', { locale }),
+                              time: format(new Date(apt.start_time), 'p', { locale }),
+                              therapist: `${apt.therapists?.first_name || ''} ${apt.therapists?.last_name || ''}`.trim(),
+                              treatment: apt.treatments?.name || '',
+                            });
+                            openWhatsApp(apt.clients?.phone || '', msg);
+                          }}
+                        >
+                          {t('whatsapp.confirmation')}
+                        </DropdownMenuItem>
+                      )}
+                      {/* Reschedule: only for scheduled (not cancelled/completed) */}
+                      {apt.status === 'scheduled' && (
+                        <DropdownMenuItem
+                          onClick={() => {
+                            const msg = t('whatsapp.messageReschedule', {
+                              name: `${apt.clients?.first_name || ''} ${apt.clients?.last_name || ''}`.trim(),
+                              date: format(new Date(apt.start_time), 'PPP', { locale }),
+                              time: format(new Date(apt.start_time), 'p', { locale }),
+                              therapist: `${apt.therapists?.first_name || ''} ${apt.therapists?.last_name || ''}`.trim(),
+                            });
+                            openWhatsApp(apt.clients?.phone || '', msg);
+                          }}
+                        >
+                          {t('whatsapp.reschedule')}
+                        </DropdownMenuItem>
+                      )}
+                      {/* Cancellation: only for scheduled or cancelled (send cancellation notice) */}
+                      {(apt.status === 'scheduled' || apt.status === 'cancelled') && (
+                        <DropdownMenuItem
+                          onClick={() => {
+                            const msg = t('whatsapp.messageCancellation', {
+                              name: `${apt.clients?.first_name || ''} ${apt.clients?.last_name || ''}`.trim(),
+                              date: format(new Date(apt.start_time), 'PPP', { locale }),
+                              time: format(new Date(apt.start_time), 'p', { locale }),
+                            });
+                            openWhatsApp(apt.clients?.phone || '', msg);
+                          }}
+                        >
+                          {t('whatsapp.cancellation')}
+                        </DropdownMenuItem>
+                      )}
+                      {/* Reminder: only for scheduled (upcoming appointment) */}
+                      {apt.status === 'scheduled' && (
+                        <DropdownMenuItem
+                          onClick={() => {
+                            const msg = t('whatsapp.messageReminder', {
+                              name: `${apt.clients?.first_name || ''} ${apt.clients?.last_name || ''}`.trim(),
+                              date: format(new Date(apt.start_time), 'PPP', { locale }),
+                              time: format(new Date(apt.start_time), 'p', { locale }),
+                              therapist: `${apt.therapists?.first_name || ''} ${apt.therapists?.last_name || ''}`.trim(),
+                            });
+                            openWhatsApp(apt.clients?.phone || '', msg);
+                          }}
+                        >
+                          {t('whatsapp.reminder')}
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                {!formatPhoneForWhatsApp(apt.clients?.phone || '') && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="outline" size="sm" disabled className="opacity-50">
+                        <MessageCircle className="h-4 w-4 mr-2" />
+                        {t('whatsapp.send')}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t('whatsapp.noPhone')}</TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
               
               <Button variant="outline" onClick={onClose}>
                 {t('appointments.close')}
@@ -1068,6 +1165,8 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
               context="appointment"
               clientId={apt.client_id}
               appointmentId={apt.id}
+              clientPhone={apt.clients?.phone}
+              clientName={`${apt.clients?.first_name || ''} ${apt.clients?.last_name || ''}`.trim()}
             />
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={onClose}>

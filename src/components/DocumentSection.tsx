@@ -19,8 +19,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { FileText, Plus, Printer, Eye, Pencil, Trash2, Mail } from 'lucide-react';
+import { FileText, Plus, Printer, Eye, Pencil, Trash2, Mail, MessageCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { openWhatsApp, formatPhoneForWhatsApp } from '@/lib/whatsapp';
 
 type DocumentInstance = Tables<'document_instances'>;
 type DocumentTemplate = Tables<'document_templates'>;
@@ -29,6 +30,10 @@ interface DocumentSectionProps {
   context: DocumentContextType;
   clientId: string;
   appointmentId?: string | null;
+  /** Optional: for WhatsApp document sharing (button shown only when set) */
+  clientPhone?: string | null;
+  /** Optional: client full name for WhatsApp message (falls back to doc variables) */
+  clientName?: string | null;
 }
 
 type FieldType =
@@ -264,6 +269,8 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
   context,
   clientId,
   appointmentId,
+  clientPhone,
+  clientName: clientNameProp,
 }) => {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -485,6 +492,28 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                     >
                       <Mail className="h-4 w-4" />
                     </Button>
+                    {formatPhoneForWhatsApp(clientPhone || '') && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-green-600 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950/50"
+                        onClick={() => {
+                          const data = (doc.data || {}) as any;
+                          const vars = (data.variables || {}) as Record<string, unknown>;
+                          const docName = data.templateName || t('documents.document', 'document');
+                          const name = clientNameProp || (vars.clientFullName as string) || '';
+                          const link = `${window.location.origin}/clients/${clientId}`;
+                          openWhatsApp(
+                            clientPhone ?? '',
+                            t('whatsapp.messageDocument', { name, document: docName, link }),
+                          );
+                        }}
+                        title={t('whatsapp.document')}
+                        aria-label={t('whatsapp.document')}
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"

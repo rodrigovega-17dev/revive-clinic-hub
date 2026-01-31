@@ -1428,5 +1428,20 @@
     "previous": "Anterior",
     "next": "Siguiente",
     "morePages": "Más páginas"
+  },
+  "whatsapp": {
+    "send": "Enviar WhatsApp",
+    "confirmation": "Enviar confirmación",
+    "reschedule": "Enviar aviso de reagendamiento",
+    "cancellation": "Enviar aviso de cancelación",
+    "reminder": "Enviar recordatorio",
+    "document": "Enviar por WhatsApp",
+    "noPhone": "No hay número de teléfono",
+    "messageConfirmation": "Hola {{name}}, tu cita está confirmada para el {{date}} a las {{time}} con {{therapist}}. Tratamiento: {{treatment}}. ¡Te esperamos!",
+    "messageReschedule": "Hola {{name}}, tu cita ha sido reagendada para el {{date}} a las {{time}} con {{therapist}}.",
+    "messageCancellation": "Hola {{name}}, tu cita del {{date}} a las {{time}} ha sido cancelada. Contáctanos para reagendar.",
+    "messageReminder": "Hola {{name}}, recordatorio: tu cita es mañana {{date}} a las {{time}} con {{therapist}}.",
+    "messageDocument": "Hola {{name}}, aquí está tu {{document}}: {{link}}",
+    "messageGreeting": "Hola {{name}}, ¿en qué podemos ayudarte?"
   }
 } 
