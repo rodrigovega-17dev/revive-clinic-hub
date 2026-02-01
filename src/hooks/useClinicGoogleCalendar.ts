@@ -168,6 +168,10 @@ export const useClinicGoogleCalendar = () => {
       appointment: any; 
       options?: GoogleCalendarSyncOptions;
     }) => {
+      // Cancelled appointments cannot be synced - they should stay removed from Google Calendar
+      if (appointment?.status === 'cancelled') {
+        throw new Error('Cancelled appointments cannot be synced to Google Calendar');
+      }
       if (!appointment.google_calendar_event_id) {
         // Create new event
         const eventId = await getService().createEvent(appointment, options);

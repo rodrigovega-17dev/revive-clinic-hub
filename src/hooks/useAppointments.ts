@@ -261,14 +261,14 @@ export const useUpdateAppointment = () => {
         updatedFields: Object.keys(updates)
       });
       
-      // Only sync to Google Calendar if connected and authenticated AND if relevant fields were updated
-      const shouldSyncToGoogle = isAuthenticated && (
-        // Sync if appointment was rescheduled (start_time or end_time changed)
-        'start_time' in updates || 
-        'end_time' in updates ||
-        // Sync if therapist was changed (might affect calendar)
-        'therapist_id' in updates
-      );
+      // Only sync to Google Calendar if connected, authenticated, NOT cancelled, and relevant fields updated
+      const shouldSyncToGoogle = isAuthenticated &&
+        updatedAppointment.status !== 'cancelled' &&
+        (
+          'start_time' in updates ||
+          'end_time' in updates ||
+          'therapist_id' in updates
+        );
 
       const shouldDeleteFromGoogle =
         isAuthenticated &&

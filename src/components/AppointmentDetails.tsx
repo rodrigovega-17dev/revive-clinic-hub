@@ -610,7 +610,8 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                       </span>
                     </div>
                     
-                    {!apt.google_calendar_event_id && (
+                    {/* Sync button: hidden for cancelled appointments - they cannot be re-synced */}
+                    {!apt.google_calendar_event_id && apt.status !== 'cancelled' && (
                       <Button 
                         size="sm" 
                         variant="outline" 
