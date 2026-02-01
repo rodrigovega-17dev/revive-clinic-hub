@@ -3,8 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Calendar, ExternalLink, LogOut, CheckCircle, AlertCircle } from 'lucide-react';
+import { Calendar, ExternalLink, LogOut, AlertCircle } from 'lucide-react';
 import { useClinicGoogleCalendar } from '@/hooks/useClinicGoogleCalendar';
 import ClinicGoogleCalendarSelector from './ClinicGoogleCalendarSelector';
 
@@ -88,8 +87,7 @@ const ClinicGoogleCalendarConnect: React.FC = () => {
           <div className="flex items-center space-x-2">
             <Calendar className="h-5 w-5" />
             <span>{t('googleCalendar.title')}</span>
-            <Badge variant="default" className="ml-2">
-              <CheckCircle className="h-3 w-3 mr-1" />
+            <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-950/30 dark:text-green-300 dark:hover:bg-green-950/30">
               {t('googleCalendar.connected')}
             </Badge>
           </div>
@@ -109,18 +107,7 @@ const ClinicGoogleCalendarConnect: React.FC = () => {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {/* Connection Status */}
-          <div className="flex items-center space-x-2 p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <span className="text-sm font-medium text-green-800 dark:text-green-200">
-              {t('googleCalendar.connectedSuccessfully')}
-            </span>
-          </div>
-
-          {/* Integrated Calendar Selection */}
-          <ClinicGoogleCalendarSelector />
-        </div>
+        <ClinicGoogleCalendarSelector />
       </CardContent>
     </Card>
   );

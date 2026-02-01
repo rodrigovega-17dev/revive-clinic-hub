@@ -2,7 +2,15 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Download, DollarSign } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Plus, Download, DollarSign, Loader2, ChevronDown } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { useDataExport } from '@/hooks/useDataExport';
 import ExpenseForm from '@/components/ExpenseForm';
 import PaymentForm from '@/components/PaymentForm';
 import DailyFinanceSection from '@/components/DailyFinanceSection';
@@ -11,6 +19,8 @@ import { useSearchParams } from 'react-router-dom';
 
 const Finance = () => {
   const { t } = useTranslation();
+  const { clinicId } = useAuth();
+  const { exportPaymentsToCsv, exportExpensesToCsv, isExporting } = useDataExport();
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => new Date());
@@ -51,10 +61,43 @@ const Finance = () => {
             <Plus className="h-4 w-4 mr-2" />
             {t('finance.addExpense')}
           </Button>
-          <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            {t('common.export')}
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" disabled={!!isExporting || !clinicId}>
+                {isExporting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-2" />
+                )}
+                {t('common.export')}
+                <ChevronDown className="h-4 w-4 ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => clinicId && exportPaymentsToCsv(clinicId)}
+                disabled={isExporting === 'payments'}
+              >
+                {isExporting === 'payments' ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-2" />
+                )}
+                {t('finance.exportPayments', 'Pagos (CSV)')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => clinicId && exportExpensesToCsv(clinicId)}
+                disabled={isExporting === 'expenses'}
+              >
+                {isExporting === 'expenses' ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-2" />
+                )}
+                {t('finance.exportExpenses', 'Gastos (CSV)')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

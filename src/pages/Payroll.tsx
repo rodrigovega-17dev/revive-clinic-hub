@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, DollarSign, TrendingUp, Users, Download, Loader2 } from 'lucide-react';
+import { Calendar, DollarSign, TrendingUp, Users, Download, Loader2, FileText, Paperclip } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,6 +18,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { useDataExport } from '@/hooks/useDataExport';
+import { CfdiUploadModal } from '@/components/CfdiUploadModal';
+import { parseCfdiXml } from '@/lib/cfdi-xml';
+import { getCfdiFileUrl } from '@/hooks/useCfdiFileUrl';
 
 const Payroll = () => {
   const { t } = useTranslation();
@@ -39,6 +43,10 @@ const Payroll = () => {
   const [payoutNotes, setPayoutNotes] = useState('');
   const [isSubmittingPayout, setIsSubmittingPayout] = useState(false);
   const [payoutRemaining, setPayoutRemaining] = useState(0);
+  const [cfdiXmlFile, setCfdiXmlFile] = useState<File | null>(null);
+  const [cfdiPdfFile, setCfdiPdfFile] = useState<File | null>(null);
+  const [attachCfdiPayoutId, setAttachCfdiPayoutId] = useState<string | null>(null);
+  const { exportPayrollReportToCsv, isExporting } = useDataExport();
 
   // Clinic-aware currency formatting
   const formatCurrencyWithClinic = (value: number) => {
@@ -238,10 +246,15 @@ const Payroll = () => {
 
       const { data, error } = await supabase
         .from('therapist_payouts')
-        .select('*')
+        .select(`
+          *,
+          cfdi_invoices (id, uuid, folio, pdf_url, xml_url, source),
+          therapists (first_name, last_name)
+        `)
         .eq('clinic_id', clinicId)
         .eq('period_start', format(currentPeriod.startDate, 'yyyy-MM-dd'))
-        .eq('period_end', format(currentPeriod.endDate, 'yyyy-MM-dd'));
+        .eq('period_end', format(currentPeriod.endDate, 'yyyy-MM-dd'))
+        .order('payout_date', { ascending: false });
 
       if (error) throw error;
       return data || [];
@@ -272,6 +285,8 @@ const Payroll = () => {
     setPayoutDate(format(new Date(), 'yyyy-MM-dd'));
     setPayoutNotes('');
     setPayoutRemaining(remaining);
+    setCfdiXmlFile(null);
+    setCfdiPdfFile(null);
     setPayoutDialogOpen(true);
   };
 
@@ -306,6 +321,52 @@ const Payroll = () => {
 
     setIsSubmittingPayout(true);
     try {
+      let cfdiInvoiceId: string | null = null;
+      if (cfdiXmlFile) {
+        const xmlText = await cfdiXmlFile.text();
+        const parsed = parseCfdiXml(xmlText);
+        if (parsed.type !== 'egreso') {
+          throw new Error(t('payroll.cfdiMustBeEgreso'));
+        }
+        const { data: inserted, error: insErr } = await supabase
+          .from('cfdi_invoices')
+          .insert({
+            clinic_id: clinicId,
+            source: 'uploaded',
+            facturapi_id: null,
+            uuid: parsed.uuid,
+            folio: parsed.folio,
+            type: parsed.type,
+            status: 'issued',
+            total: parsed.total,
+            subtotal: parsed.subtotal,
+            tax: parsed.tax,
+            currency: 'MXN',
+            emitted_at: parsed.emitted_at,
+          })
+          .select('id')
+          .single();
+        if (insErr) {
+          if (insErr.code === '23505') throw new Error('CFDI UUID already registered');
+          throw new Error(insErr.message);
+        }
+        cfdiInvoiceId = inserted.id;
+        const prefix = `${clinicId}/${inserted.id}`;
+        const { error: xmlUpErr } = await supabase.storage
+          .from('cfdi-uploads')
+          .upload(`${prefix}/cfdi.xml`, cfdiXmlFile, { upsert: true });
+        if (xmlUpErr) throw new Error('Failed to upload XML: ' + xmlUpErr.message);
+        let pdfPath: string | null = null;
+        if (cfdiPdfFile) {
+          await supabase.storage.from('cfdi-uploads').upload(`${prefix}/cfdi.pdf`, cfdiPdfFile, { upsert: true });
+          pdfPath = `${prefix}/cfdi.pdf`;
+        }
+        await supabase
+          .from('cfdi_invoices')
+          .update({ xml_url: `${prefix}/cfdi.xml`, pdf_url: pdfPath })
+          .eq('id', inserted.id);
+      }
+
       const { data: payoutData, error: payoutError } = await supabase
         .from('therapist_payouts')
         .insert({
@@ -319,6 +380,7 @@ const Payroll = () => {
           notes: payoutNotes || null,
           status: 'paid',
           created_by: user.id,
+          cfdi_invoice_id: cfdiInvoiceId,
         })
         .select()
         .single();
@@ -430,8 +492,25 @@ const Payroll = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!!isExporting || !clinicId}
+            onClick={() =>
+              clinicId &&
+              exportPayrollReportToCsv(
+                clinicId,
+                startOfDay(currentPeriod.startDate),
+                endOfDay(currentPeriod.endDate),
+                currentPeriod.label
+              )
+            }
+          >
+            {isExporting === 'payroll' ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 mr-2" />
+            )}
             {t('payroll.exportReport')}
           </Button>
         </div>
@@ -652,6 +731,87 @@ const Payroll = () => {
         </CardContent>
       </Card>
 
+      {/* Payouts recorded this period */}
+      {(payoutRecords?.length ?? 0) > 0 && (
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="text-foreground">{t('payroll.payoutsRecorded', 'Pagos registrados')}</CardTitle>
+            <CardDescription className="text-muted-foreground">
+              {t('payroll.payoutsRecordedDesc', 'Pagos de terapeutas con estado de CFDI.')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border">
+                  <TableHead className="text-foreground">{t('payroll.therapist')}</TableHead>
+                  <TableHead className="text-foreground">{t('payroll.payoutAmount')}</TableHead>
+                  <TableHead className="text-foreground">{t('payroll.payoutDate')}</TableHead>
+                  <TableHead className="text-foreground">{t('payroll.payoutMethod')}</TableHead>
+                  <TableHead className="text-foreground">{t('payroll.cfdiStatus', 'CFDI')}</TableHead>
+                  <TableHead className="text-foreground text-right">{t('common.actions')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {payoutRecords!.map((payout: any) => {
+                  const therapistName = payout.therapists
+                    ? `${payout.therapists.first_name ?? ''} ${payout.therapists.last_name ?? ''}`.trim()
+                    : '-';
+                  const hasCfdi = !!payout.cfdi_invoice_id && payout.cfdi_invoices;
+                  return (
+                    <TableRow key={payout.id} className="border-border">
+                      <TableCell className="text-foreground">{therapistName}</TableCell>
+                      <TableCell className="text-foreground">
+                        {formatCurrencyWithClinic(Number(payout.amount))}
+                      </TableCell>
+                      <TableCell className="text-foreground">{payout.payout_date}</TableCell>
+                      <TableCell className="text-foreground capitalize">{payout.payment_method}</TableCell>
+                      <TableCell>
+                        {hasCfdi ? (
+                          <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                            {t('payroll.cfdiAttached')}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">{t('payroll.noCfdi')}</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {hasCfdi ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8"
+                            onClick={async () => {
+                              const inv = payout.cfdi_invoices;
+                              if (!inv) return;
+                              const url = await getCfdiFileUrl(inv, 'pdf');
+                              if (url) window.open(url, '_blank');
+                            }}
+                          >
+                            <FileText className="h-4 w-4 mr-1" />
+                            PDF
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8"
+                            onClick={() => setAttachCfdiPayoutId(payout.id)}
+                          >
+                            <Paperclip className="h-4 w-4 mr-1" />
+                            {t('payroll.attachCfdi')}
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
       <Dialog open={payoutDialogOpen} onOpenChange={setPayoutDialogOpen}>
         <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
@@ -719,6 +879,24 @@ const Payroll = () => {
                 placeholder={t('payroll.payoutNotesPlaceholder')}
               />
             </div>
+            <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
+              <Label className="text-sm">{t('payroll.cfdiOptional')}</Label>
+              <p className="text-xs text-muted-foreground">{t('payroll.cfdiPayoutHint', 'XML (egreso) y PDF opcional.')}</p>
+              <div className="flex flex-col gap-2">
+                <input
+                  type="file"
+                  accept=".xml,application/xml"
+                  className="text-sm file:mr-2 file:rounded file:border file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground"
+                  onChange={(e) => setCfdiXmlFile(e.target.files?.[0] ?? null)}
+                />
+                <input
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="text-sm file:mr-2 file:rounded file:border file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground"
+                  onChange={(e) => setCfdiPdfFile(e.target.files?.[0] ?? null)}
+                />
+              </div>
+            </div>
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setPayoutDialogOpen(false)}>
@@ -731,6 +909,18 @@ const Payroll = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Attach CFDI to existing payout */}
+      {clinicId && (
+        <CfdiUploadModal
+          open={!!attachCfdiPayoutId}
+          onClose={() => setAttachCfdiPayoutId(null)}
+          onSuccess={() => setAttachCfdiPayoutId(null)}
+          clinicId={clinicId}
+          mode="payout"
+          therapistPayoutId={attachCfdiPayoutId ?? undefined}
+        />
+      )}
     </div>
   );
 };

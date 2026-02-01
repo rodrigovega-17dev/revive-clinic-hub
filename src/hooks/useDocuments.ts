@@ -109,6 +109,8 @@ export interface CreateDocumentPayload {
   status?: 'draft' | 'finalized';
   values: Record<string, unknown>;
   variables?: Record<string, unknown>;
+  responsiblePersonType?: 'therapist' | 'user' | 'clinic' | null;
+  responsiblePersonId?: string | null;
 }
 
 export const useCreateDocumentInstance = () => {
@@ -119,7 +121,7 @@ export const useCreateDocumentInstance = () => {
     mutationFn: async (payload: CreateDocumentPayload) => {
       if (!clinicId) throw new Error('No clinic ID available');
 
-      const { template, clientId, appointmentId, status, values, variables } = payload;
+      const { template, clientId, appointmentId, status, values, variables, responsiblePersonType, responsiblePersonId } = payload;
 
       // Load related records so we can build variables and default values
       const { data: client, error: clientError } = await supabase
@@ -203,6 +205,41 @@ export const useCreateDocumentInstance = () => {
         ...(variables || {}),
       };
 
+      // Fetch responsible person's signature if provided
+      if (responsiblePersonType && responsiblePersonId) {
+        if (responsiblePersonType === 'therapist') {
+          const { data: therapistData, error: therapistError } = await supabase
+            .from('therapists')
+            .select('first_name, last_name, signature_image_url')
+            .eq('id', responsiblePersonId)
+            .single();
+          if (!therapistError && therapistData) {
+            mergedVariables.responsibleName = `${therapistData.first_name ?? ''} ${therapistData.last_name ?? ''}`.trim();
+            mergedVariables.responsibleSignatureUrl = therapistData.signature_image_url;
+          }
+        } else if (responsiblePersonType === 'user') {
+          const { data: userData, error: userError } = await supabase
+            .from('profiles')
+            .select('first_name, last_name, signature_image_url')
+            .eq('id', responsiblePersonId)
+            .single();
+          if (!userError && userData) {
+            mergedVariables.responsibleName = `${userData.first_name ?? ''} ${userData.last_name ?? ''}`.trim();
+            mergedVariables.responsibleSignatureUrl = userData.signature_image_url;
+          }
+        } else if (responsiblePersonType === 'clinic') {
+          const { data: clinicData, error: clinicError } = await supabase
+            .from('clinics')
+            .select('name, logo_url')
+            .eq('id', responsiblePersonId)
+            .single();
+          if (!clinicError && clinicData) {
+            mergedVariables.responsibleName = clinicData.name ?? '';
+            mergedVariables.responsibleSignatureUrl = clinicData.logo_url;
+          }
+        }
+      }
+
       // Walk template schema to prefill values where missing
       const finalValues: Record<string, unknown> = { ...values };
       const schema = (template.schema || {}) as any;
@@ -284,6 +321,8 @@ export const useCreateDocumentInstance = () => {
         appointment_id: appointmentId ?? null,
         status: status || 'finalized',
         data: dataSnapshot as any,
+        responsible_person_type: responsiblePersonType || null,
+        responsible_person_id: responsiblePersonId || null,
       };
 
       const { data, error } = await supabase
@@ -379,6 +418,42 @@ export const useDeleteDocumentInstance = () => {
       return instance;
     },
     onSuccess: (instance) => {
+      if (instance.client_id) {
+        queryClient.invalidateQueries({
+          queryKey: ['documents', 'client', instance.client_id],
+        });
+      }
+      if (instance.appointment_id) {
+        queryClient.invalidateQueries({
+          queryKey: ['documents', 'appointment', instance.appointment_id],
+        });
+      }
+    },
+  });
+};
+
+/**
+ * Get or create a share token for a document instance (for public view link, e.g. WhatsApp).
+ * Returns the token to use in URL: /.netlify/functions/view-document?id=<id>&t=<token>
+ */
+export const useGetOrCreateDocumentShareToken = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (instance: DocumentInstance) => {
+      const id = instance.id;
+      if (instance.share_token) return { token: instance.share_token };
+
+      const token = crypto.randomUUID();
+      const { error } = await supabase
+        .from('document_instances')
+        .update({ share_token: token })
+        .eq('id', id);
+
+      if (error) throw error;
+      return { token };
+    },
+    onSuccess: (_, instance) => {
       if (instance.client_id) {
         queryClient.invalidateQueries({
           queryKey: ['documents', 'client', instance.client_id],

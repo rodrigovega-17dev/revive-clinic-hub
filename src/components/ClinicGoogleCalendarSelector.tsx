@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, RefreshCw, CheckCircle } from 'lucide-react';
+import { RefreshCw, CheckCircle } from 'lucide-react';
 import { useClinicGoogleCalendar } from '@/hooks/useClinicGoogleCalendar';
 
 const ClinicGoogleCalendarSelector: React.FC = () => {
@@ -85,35 +85,6 @@ const ClinicGoogleCalendarSelector: React.FC = () => {
           </SelectContent>
         </Select>
       </div>
-
-      {/* Selected Calendar Info */}
-      {selectedCalendar && (
-        <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-          <div className="flex items-center space-x-2">
-            <Calendar className="h-4 w-4 text-blue-600" />
-            <div>
-              <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                {t('googleCalendar.syncingTo')}: {selectedCalendar.summary}
-              </p>
-              {selectedCalendar.description && (
-                <p className="text-xs text-blue-600 dark:text-blue-300">
-                  {selectedCalendar.description}
-                </p>
-              )}
-              <div className="flex items-center space-x-2 mt-1">
-                <Badge variant="outline" className="text-xs">
-                  {selectedCalendar.accessRole}
-                </Badge>
-                {selectedCalendar.primary && (
-                  <Badge variant="secondary" className="text-xs">
-                    {t('googleCalendar.primary')}
-                  </Badge>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="text-xs text-muted-foreground">
         <p>{t('googleCalendar.calendarSelectionNote')}</p>

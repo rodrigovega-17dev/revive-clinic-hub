@@ -129,6 +129,7 @@ const ClinicFacturapiConnect: React.FC = () => {
             onCheckedChange={setUseLiveToggle}
           />
         </div>
+        {/* Webhook secret hidden for now
         <div className="space-y-2">
           <Label htmlFor="facturapi-webhook">{t('settings.facturapiWebhookSecret')}</Label>
           <Input
@@ -141,6 +142,7 @@ const ClinicFacturapiConnect: React.FC = () => {
             className="font-mono text-sm"
           />
         </div>
+        */}
         <Button onClick={handleSave} disabled={isSaving}>
           {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {t('common.save')}

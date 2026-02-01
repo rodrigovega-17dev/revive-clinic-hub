@@ -13,7 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Settings as SettingsIcon, Globe, Bell, Shield, Building2, Palette, Database, Zap, Loader2, AlertTriangle, CreditCard, FileText, Pencil, Plus } from 'lucide-react';
+import { Settings as SettingsIcon, Globe, Bell, Shield, Building2, Palette, Database, Zap, Loader2, AlertTriangle, CreditCard, FileText, Pencil, Plus, Download, Upload } from 'lucide-react';
 import ClinicGoogleCalendarConnect from '@/components/ClinicGoogleCalendarConnect';
 import ClinicFacturapiConnect from '@/components/ClinicFacturapiConnect';
 import { PasswordChangeDialog } from '@/components/PasswordChangeDialog';
@@ -26,6 +26,11 @@ import AddTreatmentForm from '@/components/AddTreatmentForm';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/lib/utils';
 import type { Tables } from '@/integrations/supabase/types';
+import { SignatureManager } from '@/components/SignatureManager';
+import { DataImportDialog } from '@/components/DataImportDialog';
+import { useAuth } from '@/hooks/useAuth';
+import { useDataExport } from '@/hooks/useDataExport';
+import { supabase } from '@/integrations/supabase/client';
 
 const Settings = (): JSX.Element => {
   const { t } = useTranslation();
@@ -85,6 +90,29 @@ const Settings = (): JSX.Element => {
   const [twoFactorMethod, setTwoFactorMethod] = useState<'email' | 'sms' | 'app'>('email');
   const [loginNotifications, setLoginNotifications] = useState(true);
   const [suspiciousActivityAlerts, setSuspiciousActivityAlerts] = useState(true);
+  
+  // Signature management
+  const { user, clinicId: authClinicId } = useAuth();
+  const { exportClientsToCsv, exportAppointmentsToCsv, exportPaymentsToCsv, isExporting } = useDataExport();
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showSignatureManager, setShowSignatureManager] = useState(false);
+  const [currentUserSignature, setCurrentUserSignature] = useState<string | null>(null);
+
+  // Load current user signature from profile
+  useEffect(() => {
+    const fetchUserSignature = async () => {
+      if (!user?.id) return;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('signature_image_url')
+        .eq('id', user.id)
+        .single();
+      if (!error && data) {
+        setCurrentUserSignature(data.signature_image_url);
+      }
+    };
+    fetchUserSignature();
+  }, [user?.id]);
 
   // Load clinic data into form when available
   useEffect(() => {
@@ -491,6 +519,46 @@ const Settings = (): JSX.Element => {
             </CardContent>
           </Card>
 
+          {/* My Signature - in Clinic section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                {t('settings.signature', 'My Signature')}
+              </CardTitle>
+              <CardDescription>
+                {t('settings.signatureDescription', 'Add your signature for documents you sign.')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {currentUserSignature ? (
+                <div className="flex items-center gap-4">
+                  <div className="border rounded-lg p-4 bg-muted/30">
+                    <img
+                      src={currentUserSignature}
+                      alt="Signature"
+                      className="max-w-[200px] max-h-[80px]"
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowSignatureManager(true)}
+                  >
+                    <Pencil className="h-4 w-4 mr-2" />
+                    {t('settings.editSignature', 'Edit Signature')}
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={() => setShowSignatureManager(true)}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  {t('settings.addSignature', 'Add Signature')}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <div>
@@ -770,13 +838,57 @@ const Settings = (): JSX.Element => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button variant="outline" className="w-full">
-                {t('settings.exportData')}
-              </Button>
-              <Button variant="outline" className="w-full">
-                {t('settings.backupSettings')}
-              </Button>
-              <Button variant="outline" className="w-full">
+              <p className="text-sm text-muted-foreground mb-2">
+                {t('settings.exportDataDesc', 'Export clinic data as CSV files.')}
+              </p>
+              <div className="space-y-2">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  disabled={!authClinicId || !!isExporting}
+                  onClick={() => authClinicId && exportClientsToCsv(authClinicId)}
+                >
+                  {isExporting === 'clients' ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4 mr-2" />
+                  )}
+                  {t('settings.exportClients', 'Clientes (CSV)')}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  disabled={!authClinicId || !!isExporting}
+                  onClick={() => authClinicId && exportAppointmentsToCsv(authClinicId)}
+                >
+                  {isExporting === 'appointments' ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4 mr-2" />
+                  )}
+                  {t('settings.exportAppointments', 'Citas (CSV)')}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  disabled={!authClinicId || !!isExporting}
+                  onClick={() => authClinicId && exportPaymentsToCsv(authClinicId)}
+                >
+                  {isExporting === 'payments' ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4 mr-2" />
+                  )}
+                  {t('settings.exportPayments', 'Pagos (CSV)')}
+                </Button>
+              </div>
+              <Separator />
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setShowImportDialog(true)}
+              >
+                <Upload className="h-4 w-4 mr-2" />
                 {t('settings.importData')}
               </Button>
             </CardContent>
@@ -801,6 +913,28 @@ const Settings = (): JSX.Element => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Data Import Dialog */}
+      {authClinicId && (
+        <DataImportDialog
+          open={showImportDialog}
+          onClose={() => setShowImportDialog(false)}
+          clinicId={authClinicId}
+        />
+      )}
+
+      {/* Signature Manager Modal */}
+      {user && authClinicId && (
+        <SignatureManager
+          open={showSignatureManager}
+          onClose={() => setShowSignatureManager(false)}
+          entityType="user"
+          entityId={user.id}
+          clinicId={authClinicId}
+          currentSignatureUrl={currentUserSignature}
+          onSave={(url) => setCurrentUserSignature(url)}
+        />
+      )}
     </div>
   );
 };

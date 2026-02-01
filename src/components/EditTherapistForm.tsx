@@ -14,10 +14,13 @@ import {
   type TherapistScheduleRuleInput,
 } from '@/hooks/useTherapists';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, X } from 'lucide-react';
+import { Loader2, X, Pencil } from 'lucide-react';
 import CalendarColorPicker from './CalendarColorPicker';
 import type { Tables } from '@/integrations/supabase/types';
 import TherapistScheduleRulesEditor from './TherapistScheduleRulesEditor';
+import { SignatureManager } from './SignatureManager';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 type Therapist = Tables<'therapists'>;
 
@@ -29,6 +32,7 @@ interface EditTherapistFormProps {
 
 const EditTherapistForm = ({ therapist, open, onClose }: EditTherapistFormProps) => {
   const { t } = useTranslation();
+  const { clinicId } = useAuth();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -39,6 +43,8 @@ const EditTherapistForm = ({ therapist, open, onClose }: EditTherapistFormProps)
   const [scheduleRules, setScheduleRules] = useState<TherapistScheduleRuleInput[]>(
     createDefaultScheduleRules()
   );
+  const [showSignatureManager, setShowSignatureManager] = useState(false);
+  const [therapistSignature, setTherapistSignature] = useState<string | null>(null);
   
   const updateTherapist = useUpdateTherapist();
   const scheduleRulesQuery = useTherapistScheduleRules(therapist?.id);
@@ -54,6 +60,7 @@ const EditTherapistForm = ({ therapist, open, onClose }: EditTherapistFormProps)
       setCommissionPercentage(therapist.commission_percentage?.toString() || '0');
       setCalendarColorId(therapist.calendar_color_id || '1');
       setSpecialties(therapist.specialties || []);
+      setTherapistSignature(therapist.signature_image_url || null);
     }
   }, [therapist]);
 
@@ -228,6 +235,39 @@ const EditTherapistForm = ({ therapist, open, onClose }: EditTherapistFormProps)
                 onChange={setCalendarColorId}
                 label={t('therapists.calendarColor')}
               />
+
+              <div className="space-y-2">
+                <Label>{t('settings.signature', 'Signature')}</Label>
+                {therapistSignature ? (
+                  <div className="flex items-center gap-4">
+                    <div className="border rounded-lg p-4 bg-muted/30">
+                      <img 
+                        src={therapistSignature} 
+                        alt="Signature" 
+                        className="max-w-[200px] max-h-[80px]"
+                      />
+                    </div>
+                    <Button 
+                      type="button"
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowSignatureManager(true)}
+                    >
+                      <Pencil className="h-4 w-4 mr-2" />
+                      {t('settings.editSignature', 'Edit')}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowSignatureManager(true)}
+                  >
+                    {t('settings.addSignature', 'Add Signature')}
+                  </Button>
+                )}
+              </div>
             </TabsContent>
             <TabsContent value="schedule" className="pt-4">
               <TherapistScheduleRulesEditor
@@ -250,6 +290,19 @@ const EditTherapistForm = ({ therapist, open, onClose }: EditTherapistFormProps)
             </Button>
           </div>
         </form>
+
+        {/* Signature Manager Modal for Therapist */}
+        {therapist && clinicId && (
+          <SignatureManager
+            open={showSignatureManager}
+            onClose={() => setShowSignatureManager(false)}
+            entityType="therapist"
+            entityId={therapist.id}
+            clinicId={clinicId}
+            currentSignatureUrl={therapistSignature}
+            onSave={(url) => setTherapistSignature(url)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -23,7 +23,7 @@ import { parseCfdiXml } from '@/lib/cfdi-xml';
 
 const BUCKET = 'cfdi-uploads';
 
-export type CfdiUploadMode = 'individual' | 'global';
+export type CfdiUploadMode = 'individual' | 'global' | 'payout';
 
 export interface CfdiUploadModalProps {
   open: boolean;
@@ -36,6 +36,8 @@ export interface CfdiUploadModalProps {
   /** Global: period. */
   periodStart?: string;
   periodEnd?: string;
+  /** Payout: therapist payout id to attach CFDI. */
+  therapistPayoutId?: string;
 }
 
 export function CfdiUploadModal({
@@ -47,6 +49,7 @@ export function CfdiUploadModal({
   paymentIds = [],
   periodStart,
   periodEnd,
+  therapistPayoutId,
 }: CfdiUploadModalProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -77,6 +80,14 @@ export function CfdiUploadModal({
     try {
       const xmlText = await xmlFile.text();
       const parsed = parseCfdiXml(xmlText);
+
+      // Payout mode: CFDI must be type egreso (therapist-provided factura)
+      if (mode === 'payout') {
+        if (parsed.type !== 'egreso') {
+          throw new Error(t('payroll.cfdiMustBeEgreso'));
+        }
+      }
+
       const invoiceState = mode === 'individual' ? 'individually_invoiced' : 'globally_invoiced';
 
       const { data: inserted, error: insErr } = await supabase
@@ -125,6 +136,23 @@ export function CfdiUploadModal({
         .from('cfdi_invoices')
         .update({ xml_url: xmlPath, pdf_url: pdfPath })
         .eq('id', inserted.id);
+
+      // Payout mode: link CFDI to therapist payout, no payment linking
+      if (mode === 'payout' && therapistPayoutId) {
+        const { error: updateErr } = await supabase
+          .from('therapist_payouts')
+          .update({ cfdi_invoice_id: inserted.id })
+          .eq('id', therapistPayoutId)
+          .eq('clinic_id', clinicId);
+        if (updateErr) throw new Error(updateErr.message);
+        queryClient.invalidateQueries({ queryKey: ['therapist-payouts'] });
+        queryClient.invalidateQueries({ queryKey: ['payroll'] });
+        toast({ title: t('common.success'), description: t('cfdi.uploadCfdiSuccess') });
+        reset();
+        onSuccess();
+        onClose();
+        return;
+      }
 
       let payments: { id: string; amount: number }[] = [];
       if (mode === 'individual' && paymentIds.length) {
@@ -197,14 +225,20 @@ export function CfdiUploadModal({
     }
   };
 
-  const canSubmit = !!xmlFile && !!clinicId && (mode === 'global' ? !!periodStart && !!periodEnd : true);
-  const title = mode === 'global' ? t('cfdi.uploadGlobalCfdi') : t('cfdi.uploadCfdi');
+  const canSubmit =
+    !!xmlFile &&
+    !!clinicId &&
+    (mode === 'global' ? !!periodStart && !!periodEnd : mode === 'payout' ? !!therapistPayoutId : true);
+  const title =
+    mode === 'global' ? t('cfdi.uploadGlobalCfdi') : mode === 'payout' ? t('payroll.uploadPayoutCfdi') : t('cfdi.uploadCfdi');
   const desc =
     mode === 'global' && periodStart && periodEnd
       ? `${format(new Date(periodStart), 'd MMM yyyy')} – ${format(new Date(periodEnd), 'd MMM yyyy')}`
       : mode === 'individual' && paymentIds.length
         ? t('cfdi.uploadLinkPayments', { count: paymentIds.length })
-        : t('cfdi.uploadCfdi');
+        : mode === 'payout'
+          ? t('payroll.attachCfdi')
+          : t('cfdi.uploadCfdi');
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>

@@ -630,6 +630,7 @@ export type Database = {
           last_name: string
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
+          signature_image_url: string | null
           updated_at: string
         }
         Insert: {
@@ -643,6 +644,7 @@ export type Database = {
           last_name: string
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          signature_image_url?: string | null
           updated_at?: string
         }
         Update: {
@@ -656,6 +658,7 @@ export type Database = {
           last_name?: string
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          signature_image_url?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -792,6 +795,7 @@ export type Database = {
           is_active: boolean
           last_name: string | null
           license_number: string | null
+          signature_image_url: string | null
           specialties: string[] | null
           updated_at: string
           user_id: string | null
@@ -809,6 +813,7 @@ export type Database = {
           is_active?: boolean
           last_name?: string | null
           license_number?: string | null
+          signature_image_url?: string | null
           specialties?: string[] | null
           updated_at?: string
           user_id?: string | null
@@ -826,6 +831,7 @@ export type Database = {
           is_active?: boolean
           last_name?: string | null
           license_number?: string | null
+          signature_image_url?: string | null
           specialties?: string[] | null
           updated_at?: string
           user_id?: string | null
@@ -896,6 +902,86 @@ export type Database = {
             columns: ["clinic_id"]
             isOneToOne: false
             referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      therapist_payouts: {
+        Row: {
+          id: string
+          clinic_id: string
+          therapist_id: string
+          period_start: string
+          period_end: string
+          payout_date: string
+          amount: number
+          payment_method: string
+          notes: string | null
+          status: string
+          created_by: string | null
+          created_at: string
+          updated_at: string
+          cfdi_invoice_id: string | null
+        }
+        Insert: {
+          id?: string
+          clinic_id: string
+          therapist_id: string
+          period_start: string
+          period_end: string
+          payout_date?: string
+          amount: number
+          payment_method?: string
+          notes?: string | null
+          status?: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+          cfdi_invoice_id?: string | null
+        }
+        Update: {
+          id?: string
+          clinic_id?: string
+          therapist_id?: string
+          period_start?: string
+          period_end?: string
+          payout_date?: string
+          amount?: number
+          payment_method?: string
+          notes?: string | null
+          status?: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+          cfdi_invoice_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "therapist_payouts_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "therapist_payouts_therapist_id_fkey"
+            columns: ["therapist_id"]
+            isOneToOne: false
+            referencedRelation: "therapists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "therapist_payouts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "therapist_payouts_cfdi_invoice_id_fkey"
+            columns: ["cfdi_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "cfdi_invoices"
             referencedColumns: ["id"]
           }
         ]
@@ -1489,6 +1575,9 @@ export type Database = {
           status: string
           data: Json
           rendered_pdf_url: string | null
+          share_token: string | null
+          responsible_person_type: 'therapist' | 'user' | 'clinic' | null
+          responsible_person_id: string | null
           created_by: string | null
           created_at: string
           updated_at: string
@@ -1504,6 +1593,9 @@ export type Database = {
           status?: string
           data: Json
           rendered_pdf_url?: string | null
+          share_token?: string | null
+          responsible_person_type?: 'therapist' | 'user' | 'clinic' | null
+          responsible_person_id?: string | null
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -1519,6 +1611,9 @@ export type Database = {
           status?: string
           data?: Json
           rendered_pdf_url?: string | null
+          share_token?: string | null
+          responsible_person_type?: 'therapist' | 'user' | 'clinic' | null
+          responsible_person_id?: string | null
           created_by?: string | null
           created_at?: string
           updated_at?: string

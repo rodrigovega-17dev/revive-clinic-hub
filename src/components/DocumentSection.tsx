@@ -7,8 +7,13 @@ import {
   useCreateDocumentInstance,
   useUpdateDocumentInstance,
   useDeleteDocumentInstance,
+  useGetOrCreateDocumentShareToken,
   DocumentContextType,
 } from '@/hooks/useDocuments';
+import { useTherapists } from '@/hooks/useTherapists';
+import { useClinicStaff } from '@/hooks/useClinicStaff';
+import { useAuth } from '@/hooks/useAuth';
+import { useClinic } from '@/hooks/useClinic';
 import { useTranslation } from 'react-i18next';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -16,7 +21,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { FileText, Plus, Printer, Eye, Pencil, Trash2, Mail, MessageCircle } from 'lucide-react';
@@ -149,13 +153,53 @@ const openDocumentWindow = (instance: DocumentInstance, options?: { autoPrint?: 
   const win = window.open('', '_blank');
   if (!win) return;
 
+  // Must be defined before renderSignatureBlock uses them
+  const responsibleName = (variables as any).responsibleName as string | undefined;
+  const responsibleSignatureUrl = (variables as any).responsibleSignatureUrl as string | undefined;
+
+  /** Render a signature block: client (blank line) or therapist (responsible person's sig). */
+  const renderSignatureBlock = (fieldId: string, fieldLabel: string) => {
+    const isClient = /patient_signature|client_signature/i.test(fieldId);
+    if (isClient) {
+      return `
+        <div style="margin-top: 24px;">
+          <div style="border-bottom: 1px solid #111827; width: 200px; height: 40px; margin-bottom: 4px;"></div>
+          <div style="font-size: 11px; color: #6b7280; text-transform: uppercase;">${fieldLabel}</div>
+        </div>
+      `;
+    }
+    // Therapist signature: use responsible person
+    if (responsibleName) {
+      return `
+        <div style="margin-top: 24px; text-align: right;">
+          ${responsibleSignatureUrl
+            ? `<img src="${responsibleSignatureUrl}" alt="Signature" style="max-width: 200px; max-height: 80px; display: inline-block;" />`
+            : `<div style="font-family: 'Brush Script MT', cursive; font-size: 24px; font-style: italic;">${responsibleName}</div>`
+          }
+          <div style="margin-top: 8px; font-size: 11px; color: #6b7280; text-transform: uppercase;">${fieldLabel}</div>
+          <div style="font-size: 13px; color: #374151;">${responsibleName}</div>
+        </div>
+      `;
+    }
+    return `<div style="margin-top: 24px; font-size: 13px; color: #6b7280;">${fieldLabel}</div>`;
+  };
+
   const sectionHtml = sections
     .filter((section) => section.id !== 'header')
     .map((section) => {
+      // Signature section (standalone) or field: render signature block, not form input
+      if (section.type === 'signature') {
+        const label = section.label || 'Firma';
+        return `<section style="margin-bottom: 16px;">${renderSignatureBlock(section.id, label)}</section>`;
+      }
+
       // Grouped section: render group label and each field
       if (section.type === 'group' && Array.isArray(section.fields) && section.fields.length > 0) {
         const fieldsHtml = section.fields
           .map((field) => {
+            if (field.type === 'signature') {
+              return renderSignatureBlock(field.id, field.label || 'Firma');
+            }
             const v = values[field.id];
             const display = formatFieldValue(v);
             return `
@@ -251,6 +295,22 @@ const openDocumentWindow = (instance: DocumentInstance, options?: { autoPrint?: 
               : ''
           }
           ${sectionHtml}
+          ${responsibleName ? `
+            <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+              <div style="text-align: right;">
+                <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280; text-transform: uppercase;">
+                  Firma
+                </div>
+                ${responsibleSignatureUrl 
+                  ? `<img src="${responsibleSignatureUrl}" alt="Signature" style="max-width: 200px; max-height: 80px; display: inline-block;" />`
+                  : `<div style="font-family: 'Brush Script MT', cursive; font-size: 24px; font-style: italic;">${responsibleName}</div>`
+                }
+                <div style="margin-top: 8px; font-size: 13px; color: #6b7280;">
+                  ${responsibleName}
+                </div>
+              </div>
+            </div>
+          ` : ''}
         </div>
       </body>
     </html>
@@ -279,14 +339,21 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
   const { data: templates = [] } = useDocumentTemplates(context);
   const { data: clientDocuments = [] } = useClientDocuments(clientId);
   const { data: appointmentDocuments = [] } = useAppointmentDocuments(appointmentId || null);
+  const { data: therapists = [] } = useTherapists();
+  const { data: clinicStaff = [] } = useClinicStaff();
+  const { clinicId: authClinicId } = useAuth();
+  const { data: clinic } = useClinic();
 
   const createDocument = useCreateDocumentInstance();
   const updateDocument = useUpdateDocumentInstance();
   const deleteDocument = useDeleteDocumentInstance();
+  const getOrCreateShareToken = useGetOrCreateDocumentShareToken();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  const [responsiblePersonType, setResponsiblePersonType] = useState<'therapist' | 'user' | 'clinic' | null>(null);
+  const [responsiblePersonId, setResponsiblePersonId] = useState<string | null>(null);
   const [editingInstance, setEditingInstance] = useState<DocumentInstance | null>(null);
   const [editFieldValues, setEditFieldValues] = useState<Record<string, string>>({});
   const [emailInstance, setEmailInstance] = useState<DocumentInstance | null>(null);
@@ -311,6 +378,8 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
   const handleOpenDialog = () => {
     setSelectedTemplateId(null);
     setFieldValues({});
+    setResponsiblePersonType(null);
+    setResponsiblePersonId(null);
     setIsDialogOpen(true);
   };
 
@@ -318,6 +387,22 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
     setSelectedTemplateId(id);
     // Reset field values when changing template
     setFieldValues({});
+  };
+
+  const handleResponsibleChange = (value: string) => {
+    if (value.startsWith('therapist:')) {
+      setResponsiblePersonType('therapist');
+      setResponsiblePersonId(value.replace('therapist:', ''));
+    } else if (value.startsWith('user:')) {
+      setResponsiblePersonType('user');
+      setResponsiblePersonId(value.replace('user:', ''));
+    } else if (value.startsWith('clinic:')) {
+      setResponsiblePersonType('clinic');
+      setResponsiblePersonId(value.replace('clinic:', ''));
+    } else {
+      setResponsiblePersonType(null);
+      setResponsiblePersonId(null);
+    }
   };
 
   const handleFieldChange = (id: string, value: string) => {
@@ -354,6 +439,8 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
       status: 'finalized',
       values: fieldValues,
       variables,
+      responsiblePersonType,
+      responsiblePersonId,
     });
 
     setIsDialogOpen(false);
@@ -410,9 +497,6 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="capitalize">
-                      {doc.status}
-                    </Badge>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -497,16 +581,27 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-green-600 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950/50"
-                        onClick={() => {
+                        disabled={getOrCreateShareToken.isPending}
+                        onClick={async () => {
                           const data = (doc.data || {}) as any;
                           const vars = (data.variables || {}) as Record<string, unknown>;
                           const docName = data.templateName || t('documents.document', 'document');
                           const name = clientNameProp || (vars.clientFullName as string) || '';
-                          const link = `${window.location.origin}/clients/${clientId}`;
-                          openWhatsApp(
-                            clientPhone ?? '',
-                            t('whatsapp.messageDocument', { name, document: docName, link }),
-                          );
+                          try {
+                            const { token } = await getOrCreateShareToken.mutateAsync(doc);
+                            const link = `${window.location.origin}/.netlify/functions/view-document?id=${doc.id}&t=${token}`;
+                            openWhatsApp(
+                              clientPhone ?? '',
+                              t('whatsapp.messageDocument', { name, document: docName, link }),
+                            );
+                          } catch (e) {
+                            console.error(e);
+                            toast({
+                              title: t('common.error'),
+                              description: t('documents.shareFailed', 'Could not create share link.'),
+                              variant: 'destructive',
+                            });
+                          }
                         }}
                         title={t('whatsapp.document')}
                         aria-label={t('whatsapp.document')}
@@ -546,34 +641,87 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                   )}
                 </p>
               ) : (
-                <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
-                  <label className="text-sm font-medium text-foreground block">
-                    {t('documents.template', 'Plantilla')}
-                  </label>
-                  <Select
-                    value={selectedTemplateId ?? ''}
-                    onValueChange={handleTemplateChange}
-                  >
-                    <SelectTrigger className="h-11 min-h-11 px-3.5 py-2.5 text-left [&>span]:pr-6">
-                      <SelectValue
-                        placeholder={t('documents.selectTemplate', 'Selecciona una plantilla')}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {templates.map((tpl) => (
-                        <SelectItem key={tpl.id} value={tpl.id}>
-                          {tpl.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <>
+                  <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+                    <label className="text-sm font-medium text-foreground block">
+                      {t('documents.responsiblePerson', 'Responsible Person')}
+                    </label>
+                    <Select
+                      value={responsiblePersonId && responsiblePersonType ? `${responsiblePersonType}:${responsiblePersonId}` : ''}
+                      onValueChange={handleResponsibleChange}
+                    >
+                      <SelectTrigger className="h-11 min-h-11 px-3.5 py-2.5 text-left [&>span]:pr-6">
+                        <SelectValue
+                          placeholder={t('documents.selectResponsible', 'Select responsible person')}
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {authClinicId && clinic && (
+                          <>
+                            <SelectItem disabled value="__clinic_header" className="text-xs font-semibold text-muted-foreground">
+                              — {t('documents.clinic', 'Clinic')} —
+                            </SelectItem>
+                            <SelectItem value={`clinic:${authClinicId}`}>
+                              {clinic.name}
+                            </SelectItem>
+                          </>
+                        )}
+                        {therapists.length > 0 && (
+                          <>
+                            <SelectItem disabled value="__therapists_header" className="text-xs font-semibold text-muted-foreground">
+                              — {t('documents.therapists', 'Therapists')} —
+                            </SelectItem>
+                            {therapists.map((th) => (
+                              <SelectItem key={`therapist-${th.id}`} value={`therapist:${th.id}`}>
+                                {th.first_name} {th.last_name}
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
+                        {clinicStaff.length > 0 && (
+                          <>
+                            <SelectItem disabled value="__staff_header" className="text-xs font-semibold text-muted-foreground">
+                              — {t('documents.staff', 'Clinic Staff')} —
+                            </SelectItem>
+                            {clinicStaff.map((user) => (
+                              <SelectItem key={`user-${user.id}`} value={`user:${user.id}`}>
+                                {user.first_name} {user.last_name}
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+                    <label className="text-sm font-medium text-foreground block">
+                      {t('documents.template', 'Plantilla')}
+                    </label>
+                    <Select
+                      value={selectedTemplateId ?? ''}
+                      onValueChange={handleTemplateChange}
+                    >
+                      <SelectTrigger className="h-11 min-h-11 px-3.5 py-2.5 text-left [&>span]:pr-6">
+                        <SelectValue
+                          placeholder={t('documents.selectTemplate', 'Selecciona una plantilla')}
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {templates.map((tpl) => (
+                          <SelectItem key={tpl.id} value={tpl.id}>
+                            {tpl.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
               )}
 
               {selectedTemplate && sections.length > 0 && (
                 <div className="space-y-4">
                   {sections
-                    .filter((section) => section.id !== 'header')
+                    .filter((section) => section.id !== 'header' && !(section as any).prefillFrom && section.type !== 'signature')
                     .map((section) => {
                     // Grouped section: render group label and its fields
                     if (section.type === 'group' && Array.isArray(section.fields)) {
@@ -589,7 +737,7 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                           )}
                           <div className="space-y-4">
                             {section.fields
-                              .filter((field) => !field.readonly)
+                              .filter((field) => !field.readonly && !field.prefillFrom && field.type !== 'signature')
                               .map((field) => {
                                 const value = fieldValues[field.id] ?? '';
                                 const commonProps = {
@@ -682,7 +830,7 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
             </Button>
             <Button
               onClick={handleCreate}
-              disabled={!templates.length || !selectedTemplateId || createDocument.isPending}
+              disabled={!templates.length || !selectedTemplateId || !responsiblePersonId || createDocument.isPending}
             >
               {t('common.save')}
             </Button>
@@ -705,7 +853,7 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                   const sections = (schema.sections || []) as SectionDef[];
 
                   return sections
-                    .filter((section) => section.id !== 'header')
+                    .filter((section) => section.id !== 'header' && section.type !== 'signature')
                     .map((section) => {
                       if (section.type === 'group' && Array.isArray(section.fields)) {
                         return (
@@ -719,7 +867,9 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                               </p>
                             )}
                             <div className="space-y-4">
-                              {section.fields.map((field) => {
+                              {section.fields
+                                .filter((field) => field.type !== 'signature')
+                                .map((field) => {
                                 const value = editFieldValues[field.id] ?? '';
                                 const commonProps = {
                                   id: field.id,
@@ -894,6 +1044,17 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                   const json = await res.json();
                   if (!res.ok || json.error) {
                     throw new Error(json.error || 'Failed to send email');
+                  }
+                  if (json.status === 'noop') {
+                    toast({
+                      title: t('common.warning', 'Warning'),
+                      description: t(
+                        'documents.emailNotConfigured',
+                        'Email was not sent: Resend is not configured. Add RESEND_API_KEY in Netlify env vars (or .env when using netlify dev).',
+                      ),
+                      variant: 'destructive',
+                    });
+                    return;
                   }
                   toast({
                     title: t('common.success'),
