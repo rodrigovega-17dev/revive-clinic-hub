@@ -34,7 +34,7 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
   const { t } = useTranslation();
   const { clinicId } = useAuth();
   const { data: balance, isLoading: balanceLoading } = useClientBalance(client.id);
-  const { currency } = useClinicSettings();
+  const { currency, timezone } = useClinicSettings();
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [isAppointmentFormOpen, setIsAppointmentFormOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
@@ -251,6 +251,14 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
     return formatCurrency(value, 2, currency);
   };
 
+  const formatClinicDate = (value: string | Date, options: Intl.DateTimeFormatOptions) => {
+    const date = typeof value === 'string' ? new Date(value) : value;
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      ...options,
+    }).format(date);
+  };
+
   return (
     <>
     <Dialog open={open} onOpenChange={onClose}>
@@ -412,7 +420,11 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
                     {pendingAppointments.map((appointment) => (
                       <TableRow key={appointment.id}>
                         <TableCell>
-                          {format(new Date(appointment.start_time), 'MMM d, yyyy')}
+                          {formatClinicDate(appointment.start_time, {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                          })}
                         </TableCell>
                         <TableCell>
                           {appointment.treatments?.name || 'N/A'}
@@ -462,7 +474,11 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
                     {paymentHistory.map((payment) => (
                       <TableRow key={payment.id}>
                         <TableCell>
-                          {format(new Date(payment.payment_date), 'MMM d, yyyy')}
+                          {formatClinicDate(payment.payment_date, {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                          })}
                         </TableCell>
                         <TableCell>
                           {payment.description || t('clients.payment')}

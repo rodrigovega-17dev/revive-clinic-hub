@@ -33,25 +33,37 @@ export function useClientBalance(clientId: string | null) {
 
       if (paymentsError) throw paymentsError;
 
-      // Get pending payments from completed appointments that haven't been paid
-      const { data: pendingAppointments, error: pendingError } = await supabase
+      // All completed appointments (charges for services delivered)
+      const { data: completedAppointments, error: completedError } = await supabase
         .from('appointments')
-        .select('payment_amount, payment_status')
+        .select('id, payment_amount, payment_status')
         .eq('client_id', clientId)
         .eq('clinic_id', clinicId)
-        .eq('status', 'completed')
-        .or('payment_status.is.null,payment_status.eq.pending');
+        .eq('status', 'completed');
 
-      if (pendingError) throw pendingError;
+      if (completedError) throw completedError;
 
-      // Total payments = all real money received (exclude 'balance' = applying existing credit)
+      const pendingAppointments = completedAppointments?.filter(
+        (a) => a.payment_status == null || a.payment_status === 'pending'
+      ) || [];
+
+      // Total charges: for each completed appointment, use amount actually paid (if any), else obligation (payment_amount).
+      // This matches payments (which can include IVA) so balance doesn't show IVA as false credit.
+      const totalCharges = (completedAppointments || []).reduce((sum, apt) => {
+        const paidTowardApt = (payments || [])
+          .filter((p) => p.appointment_id === apt.id)
+          .reduce((s, p) => s + (p.method === 'balance' ? Math.abs(Number(p.amount || 0)) : Number(p.amount || 0)), 0);
+        return sum + (paidTowardApt > 0 ? paidTowardApt : apt.payment_amount || 0);
+      }, 0);
+      // Money received (cash, card, etc.); balance payments are excluded (credit is applied, not new money)
       const totalPayments = payments?.reduce((sum, payment) => {
         if (payment.method === 'balance') return sum;
         return sum + (payment.amount || 0);
       }, 0) || 0;
-      const pendingPayments = pendingAppointments?.reduce((sum, apt) => sum + (apt.payment_amount || 0), 0) || 0;
-      // Balance = total paid minus applied credit (balance payments); for now same as totalPayments
-      const balance = totalPayments;
+      const pendingPayments = pendingAppointments.reduce((sum, apt) => sum + (apt.payment_amount || 0), 0);
+
+      // Balance = money in − charges. totalCharges already includes amount paid via balance, so using credit reduces balance.
+      const balance = totalPayments - totalCharges;
       
       const lastPaymentDate = payments && payments.length > 0 
         ? payments.reduce((latest, payment) => 
@@ -95,27 +107,35 @@ export function useAllClientBalances() {
 
       if (paymentsError) throw paymentsError;
 
-      // Get all completed appointments with pending payments
-      const { data: pendingAppointments, error: pendingError } = await supabase
+      // All completed appointments (for total charges per client)
+      const { data: completedAppointments, error: completedError } = await supabase
         .from('appointments')
-        .select('client_id, payment_amount, payment_status')
+        .select('id, client_id, payment_amount, payment_status')
         .eq('clinic_id', clinicId)
-        .eq('status', 'completed')
-        .or('payment_status.is.null,payment_status.eq.pending');
+        .eq('status', 'completed');
 
-      if (pendingError) throw pendingError;
+      if (completedError) throw completedError;
 
-      // Calculate balances for each client
+      // Calculate balances: totalCharges = per-apt amount paid (or payment_amount if unpaid)
       const clientBalances = clients?.map(client => {
         const clientPayments = payments?.filter(p => p.client_id === client.id) || [];
-        const clientPending = pendingAppointments?.filter(a => a.client_id === client.id) || [];
-        
+        const clientCompleted = completedAppointments?.filter(a => a.client_id === client.id) || [];
+        const clientPending = clientCompleted.filter(
+          (a) => a.payment_status == null || a.payment_status === 'pending'
+        );
+
+        const totalCharges = clientCompleted.reduce((sum, apt) => {
+          const paidTowardApt = clientPayments
+            .filter((p) => p.appointment_id === apt.id)
+            .reduce((s, p) => s + (p.method === 'balance' ? Math.abs(Number(p.amount || 0)) : Number(p.amount || 0)), 0);
+          return sum + (paidTowardApt > 0 ? paidTowardApt : apt.payment_amount || 0);
+        }, 0);
         const totalPayments = clientPayments.reduce((sum, p) => {
           if (p.method === 'balance') return sum;
           return sum + (p.amount || 0);
         }, 0);
         const pendingPayments = clientPending.reduce((sum, a) => sum + (a.payment_amount || 0), 0);
-        const balance = totalPayments;
+        const balance = totalPayments - totalCharges;
 
         return {
           clientId: client.id,

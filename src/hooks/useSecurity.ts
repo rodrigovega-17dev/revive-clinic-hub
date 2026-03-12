@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
 import { useAuth } from './useAuth';
 import { useClinic } from './useClinic';
+import { generateSalt, hashPin, verifyPin, isValidPin } from '@/lib/financePin';
 
 type SecuritySettings = Database['public']['Tables']['security_settings']['Row'];
 type UpdateSecuritySettingsData = Partial<Database['public']['Tables']['security_settings']['Update']>;
@@ -47,6 +48,9 @@ export const useSecurity = () => {
             session_timeout_minutes: 480,
             login_notifications: true,
             suspicious_activity_alerts: true,
+            finance_pin_required: false,
+            finance_pin_salt: null,
+            finance_pin_hash: null,
           };
 
           const { data: newSettings, error: createError } = await supabase
@@ -131,6 +135,61 @@ export const useSecurity = () => {
     }
 
     return updateSecuritySettings(updates);
+  };
+
+  // Set or update 4-digit finance PIN (requires current password)
+  const setFinancePin = async (currentPassword: string, newPin: string) => {
+    if (!user || !clinic) return { error: { message: t('errors.userNotAuthenticated') } };
+    if (!isValidPin(newPin)) return { error: { message: t('security.financePinMustBe4Digits') } };
+    try {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email!,
+        password: currentPassword,
+      });
+      if (signInError) return { error: { message: t('errors.currentPasswordIncorrect') } };
+      const salt = generateSalt();
+      const pinHash = await hashPin(salt, newPin);
+      const result = await updateSecuritySettings({
+        finance_pin_required: true,
+        finance_pin_salt: salt,
+        finance_pin_hash: pinHash,
+      });
+      return result ?? { data: null, error: null };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t('errors.updateSecuritySettingsFailed');
+      return { data: null, error: { message: msg } };
+    }
+  };
+
+  /** Disable PIN requirement but keep salt/hash so re-enabling does not require setting the code again. */
+  const clearFinancePin = async () => {
+    const result = await updateSecuritySettings({
+      finance_pin_required: false,
+    });
+    return result ?? { data: null, error: null };
+  };
+
+  /** Disable finance PIN; requires current password. */
+  const clearFinancePinWithPassword = async (currentPassword: string) => {
+    if (!user) return { error: { message: t('errors.userNotAuthenticated') } };
+    try {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email!,
+        password: currentPassword,
+      });
+      if (signInError) return { error: { message: t('errors.currentPasswordIncorrect') } };
+      return await clearFinancePin();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t('errors.updateSecuritySettingsFailed');
+      return { data: null, error: { message: msg } };
+    }
+  };
+
+  const verifyFinancePin = async (enteredPin: string): Promise<boolean> => {
+    const salt = securitySettings?.finance_pin_salt;
+    const hash = securitySettings?.finance_pin_hash;
+    if (!salt || !hash) return false;
+    return verifyPin(enteredPin, salt, hash);
   };
 
   // Change password using Supabase Auth
@@ -268,6 +327,10 @@ export const useSecurity = () => {
     updateSecuritySettings,
     toggleTwoFactor,
     changePassword,
+    setFinancePin,
+    clearFinancePin,
+    clearFinancePinWithPassword,
+    verifyFinancePin,
     signOutCurrentDevice,
     signOutFromAllDevices,
     refetch: () => {

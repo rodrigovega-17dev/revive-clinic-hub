@@ -52,7 +52,7 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
 }) => {
   const { t } = useTranslation();
   const { currentLanguage } = useLanguage();
-  const { currency } = useClinicSettings();
+  const { currency, timezone } = useClinicSettings();
   const [selectedMonth, setSelectedMonth] = useState(currentDate);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showDayPopup, setShowDayPopup] = useState(false);
@@ -271,7 +271,12 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
                         <div className="flex items-center space-x-1">
                           <Clock className="h-2.5 w-2.5" />
                           <span className="font-medium">
-                            {format(parseISO(appointment.start_time), 'HH:mm')}
+                            {new Intl.DateTimeFormat('en-US', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: false,
+                              timeZone: timezone,
+                            }).format(parseISO(appointment.start_time))}
                           </span>
                         </div>
                         <div className="truncate font-medium">
@@ -335,7 +340,19 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
                         <div className="flex items-center space-x-2 mb-2">
                           <Clock className="h-4 w-4 text-muted-foreground" />
                           <span className="font-medium text-foreground">
-                            {format(parseISO(appointment.start_time), 'HH:mm')} - {format(parseISO(appointment.end_time), 'HH:mm')}
+                            {new Intl.DateTimeFormat('en-US', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: false,
+                              timeZone: timezone,
+                            }).format(parseISO(appointment.start_time))}{' '}
+                            -{' '}
+                            {new Intl.DateTimeFormat('en-US', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: false,
+                              timeZone: timezone,
+                            }).format(parseISO(appointment.end_time))}
                           </span>
                           <Badge 
                             variant="outline" 

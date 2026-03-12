@@ -15,6 +15,7 @@ import Clients from "./pages/Clients";
 import Therapists from "./pages/Therapists";
 import Finance from "./pages/Finance";
 import Payroll from "./pages/Payroll";
+import { FinancePinGate } from "./components/FinancePinGate";
 import Settings from "./pages/Settings";
 import Subscription from "./pages/Subscription";
 import ComingSoon from "./pages/ComingSoon";
@@ -23,6 +24,7 @@ import GoogleAuthCallback from "./pages/GoogleAuthCallback";
 import PasswordResetConfirm from "./components/auth/PasswordResetConfirm";
 import TranslationDebugger from "./components/TranslationDebugger";
 import { useTranslation } from "react-i18next";
+import { useEffect } from "react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,7 +52,13 @@ const queryClient = new QueryClient({
 });
 
 const App = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+
+  // Sync document lang with app language so native date/time inputs and screen readers use it
+  useEffect(() => {
+    const lang = i18n.language?.startsWith('es') ? 'es' : 'en';
+    document.documentElement.lang = lang;
+  }, [i18n.language]);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -69,8 +77,8 @@ const App = () => {
               <Route path="/appointments" element={<ProtectedRoute><Layout><Appointments /></Layout></ProtectedRoute>} />
               <Route path="/clients" element={<ProtectedRoute><Layout><Clients /></Layout></ProtectedRoute>} />
               <Route path="/therapists" element={<ProtectedRoute><Layout><Therapists /></Layout></ProtectedRoute>} />
-              <Route path="/finance" element={<ProtectedRoute><Layout><Finance /></Layout></ProtectedRoute>} />
-              <Route path="/payroll" element={<ProtectedRoute><Layout><Payroll /></Layout></ProtectedRoute>} />
+              <Route path="/finance" element={<ProtectedRoute><Layout><FinancePinGate><Finance /></FinancePinGate></Layout></ProtectedRoute>} />
+              <Route path="/payroll" element={<ProtectedRoute><Layout><FinancePinGate><Payroll /></FinancePinGate></Layout></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
               <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><Layout><ComingSoon title={t('comingSoon.reportsTitle')} description={t('comingSoon.reportsDescription')} /></Layout></ProtectedRoute>} />

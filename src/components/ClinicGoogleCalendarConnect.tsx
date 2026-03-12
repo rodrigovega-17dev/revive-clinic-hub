@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Calendar, ExternalLink, LogOut, AlertCircle } from 'lucide-react';
 import { useClinicGoogleCalendar } from '@/hooks/useClinicGoogleCalendar';
 import ClinicGoogleCalendarSelector from './ClinicGoogleCalendarSelector';
@@ -14,9 +16,12 @@ const ClinicGoogleCalendarConnect: React.FC = () => {
     isConnecting,
     authData,
     selectedCalendar,
+    clinicData,
     disconnect,
     getOAuthUrl,
     isDisconnecting,
+    updateSyncSettings,
+    isUpdatingSyncSettings,
   } = useClinicGoogleCalendar();
 
   const handleConnect = () => {
@@ -106,8 +111,24 @@ const ClinicGoogleCalendarConnect: React.FC = () => {
           {t('googleCalendar.syncDescription')}
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <ClinicGoogleCalendarSelector />
+        <div className="flex items-center justify-between rounded-lg border p-4">
+          <div className="space-y-0.5">
+            <Label htmlFor="google-cal-send-invites" className="cursor-pointer">
+              {t('googleCalendar.sendInvitesLabel')}
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              {t('googleCalendar.sendInvitesDescription')}
+            </p>
+          </div>
+          <Switch
+            id="google-cal-send-invites"
+            checked={clinicData?.settings?.syncSettings?.sendInvites ?? true}
+            onCheckedChange={(checked) => updateSyncSettings({ sendInvites: checked })}
+            disabled={isUpdatingSyncSettings}
+          />
+        </div>
       </CardContent>
     </Card>
   );

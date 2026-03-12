@@ -12,11 +12,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Settings as SettingsIcon, Globe, Bell, Shield, Building2, Palette, Database, Zap, Loader2, AlertTriangle, CreditCard, FileText, Pencil, Plus, Download, Upload } from 'lucide-react';
 import ClinicGoogleCalendarConnect from '@/components/ClinicGoogleCalendarConnect';
 import ClinicFacturapiConnect from '@/components/ClinicFacturapiConnect';
 import { PasswordChangeDialog } from '@/components/PasswordChangeDialog';
+import { FinancePinDialog } from '@/components/FinancePinDialog';
 import { SessionManagement } from '@/components/SessionManagement';
 import { Badge } from '@/components/ui/badge';
 import SubscriptionManagement from '@/components/SubscriptionManagement';
@@ -57,6 +60,10 @@ const Settings = (): JSX.Element => {
     changePassword, 
     signOutCurrentDevice, 
     signOutFromAllDevices,
+    setFinancePin,
+    clearFinancePinWithPassword,
+    updateSecuritySettings,
+    refetch: refetchSecurity,
     toggleTwoFactor 
   } = useSecurity();
 
@@ -90,7 +97,13 @@ const Settings = (): JSX.Element => {
   const [twoFactorMethod, setTwoFactorMethod] = useState<'email' | 'sms' | 'app'>('email');
   const [loginNotifications, setLoginNotifications] = useState(true);
   const [suspiciousActivityAlerts, setSuspiciousActivityAlerts] = useState(true);
-  
+  const [financePinDialogOpen, setFinancePinDialogOpen] = useState(false);
+  const [financePinDialogMode, setFinancePinDialogMode] = useState<'set' | 'change'>('set');
+  const [disablePinDialogOpen, setDisablePinDialogOpen] = useState(false);
+  const [disablePinPassword, setDisablePinPassword] = useState('');
+  const [disablePinLoading, setDisablePinLoading] = useState(false);
+  const [disablePinError, setDisablePinError] = useState<string | null>(null);
+
   // Signature management
   const { user, clinicId: authClinicId } = useAuth();
   const { exportClientsToCsv, exportAppointmentsToCsv, exportPaymentsToCsv, isExporting } = useDataExport();
@@ -791,6 +804,127 @@ const Settings = (): JSX.Element => {
               </div>
 
               <Separator /> */}
+
+              {/* Finance & Payroll access code */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">{t('security.financePinSectionTitle')}</h3>
+                <p className="text-sm text-muted-foreground">{t('security.financePinSectionDescription')}</p>
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="finance-pin-required" className="flex-1 cursor-pointer">
+                      {t('security.financePinRequiredLabel')}
+                    </Label>
+                    <Switch
+                      id="finance-pin-required"
+                      checked={securitySettings?.finance_pin_required ?? false}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          if (securitySettings?.finance_pin_salt && securitySettings?.finance_pin_hash) {
+                            const p = updateSecuritySettings({ finance_pin_required: true });
+                            if (p) void p.then(() => refetchSecurity());
+                            else refetchSecurity();
+                          } else {
+                            setFinancePinDialogMode('set');
+                            setFinancePinDialogOpen(true);
+                          }
+                        } else {
+                          setDisablePinError(null);
+                          setDisablePinPassword('');
+                          setDisablePinDialogOpen(true);
+                        }
+                      }}
+                    />
+                  </div>
+                  {(securitySettings?.finance_pin_required) && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setFinancePinDialogMode('change');
+                        setFinancePinDialogOpen(true);
+                      }}
+                    >
+                      {t('security.financePinChangeButton')}
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <FinancePinDialog
+                open={financePinDialogOpen}
+                onOpenChange={(open) => {
+                  setFinancePinDialogOpen(open);
+                  if (!open) refetchSecurity();
+                }}
+                onSetPin={setFinancePin}
+                mode={financePinDialogMode}
+              />
+
+              {/* Disable PIN: require current password */}
+              <Dialog open={disablePinDialogOpen} onOpenChange={(open) => {
+                if (!open) {
+                  setDisablePinPassword('');
+                  setDisablePinError(null);
+                }
+                setDisablePinDialogOpen(open);
+              }}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>{t('security.financePinDisableTitle')}</DialogTitle>
+                    <DialogDescription>{t('security.financePinDisableDescription')}</DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    setDisablePinError(null);
+                    if (!disablePinPassword.trim()) {
+                      setDisablePinError(t('security.allFieldsRequired'));
+                      return;
+                    }
+                    setDisablePinLoading(true);
+                    try {
+                      const result = await clearFinancePinWithPassword(disablePinPassword);
+                      if (result?.error) {
+                        setDisablePinError(result.error.message);
+                      } else {
+                        toast({ title: t('notifications.success'), description: t('security.financePinDisabledSuccess') });
+                        setDisablePinDialogOpen(false);
+                        setDisablePinPassword('');
+                        refetchSecurity();
+                      }
+                    } finally {
+                      setDisablePinLoading(false);
+                    }
+                  }} className="space-y-4">
+                    {disablePinError && (
+                      <Alert variant="destructive">
+                        <AlertDescription>{disablePinError}</AlertDescription>
+                      </Alert>
+                    )}
+                    <div className="space-y-2">
+                      <Label htmlFor="disable-pin-password">{t('security.currentPassword')}</Label>
+                      <Input
+                        id="disable-pin-password"
+                        type="password"
+                        value={disablePinPassword}
+                        onChange={(e) => setDisablePinPassword(e.target.value)}
+                        placeholder={t('security.enterCurrentPassword')}
+                        required
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" onClick={() => setDisablePinDialogOpen(false)} disabled={disablePinLoading}>
+                        {t('common.cancel')}
+                      </Button>
+                      <Button type="submit" disabled={disablePinLoading}>
+                        {disablePinLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {t('security.financePinDisableConfirm')}
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+
+              <Separator />
 
               {/* Session Management */}
               <div className="space-y-4">

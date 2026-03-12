@@ -133,8 +133,8 @@ const MonthlyFinanceSection = () => {
     return searchableText.includes(searchTerm.toLowerCase());
   }) || [];
 
-  // Calculate monthly totals
-  const totalPayments = payments?.reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
+  // Revenue = only real money; exclude balance (credit) payments
+  const totalPayments = payments?.reduce((sum, p) => (p.method === 'balance' ? sum : sum + Number(p.amount)), 0) || 0;
   const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
   const cashPayments = payments?.filter(p => p.method === 'cash').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
 
@@ -317,7 +317,7 @@ const MonthlyFinanceSection = () => {
         <CardHeader>
           <CardTitle className="text-foreground">{t('finance.paymentHistory')}</CardTitle>
           <CardDescription className="text-muted-foreground">
-            {t('finance.allPaymentsFor', { period: format(currentRange.start, 'MMMM yyyy') })}
+            {t('finance.allPaymentsFor', { period: format(currentRange.start, 'MMMM yyyy', { locale }) })}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -336,7 +336,7 @@ const MonthlyFinanceSection = () => {
                 {filteredPayments.map((payment) => (
                   <TableRow key={payment.id} className="hover:bg-muted/50 border-border">
                     <TableCell className="text-foreground">
-                      {format(new Date(payment.payment_date), 'MMM d, yyyy')}
+                      {format(new Date(payment.payment_date), 'MMM d, yyyy', { locale })}
                     </TableCell>
                     <TableCell className="text-foreground">
                       {payment.clients ? 
@@ -381,7 +381,7 @@ const MonthlyFinanceSection = () => {
         <CardHeader>
           <CardTitle className="text-foreground">{t('finance.expenses')}</CardTitle>
           <CardDescription className="text-muted-foreground">
-            {t('finance.allExpensesFor', { period: format(currentRange.start, 'MMMM yyyy') })}
+            {t('finance.allExpensesFor', { period: format(currentRange.start, 'MMMM yyyy', { locale }) })}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -399,7 +399,7 @@ const MonthlyFinanceSection = () => {
                 {expenses.map((expense) => (
                   <TableRow key={expense.id} className="hover:bg-muted/50 border-border">
                     <TableCell className="text-foreground">
-                      {format(new Date(expense.date), 'MMM d, yyyy')}
+                      {format(new Date(expense.date), 'MMM d, yyyy', { locale })}
                     </TableCell>
                     <TableCell className="text-foreground">
                       {expense.description}

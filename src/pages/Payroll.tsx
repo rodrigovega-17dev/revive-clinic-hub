@@ -180,10 +180,12 @@ const Payroll = () => {
         const payment = appointment.payments?.[0]; // Assuming one payment per appointment
         const isFacturado = payment?.facturado || false;
         const ivaAmount = Number(payment?.iva_amount || 0);
-        
-        // Calculate amount before IVA for commission calculations
+        const paymentTotal = Number(payment?.amount ?? appointment.payment_amount ?? 0);
+
+        // Pre-IVA base: when facturado with IVA, payment.amount is total (base+IVA), so base = total - IVA.
+        // Otherwise appointment.payment_amount is the base (service price).
         const amountBeforeIVA = isFacturado && ivaAmount > 0
-          ? Number(appointment.payment_amount || 0) - ivaAmount
+          ? paymentTotal - ivaAmount
           : Number(appointment.payment_amount || 0);
         
         if (!acc[therapistId]) {
@@ -202,7 +204,8 @@ const Payroll = () => {
         }
         
         acc[therapistId].totalAppointments += 1;
-        acc[therapistId].totalRevenue += Number(appointment.payment_amount || 0);
+        // When we have payment data use it (total collected); else use appointment amount
+        acc[therapistId].totalRevenue += paymentTotal > 0 ? paymentTotal : Number(appointment.payment_amount || 0);
         acc[therapistId].totalRevenueBeforeIVA += amountBeforeIVA;
         acc[therapistId].totalIVA += ivaAmount;
         acc[therapistId].appointments.push(appointment);

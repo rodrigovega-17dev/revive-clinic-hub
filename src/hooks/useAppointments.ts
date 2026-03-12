@@ -52,10 +52,11 @@ export const useAppointmentsByDate = (selectedDate: string, enabled = true) => {
     queryFn: async () => {
       if (!clinicId) return {};
       
-      // Parse the date properly to avoid timezone issues
-      const [year, month, day] = selectedDate.split('-').map(Number);
-      const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
-      const endOfDay = new Date(year, month - 1, day, 23, 59, 59, 999);
+      // Parse the date as a UTC calendar day boundary to avoid mixing browser
+      // timezone with clinic timezone. We interpret selectedDate as a pure
+      // calendar date in the clinic, which is stored in UTC.
+      const startOfDay = new Date(`${selectedDate}T00:00:00.000Z`);
+      const endOfDay = new Date(`${selectedDate}T23:59:59.999Z`);
 
       const { data, error } = await supabase
         .from('appointments')
@@ -375,10 +376,10 @@ export const useTodayStats = () => {
 
       if (appointmentsError) throw appointmentsError;
 
-      // Get today's payments
+      // Get today's payments (method needed to exclude balance/credit from revenue)
       const { data: payments, error: paymentsError } = await supabase
         .from('payments')
-        .select('amount')
+        .select('amount, method')
         .eq('clinic_id', clinicId)
         .gte('payment_date', startOfDay)
         .lte('payment_date', endOfDay);
@@ -387,7 +388,7 @@ export const useTodayStats = () => {
 
       const totalAppointments = appointments?.length || 0;
       const completedAppointments = appointments?.filter(a => a.status === 'completed').length || 0;
-      const todayRevenue = payments?.reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
+      const todayRevenue = payments?.reduce((sum, p) => (p.method === 'balance' ? sum : sum + Number(p.amount)), 0) || 0;
       const uniqueClientIds = new Set((appointments || []).map((a) => a.client_id).filter(Boolean));
       const clientsWithAppointmentsToday = uniqueClientIds.size;
 
@@ -444,7 +445,8 @@ export const useAppointmentsByMonth = (year: number, month: number, enabled = tr
 
       if (error) throw error;
 
-      // Group appointments by date
+      // Group appointments by date (UTC calendar day so it matches how we
+      // query ranges for the month and the daily view)
       const groupedByDate: Record<string, any[]> = {};
       
       data?.forEach(appointment => {

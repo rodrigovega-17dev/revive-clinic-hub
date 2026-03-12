@@ -1,10 +1,10 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Clock, User } from "lucide-react";
-import { format } from "date-fns";
 import { useUpcomingAppointments } from "@/hooks/useAppointments";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "react-i18next";
+import { useClinicSettings } from "@/hooks/useClinic";
 
 interface UpcomingAppointmentsProps {
   onAppointmentClick?: (appointment: any) => void;
@@ -12,6 +12,7 @@ interface UpcomingAppointmentsProps {
 
 const UpcomingAppointments = ({ onAppointmentClick }: UpcomingAppointmentsProps) => {
   const { t } = useTranslation();
+  const { timezone } = useClinicSettings();
   const { data: appointments, isLoading } = useUpcomingAppointments();
 
   const getStatusText = (status: string) => {
@@ -121,7 +122,14 @@ const UpcomingAppointments = ({ onAppointmentClick }: UpcomingAppointmentsProps)
                 <div className="flex items-center space-x-2 mt-1">
                   <Clock className="h-3 w-3 text-muted-foreground" />
                   <span className="text-xs text-muted-foreground">
-                    {format(new Date(appointment.start_time), 'MMM d, h:mm a')}
+                    {new Intl.DateTimeFormat('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true,
+                      timeZone: timezone,
+                    }).format(new Date(appointment.start_time))}
                   </span>
                 </div>
               </div>

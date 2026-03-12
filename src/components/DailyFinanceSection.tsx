@@ -8,9 +8,11 @@ import { Calendar, DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Ey
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format, startOfDay, endOfDay, subDays } from 'date-fns';
+import { es, enUS } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useClinicSettings } from '@/hooks/useClinic';
+import { useLanguage } from '@/hooks/useLanguage';
 import DateFilter from '@/components/DateFilter';
 import PaymentForm from './PaymentForm';
 import ExpenseForm from './ExpenseForm';
@@ -23,7 +25,9 @@ interface DailyFinanceSectionProps {
 const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSectionProps) => {
   const { t } = useTranslation();
   const { clinicId } = useAuth();
-  const { currency } = useClinicSettings();
+  const { currency, timezone } = useClinicSettings();
+  const { currentLanguage } = useLanguage();
+  const locale = currentLanguage === 'es' ? es : enUS;
   const [showAllPayments, setShowAllPayments] = useState(false);
 
   // Fetch daily payments
@@ -93,13 +97,13 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
     enabled: !!clinicId,
   });
 
-  const totalRevenue = payments?.reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
+  // Revenue = only real money; exclude balance (credit) payments so gains don't go negative
+  const totalRevenue = payments?.reduce((sum, p) => (p.method === 'balance' ? sum : sum + Number(p.amount)), 0) || 0;
   const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
   const netProfit = totalRevenue - totalExpenses;
-  
-  // Calculate specific financial metrics
+
   const totalCash = payments?.filter(p => p.method === 'cash').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
-  const totalIntangible = payments?.filter(p => p.method !== 'cash').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+  const totalIntangible = payments?.filter(p => p.method !== 'cash' && p.method !== 'balance').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
   const amountInCashier = totalCash - totalExpenses;
 
   // Clinic-aware currency formatting
@@ -232,7 +236,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
             <div>
               <CardTitle className="text-foreground">{t('finance.dailyPayments')}</CardTitle>
               <CardDescription className="text-muted-foreground">
-                {showAllPayments ? t('finance.allPayments') : t('finance.paymentsReceivedOn', { date: format(selectedDate, 'MMMM d, yyyy') })}
+                {showAllPayments ? t('finance.allPayments') : t('finance.paymentsReceivedOn', { date: format(selectedDate, 'MMMM d, yyyy', { locale }) })}
               </CardDescription>
             </div>
             <Button
@@ -262,7 +266,12 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                 {payments.map((payment) => (
                   <TableRow key={payment.id} className="hover:bg-muted/50 border-border">
                     <TableCell className="text-foreground">
-                      {format(new Date(payment.payment_date), 'HH:mm')}
+                      {new Intl.DateTimeFormat('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false,
+                        timeZone: timezone,
+                      }).format(new Date(payment.payment_date))}
                     </TableCell>
                     <TableCell className="text-foreground">
                       {payment.clients ? 
@@ -305,7 +314,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
               <p className="text-muted-foreground">
                 {showAllPayments 
                   ? t('finance.noPaymentsRecorded')
-                  : t('finance.noPaymentsOnDate', { date: format(selectedDate, 'MMMM d, yyyy') })
+                  : t('finance.noPaymentsOnDate', { date: format(selectedDate, 'MMMM d, yyyy', { locale }) })
                 }
               </p>
             </div>
@@ -318,7 +327,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
         <CardHeader>
           <CardTitle className="text-foreground">{t('finance.dailyExpenses')}</CardTitle>
           <CardDescription className="text-muted-foreground">
-            {t('finance.expensesRecordedOn', { date: format(selectedDate, 'MMMM d, yyyy') })}
+            {t('finance.expensesRecordedOn', { date: format(selectedDate, 'MMMM d, yyyy', { locale }) })}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -347,7 +356,12 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                       </span>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {format(new Date(expense.created_at), 'HH:mm')}
+                      {new Intl.DateTimeFormat('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false,
+                        timeZone: timezone,
+                      }).format(new Date(expense.created_at))}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -358,7 +372,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
               <Receipt className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium text-foreground mb-2">{t('finance.noExpensesToday')}</h3>
               <p className="text-muted-foreground">
-                {t('finance.noExpensesOnDate', { date: format(selectedDate, 'MMMM d, yyyy') })}
+                {t('finance.noExpensesOnDate', { date: format(selectedDate, 'MMMM d, yyyy', { locale }) })}
               </p>
             </div>
           )}

@@ -287,11 +287,10 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
     return { hour, minute };
   };
 
+  // 24-hour format for time column labels and appointment blocks
   const formatHourLabel = (hour: number) => {
     const normalized = hour % 24;
-    const period = normalized >= 12 ? 'PM' : 'AM';
-    const displayHour = normalized % 12 === 0 ? 12 : normalized % 12;
-    return `${displayHour} ${period}`;
+    return `${String(normalized).padStart(2, '0')}:00`;
   };
 
   const formatClinicTime = (isoString: string) => {
@@ -300,6 +299,7 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
       timeZone: timezone,
       hour: '2-digit',
       minute: '2-digit',
+      hour12: false,
     }).format(date);
   };
 

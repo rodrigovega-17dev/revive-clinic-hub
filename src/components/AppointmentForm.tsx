@@ -19,7 +19,7 @@ import { useClientBalance } from '@/hooks/useClientBalance';
 import { useQueryClient } from '@tanstack/react-query';
 import { format, addMinutes, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
-import { formatCurrency } from '@/lib/utils';
+import { convertToTimezone, formatCurrency } from '@/lib/utils';
 import { useClinicGoogleCalendar } from '@/hooks/useClinicGoogleCalendar';
 import { AlertTriangle, Clock, User, Stethoscope, DollarSign, MessageSquare, MapPin, Loader2, Plus, X } from 'lucide-react';
 import { useClinicSettings } from '@/hooks/useClinic';
@@ -220,8 +220,20 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
       const [year, month, day] = startDate.split('-').map(Number);
       const [hour, minute] = startTime.split(':').map(Number);
       const durationMinutes = parseInt(sessionDuration);
-      
-      const startDateTime = new Date(year, month - 1, day, hour, minute, 0);
+
+      /**
+       * Always interpret the selected date/time in the clinic timezone.
+       * 
+       * Steps:
+       * - Build a "local" JS Date corresponding to the selected wall-clock
+       *   time in the *current browser timezone*.
+       * - Use convertToTimezone to shift that instant so that the wall-clock
+       *   time matches in the clinic timezone.
+       * - Store the final UTC instants (toISOString) coming from the
+       *   clinic-timezone-corrected Date objects.
+       */
+      const browserLocal = new Date(year, month - 1, day, hour, minute, 0, 0);
+      const startDateTime = convertToTimezone(browserLocal, timezone || 'UTC');
       const endDateTime = new Date(startDateTime.getTime() + durationMinutes * 60000);
       
       // Validate times

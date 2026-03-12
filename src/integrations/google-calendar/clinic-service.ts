@@ -249,7 +249,7 @@ class ClinicGoogleCalendarService {
     return settings.selectedCalendarId || 'primary';
   }
 
-  // Convert appointment to Google Calendar event
+  /** Convert appointment to Google Calendar event. When options.sendInvites is false, attendees are omitted so Google does not send invitation emails. */
   private appointmentToGoogleEvent(appointment: any, options: GoogleCalendarSyncOptions = {}): GoogleCalendarEvent {
     const startTime = new Date(appointment.start_time);
     const endTime = new Date(appointment.end_time);
@@ -291,28 +291,24 @@ class ClinicGoogleCalendarService {
       event.colorId = appointment.therapists.calendar_color_id;
     }
 
-    // Add attendees (both client and therapist)
-    const attendees = [];
-    
-    // Add client if they have an email
-    if (appointment.clients?.email) {
-      attendees.push({
-        email: appointment.clients.email,
-        displayName: `${appointment.clients.first_name} ${appointment.clients.last_name}`,
-      });
-    }
-    
-    // Add therapist if they have an email
-    if (appointment.therapists?.email) {
-      attendees.push({
-        email: appointment.therapists.email,
-        displayName: `${appointment.therapists.first_name} ${appointment.therapists.last_name}`,
-      });
-    }
-    
-    // Only set attendees if we have any
-    if (attendees.length > 0) {
-      event.attendees = attendees;
+    // Add attendees only when sendInvites is true (otherwise Google sends invitation emails to client/therapist)
+    if (options.sendInvites !== false) {
+      const attendees: Array<{ email: string; displayName?: string }> = [];
+      if (appointment.clients?.email) {
+        attendees.push({
+          email: appointment.clients.email,
+          displayName: `${appointment.clients.first_name} ${appointment.clients.last_name}`,
+        });
+      }
+      if (appointment.therapists?.email) {
+        attendees.push({
+          email: appointment.therapists.email,
+          displayName: `${appointment.therapists.first_name} ${appointment.therapists.last_name}`,
+        });
+      }
+      if (attendees.length > 0) {
+        event.attendees = attendees;
+      }
     }
 
     // Add meeting link if requested
@@ -493,14 +489,21 @@ class ClinicGoogleCalendarService {
   }
 
   public async createEvent(appointment: any, options: GoogleCalendarSyncOptions = {}): Promise<string> {
-    const event = this.appointmentToGoogleEvent(appointment, options);
+    const settings = await this.getClinicSettings();
+    const opts: GoogleCalendarSyncOptions = {
+      sendInvites: options.sendInvites ?? settings.syncSettings.sendInvites,
+      reminderMinutes: options.reminderMinutes ?? settings.syncSettings.reminderMinutes,
+      createMeetingLinks: options.createMeetingLinks ?? settings.syncSettings.createMeetingLinks,
+      ...options,
+    };
+    const event = this.appointmentToGoogleEvent(appointment, opts);
     const calendarId = options.calendarId || await this.getSelectedCalendarId();
-    
+
     const response = await this.makeRequest(`/calendars/${calendarId}/events`, {
       method: 'POST',
       body: JSON.stringify({
         ...event,
-        sendUpdates: options.sendInvites ? 'all' : 'none',
+        sendUpdates: opts.sendInvites ? 'all' : 'none',
       }),
     });
 
@@ -511,14 +514,21 @@ class ClinicGoogleCalendarService {
   }
 
   public async updateEvent(googleEventId: string, appointment: any, options: GoogleCalendarSyncOptions = {}): Promise<void> {
-    const event = this.appointmentToGoogleEvent(appointment, options);
+    const settings = await this.getClinicSettings();
+    const opts: GoogleCalendarSyncOptions = {
+      sendInvites: options.sendInvites ?? settings.syncSettings.sendInvites,
+      reminderMinutes: options.reminderMinutes ?? settings.syncSettings.reminderMinutes,
+      createMeetingLinks: options.createMeetingLinks ?? settings.syncSettings.createMeetingLinks,
+      ...options,
+    };
+    const event = this.appointmentToGoogleEvent(appointment, opts);
     const calendarId = options.calendarId || await this.getSelectedCalendarId();
-    
+
     await this.makeRequest(`/calendars/${calendarId}/events/${googleEventId}`, {
       method: 'PUT',
       body: JSON.stringify({
         ...event,
-        sendUpdates: options.sendInvites ? 'all' : 'none',
+        sendUpdates: opts.sendInvites ? 'all' : 'none',
       }),
     });
   }
@@ -601,6 +611,14 @@ class ClinicGoogleCalendarService {
     } catch (error) {
       console.error('Error clearing Google Calendar event ID:', error);
     }
+  }
+
+  /** Update only sync settings (e.g. sendInvites). Merges with current settings. */
+  public async updateSyncSettings(partial: Partial<ClinicGoogleCalendarSettings['syncSettings']>): Promise<void> {
+    const current = await this.getClinicSettings();
+    await this.updateClinicSettings({
+      syncSettings: { ...current.syncSettings, ...partial },
+    });
   }
 
   // Get complete clinic Google Calendar data

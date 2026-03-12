@@ -36,7 +36,7 @@ interface AppointmentTableProps {
 
 const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: AppointmentTableProps) => {
   const { t } = useTranslation();
-  const { currency } = useClinicSettings();
+  const { currency, timezone } = useClinicSettings();
   
   // Clinic-aware currency formatting
   const formatCurrencyWithClinic = (value: number) => {
@@ -119,8 +119,19 @@ const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: Appointme
                 {appointments.map((appointment) => (
                   <TableRow key={appointment.id} className="hover:bg-muted/50">
                     <TableCell className="font-medium">
-                      {format(new Date(appointment.start_time), 'HH:mm')} - 
-                      {format(new Date(appointment.end_time), 'HH:mm')}
+                      {new Intl.DateTimeFormat('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false,
+                        timeZone: timezone,
+                      }).format(new Date(appointment.start_time))}{' '}
+                      -{' '}
+                      {new Intl.DateTimeFormat('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false,
+                        timeZone: timezone,
+                      }).format(new Date(appointment.end_time))}
                     </TableCell>
                     <TableCell>
                       <div>

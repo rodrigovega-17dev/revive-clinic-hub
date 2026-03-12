@@ -262,11 +262,10 @@ export const useClinicGoogleCalendar = () => {
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   }, []);
 
-  // Update clinic settings
-  const updateSettingsMutation = useMutation({
-    mutationFn: async (settings: Partial<ClinicGoogleCalendarData['settings']>) => {
-      // This would need to be implemented in the service
-      // For now, we'll just refetch the data
+  // Update sync settings (e.g. sendInvites to control calendar invitation emails)
+  const updateSyncSettingsMutation = useMutation({
+    mutationFn: async (partial: Partial<ClinicGoogleCalendarData['settings']['syncSettings']>) => {
+      await getService().updateSyncSettings(partial);
       await refetchClinicData();
     },
     onSuccess: () => {
@@ -306,8 +305,8 @@ export const useClinicGoogleCalendar = () => {
     isSyncing: syncAppointmentMutation.isPending,
     deleteAppointment: deleteAppointmentMutation.mutate,
     isDeleting: deleteAppointmentMutation.isPending,
-    updateSettings: updateSettingsMutation.mutate,
-    isUpdatingSettings: updateSettingsMutation.isPending,
+    updateSyncSettings: updateSyncSettingsMutation.mutate,
+    isUpdatingSyncSettings: updateSyncSettingsMutation.isPending,
     
     // Utilities
     getOAuthUrl,

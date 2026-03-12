@@ -88,7 +88,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const queryClient = useQueryClient();
   const { isAuthenticated, syncAppointment } = useClinicGoogleCalendar();
   const deleteAppointmentMutation = useDeleteAppointment();
-  const { currency } = useClinicSettings();
+  const { currency, timezone } = useClinicSettings();
   const { clinicId } = useAuth();
   const { data: clientBalance } = useClientBalance(appointment?.client_id || null);
   const [requestingCfdi, setRequestingCfdi] = useState(false);
@@ -129,6 +129,14 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   };
 
   const appointmentAmount = Number(apt?.payment_amount || 0);
+
+  const formatClinicDate = (value: string | Date, options: Intl.DateTimeFormatOptions) => {
+    const date = typeof value === 'string' ? new Date(value) : value;
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      ...options,
+    }).format(date);
+  };
   const availableCredit = Math.max(0, Number(clientBalance?.balance || 0));
   const maxApplicableCredit = Math.min(availableCredit, appointmentAmount);
   const appliedCredit = useBalanceCredit ? maxApplicableCredit : 0;
@@ -191,12 +199,13 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       const paymentDate = new Date().toISOString();
       const paymentInserts: any[] = [];
 
+      // Store credit applied as positive amount; method='balance' marks it as non-cash so it's excluded from revenue
       if (useBalanceCredit && appliedCredit > 0) {
         paymentInserts.push({
           appointment_id: appointment.id,
           client_id: appointment.client_id,
           clinic_id: clinicId,
-          amount: -Math.abs(appliedCredit),
+          amount: Math.abs(appliedCredit),
           method: 'balance',
           payment_date: paymentDate,
           description: `Balance applied to ${appointment.treatments?.name || 'appointment'} session`,
@@ -546,13 +555,19 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   <div className="flex items-center space-x-2">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     <span className="text-foreground">
-                      {format(new Date(apt.start_time), 'PPP')}
+                      {formatClinicDate(apt.start_time, {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <span className="text-foreground">
-                      {format(new Date(apt.start_time), 'p')} - {format(new Date(apt.end_time), 'p')}
+                      {formatClinicDate(apt.start_time, { hour: 'numeric', minute: '2-digit' })}{' '}
+                      -{' '}
+                      {formatClinicDate(apt.end_time, { hour: 'numeric', minute: '2-digit' })}
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -684,8 +699,15 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                           onClick={() => {
                             const msg = t('whatsapp.messageConfirmation', {
                               name: `${apt.clients?.first_name || ''} ${apt.clients?.last_name || ''}`.trim(),
-                              date: format(new Date(apt.start_time), 'PPP', { locale }),
-                              time: format(new Date(apt.start_time), 'p', { locale }),
+                              date: formatClinicDate(apt.start_time, {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                              }),
+                              time: formatClinicDate(apt.start_time, {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              }),
                               therapist: `${apt.therapists?.first_name || ''} ${apt.therapists?.last_name || ''}`.trim(),
                               treatment: apt.treatments?.name || '',
                             });
@@ -701,8 +723,15 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                           onClick={() => {
                             const msg = t('whatsapp.messageReschedule', {
                               name: `${apt.clients?.first_name || ''} ${apt.clients?.last_name || ''}`.trim(),
-                              date: format(new Date(apt.start_time), 'PPP', { locale }),
-                              time: format(new Date(apt.start_time), 'p', { locale }),
+                              date: formatClinicDate(apt.start_time, {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                              }),
+                              time: formatClinicDate(apt.start_time, {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              }),
                               therapist: `${apt.therapists?.first_name || ''} ${apt.therapists?.last_name || ''}`.trim(),
                             });
                             openWhatsApp(apt.clients?.phone || '', msg);
@@ -717,8 +746,15 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                           onClick={() => {
                             const msg = t('whatsapp.messageCancellation', {
                               name: `${apt.clients?.first_name || ''} ${apt.clients?.last_name || ''}`.trim(),
-                              date: format(new Date(apt.start_time), 'PPP', { locale }),
-                              time: format(new Date(apt.start_time), 'p', { locale }),
+                              date: formatClinicDate(apt.start_time, {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                              }),
+                              time: formatClinicDate(apt.start_time, {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              }),
                             });
                             openWhatsApp(apt.clients?.phone || '', msg);
                           }}
@@ -732,8 +768,15 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                           onClick={() => {
                             const msg = t('whatsapp.messageReminder', {
                               name: `${apt.clients?.first_name || ''} ${apt.clients?.last_name || ''}`.trim(),
-                              date: format(new Date(apt.start_time), 'PPP', { locale }),
-                              time: format(new Date(apt.start_time), 'p', { locale }),
+                              date: formatClinicDate(apt.start_time, {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                              }),
+                              time: formatClinicDate(apt.start_time, {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              }),
                               therapist: `${apt.therapists?.first_name || ''} ${apt.therapists?.last_name || ''}`.trim(),
                             });
                             openWhatsApp(apt.clients?.phone || '', msg);
@@ -884,7 +927,11 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   </div>
                   <div className="text-muted-foreground mb-4">
                     {apt.payment_status === 'paid'
-                      ? `${t('appointments.paidVia')} ${getPaymentMethodText(apt.payment_method)} ${t('appointments.on')} ${format(new Date(apt.payment_date), 'PPP')}`
+                      ? `${t('appointments.paidVia')} ${getPaymentMethodText(apt.payment_method)} ${t('appointments.on')} ${formatClinicDate(apt.payment_date, {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })}`
                       : t('appointments.paymentCannotBeProcessed')
                     }
                   </div>

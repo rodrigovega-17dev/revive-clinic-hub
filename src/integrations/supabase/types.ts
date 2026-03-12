@@ -1228,6 +1228,9 @@ export type Database = {
           session_timeout_minutes: number
           login_notifications: boolean
           suspicious_activity_alerts: boolean
+          finance_pin_required: boolean
+          finance_pin_salt: string | null
+          finance_pin_hash: string | null
           created_at: string
           updated_at: string
         }
@@ -1244,6 +1247,9 @@ export type Database = {
           session_timeout_minutes?: number
           login_notifications?: boolean
           suspicious_activity_alerts?: boolean
+          finance_pin_required?: boolean
+          finance_pin_salt?: string | null
+          finance_pin_hash?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1260,6 +1266,9 @@ export type Database = {
           session_timeout_minutes?: number
           login_notifications?: boolean
           suspicious_activity_alerts?: boolean
+          finance_pin_required?: boolean
+          finance_pin_salt?: string | null
+          finance_pin_hash?: string | null
           created_at?: string
           updated_at?: string
         }
