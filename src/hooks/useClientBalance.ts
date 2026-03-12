@@ -47,13 +47,13 @@ export function useClientBalance(clientId: string | null) {
         (a) => a.payment_status == null || a.payment_status === 'pending'
       ) || [];
 
-      // Total charges: for each completed appointment, use amount actually paid (if any), else obligation (payment_amount).
-      // This matches payments (which can include IVA) so balance doesn't show IVA as false credit.
+      // Total charges: only sum amounts actually paid toward each completed appointment (cash, card, balance).
+      // Completion alone does not change balance; balance is reduced only when "use balance" creates a balance payment.
       const totalCharges = (completedAppointments || []).reduce((sum, apt) => {
         const paidTowardApt = (payments || [])
           .filter((p) => p.appointment_id === apt.id)
           .reduce((s, p) => s + (p.method === 'balance' ? Math.abs(Number(p.amount || 0)) : Number(p.amount || 0)), 0);
-        return sum + (paidTowardApt > 0 ? paidTowardApt : apt.payment_amount || 0);
+        return sum + paidTowardApt;
       }, 0);
       // Money received (cash, card, etc.); balance payments are excluded (credit is applied, not new money)
       const totalPayments = payments?.reduce((sum, payment) => {
@@ -116,7 +116,7 @@ export function useAllClientBalances() {
 
       if (completedError) throw completedError;
 
-      // Calculate balances: totalCharges = per-apt amount paid (or payment_amount if unpaid)
+      // Calculate balances: totalCharges = only amounts actually paid per appointment (no fallback to payment_amount)
       const clientBalances = clients?.map(client => {
         const clientPayments = payments?.filter(p => p.client_id === client.id) || [];
         const clientCompleted = completedAppointments?.filter(a => a.client_id === client.id) || [];
@@ -128,7 +128,7 @@ export function useAllClientBalances() {
           const paidTowardApt = clientPayments
             .filter((p) => p.appointment_id === apt.id)
             .reduce((s, p) => s + (p.method === 'balance' ? Math.abs(Number(p.amount || 0)) : Number(p.amount || 0)), 0);
-          return sum + (paidTowardApt > 0 ? paidTowardApt : apt.payment_amount || 0);
+          return sum + paidTowardApt;
         }, 0);
         const totalPayments = clientPayments.reduce((sum, p) => {
           if (p.method === 'balance') return sum;

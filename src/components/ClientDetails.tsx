@@ -388,6 +388,7 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
                     <p className={`text-2xl font-bold ${balance.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {balance.balance >= 0 ? '+' : ''}{formatCurrencyWithClinic(balance.balance)}
                     </p>
+                    <p className="mt-1 text-xs text-muted-foreground">{t('clients.balanceDescription')}</p>
                   </div>
                 </div>
               ) : (

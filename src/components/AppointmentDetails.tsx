@@ -823,6 +823,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                         {formatCurrencyWithClinic(Number(clientBalance?.balance || 0))}
                       </span>
                     </div>
+                    <p className="mt-1 text-xs text-muted-foreground">{t('appointments.balanceDescription')}</p>
                     {availableCredit > 0 && (
                       <div className="mt-3 space-y-2">
                         <div className="flex items-center space-x-2">
