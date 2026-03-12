@@ -183,14 +183,9 @@ export const useClinicGoogleCalendar = () => {
       }
     },
     onSuccess: (result, variables) => {
-      // Invalidate queries to refresh appointment data
-      queryClient.invalidateQueries({ queryKey: ['appointments', clinicId] });
-      
-      // Invalidate weekly appointments queries to ensure weekly view updates
-      queryClient.invalidateQueries({ 
-        queryKey: ['weekly-appointments'],
-        exact: false 
-      });
+      // Invalidate all appointment queries so lists (by-date, by-week, etc.) refetch and modal gets updated appointment
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['weekly-appointments'], exact: false });
       
       toast({
         title: t('googleCalendar.syncSuccess'),

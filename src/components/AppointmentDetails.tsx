@@ -419,7 +419,8 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   useEffect(() => {
     if (!appointment) return;
     const keeping = displayAppointment?.id === appointment.id;
-    setDisplayAppointment((prev) => (prev?.id === appointment.id ? prev : appointment));
+    // Always use latest appointment from parent so sync status (e.g. google_calendar_event_id) updates without reload
+    setDisplayAppointment(appointment);
     setPaymentData({
       amount: appointment.payment_amount || 0,
       method: appointment.payment_method || '',
