@@ -94,6 +94,15 @@ function renderDocumentHtml(instance, opts = {}) {
     return `<div style="margin-top: 24px; font-size: 13px; color: #6b7280;">${escapeHtml(fieldLabel)}</div>`;
   }
 
+  // If the template already has a responsible (therapist) signature section/field, don't add the extra trailing block
+  const hasResponsibleSignatureInSchema = sections.some((s) => {
+    if (s.type === 'signature') return !/patient_signature|client_signature/i.test(String(s.id || ''));
+    if (s.type === 'group' && Array.isArray(s.fields)) {
+      return s.fields.some((f) => f.type === 'signature' && !/patient_signature|client_signature/i.test(String(f.id || '')));
+    }
+    return false;
+  });
+
   const sectionHtml = sections
     .filter((s) => s.id !== 'header')
     .map((section) => {
@@ -148,7 +157,7 @@ function renderDocumentHtml(instance, opts = {}) {
         </div>`
       : '';
 
-  const signatureBlockHtml = responsibleName
+  const signatureBlockHtml = responsibleName && !hasResponsibleSignatureInSchema
     ? `
       <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
         <div style="text-align: right;">

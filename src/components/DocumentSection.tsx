@@ -157,6 +157,15 @@ const openDocumentWindow = (instance: DocumentInstance, options?: { autoPrint?: 
   const responsibleName = (variables as any).responsibleName as string | undefined;
   const responsibleSignatureUrl = (variables as any).responsibleSignatureUrl as string | undefined;
 
+  // If template already has a responsible (therapist) signature, don't add the extra trailing block
+  const hasResponsibleSignatureInSchema = sections.some((s) => {
+    if (s.type === 'signature') return !/patient_signature|client_signature/i.test(String((s as any).id || ''));
+    if (s.type === 'group' && Array.isArray((s as any).fields)) {
+      return (s as any).fields.some((f: any) => f.type === 'signature' && !/patient_signature|client_signature/i.test(String(f.id || '')));
+    }
+    return false;
+  });
+
   /** Render a signature block: client (blank line) or therapist (responsible person's sig). */
   const renderSignatureBlock = (fieldId: string, fieldLabel: string) => {
     const isClient = /patient_signature|client_signature/i.test(fieldId);
@@ -295,7 +304,7 @@ const openDocumentWindow = (instance: DocumentInstance, options?: { autoPrint?: 
               : ''
           }
           ${sectionHtml}
-          ${responsibleName ? `
+          ${responsibleName && !hasResponsibleSignatureInSchema ? `
             <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
               <div style="text-align: right;">
                 <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280; text-transform: uppercase;">
