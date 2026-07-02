@@ -147,7 +147,7 @@ async function handleSubscriptionEvent(subscription) {
       canceled_at: safeDateConversion(subscription.canceled_at),
       trial_start: safeDateConversion(subscription.trial_start),
       trial_end: safeDateConversion(subscription.trial_end),
-    });
+    }, { onConflict: 'clinic_id' });
 
   if (subscriptionError) {
     console.error('Error updating clinic_subscriptions:', subscriptionError);

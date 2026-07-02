@@ -183,17 +183,19 @@ const createSubscription = async (payload) => {
 
   const subscription = await stripe.subscriptions.create(subscriptionParams);
 
-  await supabase.from('clinic_subscriptions').insert({
+  const toIso = (secs) => (secs ? new Date(secs * 1000).toISOString() : null);
+
+  await supabase.from('clinic_subscriptions').upsert({
     clinic_id: payload.clinicId,
     plan_id: payload.planId,
     stripe_customer_id: customer.id,
     stripe_subscription_id: subscription.id,
     status: subscription.status,
-    current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-    current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-    trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString() : null,
-    trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-  });
+    current_period_start: toIso(subscription.current_period_start),
+    current_period_end: toIso(subscription.current_period_end),
+    trial_start: toIso(subscription.trial_start),
+    trial_end: toIso(subscription.trial_end),
+  }, { onConflict: 'clinic_id' });
 
   await supabase
     .from('clinics')
