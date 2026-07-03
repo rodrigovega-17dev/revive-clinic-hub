@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import TherapistOption from '@/components/TherapistOption';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -343,7 +344,7 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
               <SelectContent className="bg-popover border-border">
                 {therapists?.map((therapist) => (
                   <SelectItem key={therapist.id} value={therapist.id}>
-                    {therapist.first_name} {therapist.last_name}
+                    <TherapistOption therapist={therapist} />
                   </SelectItem>
                 ))}
               </SelectContent>

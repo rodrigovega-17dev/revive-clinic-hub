@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import TherapistOption from '@/components/TherapistOption';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -59,6 +60,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   });
   const [useBalanceCredit, setUseBalanceCredit] = useState(false);
   const [balanceApplied, setBalanceApplied] = useState(0);
+  const [requiereFactura, setRequiereFactura] = useState(false);
   const [rescheduleData, setRescheduleData] = useState({
     start_time: appointment ? format(new Date(appointment.start_time), "yyyy-MM-dd'T'HH:mm") : '',
     duration: appointment ? 
@@ -142,8 +144,8 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const appliedCredit = useBalanceCredit ? maxApplicableCredit : 0;
   const amountDue = Math.max(0, appointmentAmount - appliedCredit);
   const effectiveAmount = useBalanceCredit ? amountDue : paymentData.amount;
-  // Always charge IVA (16%)
-  const ivaAmount = effectiveAmount * 0.16;
+  // IVA (16%) only when the payment requires an invoice (factura); added on top of the base.
+  const ivaAmount = requiereFactura ? effectiveAmount * 0.16 : 0;
   const totalWithIva = effectiveAmount + ivaAmount;
 
   const getStatusText = (status: string) => {
@@ -222,8 +224,8 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
           amount: totalWithIva,
           method: paymentData.method,
           payment_date: paymentDate,
-          description: `Payment for ${appointment.treatments?.name || 'appointment'} session (IVA 16%)`,
-          facturado: true,
+          description: `Payment for ${appointment.treatments?.name || 'appointment'} session${requiereFactura ? ' (IVA 16%)' : ''}`,
+          facturado: requiereFactura,
           iva_amount: ivaAmount,
         });
       }
@@ -893,15 +895,28 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                     </div>
                   </div>
 
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="requiereFactura"
+                      checked={requiereFactura}
+                      onCheckedChange={(checked) => setRequiereFactura(checked === true)}
+                    />
+                    <Label htmlFor="requiereFactura" className="text-foreground">
+                      {t('appointments.requiereFactura')}
+                    </Label>
+                  </div>
+
                   <div className="p-3 bg-muted/50 rounded-lg space-y-2">
                     <div className="flex justify-between">
                       <span className="text-foreground">{t('appointments.baseAmount')}:</span>
                       <span className="text-foreground">{formatCurrencyWithClinic(effectiveAmount)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-foreground">{t('appointments.ivaAmount')}:</span>
-                      <span className="text-foreground">{formatCurrencyWithClinic(ivaAmount)}</span>
-                    </div>
+                    {requiereFactura && (
+                      <div className="flex justify-between">
+                        <span className="text-foreground">{t('appointments.ivaAmount')}:</span>
+                        <span className="text-foreground">{formatCurrencyWithClinic(ivaAmount)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between font-semibold border-t pt-2">
                       <span className="text-foreground">{t('appointments.total')}:</span>
                       <span className="text-foreground">{formatCurrencyWithClinic(totalWithIva)}</span>
@@ -1087,7 +1102,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                         <SelectContent className="bg-popover border-border">
                           {therapists?.map((therapist) => (
                             <SelectItem key={therapist.id} value={therapist.id}>
-                              {therapist.first_name} {therapist.last_name}
+                              <TherapistOption therapist={therapist} />
                             </SelectItem>
                           ))}
                         </SelectContent>

@@ -27,7 +27,7 @@ export function useClientBalance(clientId: string | null) {
       // Get all payments made by this client
       const { data: payments, error: paymentsError } = await supabase
         .from('payments')
-        .select('amount, payment_date, appointment_id, method')
+        .select('amount, payment_date, appointment_id, method, iva_amount, facturado')
         .eq('client_id', clientId)
         .eq('clinic_id', clinicId);
 
@@ -47,22 +47,21 @@ export function useClientBalance(clientId: string | null) {
         (a) => a.payment_status == null || a.payment_status === 'pending'
       ) || [];
 
-      // Total charges: only sum amounts actually paid toward each completed appointment (cash, card, balance).
-      // Completion alone does not change balance; balance is reduced only when "use balance" creates a balance payment.
-      const totalCharges = (completedAppointments || []).reduce((sum, apt) => {
-        const paidTowardApt = (payments || [])
-          .filter((p) => p.appointment_id === apt.id)
-          .reduce((s, p) => s + (p.method === 'balance' ? Math.abs(Number(p.amount || 0)) : Number(p.amount || 0)), 0);
-        return sum + paidTowardApt;
+      // Charges = price of every service delivered (each completed appointment), whether paid yet or not.
+      const totalCharges = (completedAppointments || []).reduce(
+        (sum, apt) => sum + Number(apt.payment_amount || 0),
+        0
+      );
+      // Money in = base amount received, excluding IVA (tax, not service payment) and excluding
+      // method='balance' rows (applied credit, not new money).
+      const totalPayments = (payments || []).reduce((sum, p) => {
+        if (p.method === 'balance') return sum;
+        const base = p.facturado ? Number(p.amount || 0) - Number(p.iva_amount || 0) : Number(p.amount || 0);
+        return sum + base;
       }, 0);
-      // Money received (cash, card, etc.); balance payments are excluded (credit is applied, not new money)
-      const totalPayments = payments?.reduce((sum, payment) => {
-        if (payment.method === 'balance') return sum;
-        return sum + (payment.amount || 0);
-      }, 0) || 0;
       const pendingPayments = pendingAppointments.reduce((sum, apt) => sum + (apt.payment_amount || 0), 0);
 
-      // Balance = money in − charges. totalCharges already includes amount paid via balance, so using credit reduces balance.
+      // Balance = money in − charges. Underpay → negative (owes); overpay → positive (credit).
       const balance = totalPayments - totalCharges;
       
       const lastPaymentDate = payments && payments.length > 0 
@@ -102,7 +101,7 @@ export function useAllClientBalances() {
       // Get all payments
       const { data: payments, error: paymentsError } = await supabase
         .from('payments')
-        .select('client_id, amount, payment_date, appointment_id, method')
+        .select('client_id, amount, payment_date, appointment_id, method, iva_amount, facturado')
         .eq('clinic_id', clinicId);
 
       if (paymentsError) throw paymentsError;
@@ -124,15 +123,11 @@ export function useAllClientBalances() {
           (a) => a.payment_status == null || a.payment_status === 'pending'
         );
 
-        const totalCharges = clientCompleted.reduce((sum, apt) => {
-          const paidTowardApt = clientPayments
-            .filter((p) => p.appointment_id === apt.id)
-            .reduce((s, p) => s + (p.method === 'balance' ? Math.abs(Number(p.amount || 0)) : Number(p.amount || 0)), 0);
-          return sum + paidTowardApt;
-        }, 0);
+        const totalCharges = clientCompleted.reduce((sum, apt) => sum + Number(apt.payment_amount || 0), 0);
         const totalPayments = clientPayments.reduce((sum, p) => {
           if (p.method === 'balance') return sum;
-          return sum + (p.amount || 0);
+          const base = p.facturado ? Number(p.amount || 0) - Number(p.iva_amount || 0) : Number(p.amount || 0);
+          return sum + base;
         }, 0);
         const pendingPayments = clientPending.reduce((sum, a) => sum + (a.payment_amount || 0), 0);
         const balance = totalPayments - totalCharges;

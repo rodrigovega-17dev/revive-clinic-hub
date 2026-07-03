@@ -12,6 +12,8 @@ import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
+import { useTherapists } from '@/hooks/useTherapists';
+import TherapistOption from '@/components/TherapistOption';
 
 interface ExpenseFormProps {
   open: boolean;
@@ -25,6 +27,8 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [therapistId, setTherapistId] = useState('');
+  const { data: therapists = [] } = useTherapists();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -106,6 +110,7 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
       description,
       category,
       date,
+      therapist_id: therapistId || null,
     });
   };
 
@@ -114,6 +119,7 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
     setDescription('');
     setCategory('');
     setDate(format(new Date(), 'yyyy-MM-dd'));
+    setTherapistId('');
     onClose();
   };
 
@@ -161,6 +167,26 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
                 {expenseCategories.map((cat) => (
                   <SelectItem key={cat.value} value={cat.value}>
                     {cat.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="expense-therapist">{t('finance.therapist')}</Label>
+            <Select
+              value={therapistId || '__none__'}
+              onValueChange={(v) => setTherapistId(v === '__none__' ? '' : v)}
+            >
+              <SelectTrigger className="bg-input border-border text-foreground">
+                <SelectValue placeholder={t('finance.noTherapist')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">{t('finance.noTherapist')}</SelectItem>
+                {therapists.map((th) => (
+                  <SelectItem key={th.id} value={th.id}>
+                    <TherapistOption therapist={th} />
                   </SelectItem>
                 ))}
               </SelectContent>

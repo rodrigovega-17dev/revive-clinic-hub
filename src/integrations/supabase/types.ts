@@ -355,6 +355,7 @@ export type Database = {
           description: string
           id: string
           recorded_by: string | null
+          therapist_id: string | null
           updated_at: string
         }
         Insert: {
@@ -366,6 +367,7 @@ export type Database = {
           description: string
           id?: string
           recorded_by?: string | null
+          therapist_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -377,6 +379,7 @@ export type Database = {
           description?: string
           id?: string
           recorded_by?: string | null
+          therapist_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -385,6 +388,13 @@ export type Database = {
             columns: ["clinic_id"]
             isOneToOne: false
             referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_therapist_id_fkey"
+            columns: ["therapist_id"]
+            isOneToOne: false
+            referencedRelation: "therapists"
             referencedColumns: ["id"]
           },
           {

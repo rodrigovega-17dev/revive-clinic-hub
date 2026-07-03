@@ -136,6 +136,8 @@ const Payroll = () => {
           totalRevenueBeforeIVA: 0,
           totalIVA: 0,
           totalTherapistEarnings: 0,
+          totalTherapistIVAWithheld: 0,
+          totalTherapistEarningsNet: 0,
           totalClinicEarnings: 0,
           totalAppointments: 0
         }
@@ -219,12 +221,17 @@ const Payroll = () => {
         const clinicPercentage = 1 - therapistPercentage;
         stats.therapistEarnings = stats.totalRevenueBeforeIVA * therapistPercentage;
         stats.clinicEarnings = stats.totalRevenueBeforeIVA * clinicPercentage;
+        // Withhold 16% IVA from the therapist's payout (net = gross × 0.84).
+        stats.therapistIVAWithheld = stats.therapistEarnings * 0.16;
+        stats.therapistEarningsNet = stats.therapistEarnings - stats.therapistIVAWithheld;
       });
 
       const totalRevenue = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.totalRevenue, 0);
       const totalRevenueBeforeIVA = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.totalRevenueBeforeIVA, 0);
       const totalIVA = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.totalIVA, 0);
       const totalTherapistEarnings = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.therapistEarnings, 0);
+      const totalTherapistIVAWithheld = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.therapistIVAWithheld, 0);
+      const totalTherapistEarningsNet = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.therapistEarningsNet, 0);
       const totalClinicEarnings = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.clinicEarnings, 0);
 
       return {
@@ -234,6 +241,8 @@ const Payroll = () => {
           totalRevenueBeforeIVA,
           totalIVA,
           totalTherapistEarnings,
+          totalTherapistIVAWithheld,
+          totalTherapistEarningsNet,
           totalClinicEarnings,
           totalAppointments: appointments.length
         }
@@ -265,6 +274,33 @@ const Payroll = () => {
     enabled: !!clinicId,
   });
 
+  // Therapist-attributed expenses within this period, summed per therapist.
+  // Key starts with 'expenses' so it refreshes when the expenses cache is invalidated.
+  const { data: therapistExpenses } = useQuery({
+    queryKey: ['expenses', 'by-therapist', clinicId, format(currentPeriod.startDate, 'yyyy-MM-dd'), format(currentPeriod.endDate, 'yyyy-MM-dd')],
+    queryFn: async () => {
+      if (!clinicId) return {} as Record<string, number>;
+      const { data, error } = await supabase
+        .from('expenses')
+        .select('therapist_id, amount')
+        .eq('clinic_id', clinicId)
+        .not('therapist_id', 'is', null)
+        .gte('date', format(currentPeriod.startDate, 'yyyy-MM-dd'))
+        .lte('date', format(currentPeriod.endDate, 'yyyy-MM-dd'));
+      if (error) throw error;
+      return (data || []).reduce((acc: Record<string, number>, e: any) => {
+        acc[e.therapist_id] = (acc[e.therapist_id] || 0) + Number(e.amount || 0);
+        return acc;
+      }, {} as Record<string, number>);
+    },
+    enabled: !!clinicId,
+  });
+
+  const getAttributedExpenses = (therapistId: string) => Number(therapistExpenses?.[therapistId] || 0);
+  // Final payout = gross earnings − 16% IVA − therapist-attributed expenses for the period.
+  const getNetPayable = (therapist: any) =>
+    Number(therapist?.therapistEarningsNet || 0) - getAttributedExpenses(therapist?.id);
+
   const payoutsByTherapist = (payoutRecords || []).reduce((acc: Map<string, { total: number }>, payout: any) => {
     const existing = acc.get(payout.therapist_id);
     const nextTotal = (existing?.total || 0) + Number(payout.amount || 0);
@@ -281,7 +317,7 @@ const Payroll = () => {
   };
 
   const openPayoutDialog = (therapist: any) => {
-    const remaining = getRemainingAmount(therapist.id, Number(therapist.therapistEarnings || 0));
+    const remaining = getRemainingAmount(therapist.id, getNetPayable(therapist));
     setPayoutTherapist(therapist);
     setPayoutAmount(String(Number(remaining).toFixed(2)));
     setPayoutMethod('transfer');
@@ -437,7 +473,7 @@ const Payroll = () => {
 
   const getPayoutStatus = (therapistId: string) => {
     const therapist = payrollData?.therapistStats?.find((item: any) => item.id === therapistId);
-    const earnings = Number(therapist?.therapistEarnings || 0);
+    const earnings = therapist ? getNetPayable(therapist) : 0;
     const totalPaid = getTotalPaid(therapistId);
 
     if (earnings > 0 && totalPaid >= earnings) return 'paid';
@@ -603,9 +639,12 @@ const Payroll = () => {
             <div className="flex items-center space-x-2">
               <Users className="h-4 w-4 text-yellow-400" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">{t('payroll.therapistEarnings')}</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('payroll.therapistNetPayout')}</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrencyWithClinic(Number(payrollData?.totals.totalTherapistEarnings || 0))}
+                  {formatCurrencyWithClinic(
+                    Number(payrollData?.totals.totalTherapistEarningsNet || 0) -
+                    Object.values(therapistExpenses || {}).reduce((s: number, v: any) => s + Number(v || 0), 0)
+                  )}
                 </p>
               </div>
             </div>
@@ -670,9 +709,12 @@ const Payroll = () => {
                 {payrollData.therapistStats.map((therapist: any) => (
                   (() => {
                     const status = getPayoutStatus(therapist.id);
-                    const earnings = Number(therapist.therapistEarnings || 0);
-                    const remainingAmount = getRemainingAmount(therapist.id, earnings);
-                    const hasEarnings = earnings > 0;
+                    const gross = Number(therapist.therapistEarnings || 0);
+                    const ivaWithheld = Number(therapist.therapistIVAWithheld || 0);
+                    const attributedExpenses = getAttributedExpenses(therapist.id);
+                    const netPayable = getNetPayable(therapist);
+                    const remainingAmount = getRemainingAmount(therapist.id, netPayable);
+                    const hasEarnings = netPayable > 0;
                     return (
                   <TableRow key={therapist.id} className="hover:bg-muted/50 border-border">
                     <TableCell>
@@ -697,7 +739,13 @@ const Payroll = () => {
                     </TableCell>
                     <TableCell>
                       <div className="font-medium text-green-600">
-                        {formatCurrencyWithClinic(Number(therapist.therapistEarnings))}
+                        {formatCurrencyWithClinic(netPayable)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatCurrencyWithClinic(gross)} − {t('payroll.ivaWithheld')} {formatCurrencyWithClinic(ivaWithheld)}
+                        {attributedExpenses > 0 && (
+                          <> − {t('payroll.expensesShort')} {formatCurrencyWithClinic(attributedExpenses)}</>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">

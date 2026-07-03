@@ -19,6 +19,7 @@ import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import TherapistOption from '@/components/TherapistOption';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -682,7 +683,7 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                             </SelectItem>
                             {therapists.map((th) => (
                               <SelectItem key={`therapist-${th.id}`} value={`therapist:${th.id}`}>
-                                {th.first_name} {th.last_name}
+                                <TherapistOption therapist={th} />
                               </SelectItem>
                             ))}
                           </>
