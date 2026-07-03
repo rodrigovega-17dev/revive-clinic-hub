@@ -189,6 +189,8 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
 
   const getAppointmentStatusText = (status: string) => {
     switch (status) {
+      case 'confirmed': return t('appointments.confirmed');
+      case 'in_progress': return t('appointments.inProgress');
       case 'completed': return t('appointments.completed');
       case 'cancelled': return t('appointments.cancelled');
       case 'no_show': return t('appointments.noShow');
@@ -200,6 +202,8 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
   const getAppointmentStatusColor = (status: string) => {
     switch (status) {
       case 'scheduled': return 'bg-primary/10 text-primary border-primary/20';
+      case 'confirmed': return 'bg-teal-500/10 text-teal-600 border-teal-500/20 dark:text-teal-400';
+      case 'in_progress': return 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400';
       case 'completed': return 'bg-green-500/10 text-green-600 border-green-500/20 dark:text-green-400';
       case 'cancelled': return 'bg-destructive/10 text-destructive border-destructive/20';
       case 'no_show': return 'bg-orange-500/10 text-orange-600 border-orange-500/20 dark:text-orange-400';

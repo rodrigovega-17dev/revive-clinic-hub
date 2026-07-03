@@ -28,21 +28,21 @@ export const FinancePinGate: React.FC<FinancePinGateProps> = ({ children }) => {
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isFinanceOrPayroll = pathname === '/finance' || pathname === '/payroll';
+  const isProtectedPath = pathname === '/finance' || pathname === '/payroll' || pathname === '/therapists';
   const required = Boolean(securitySettings?.finance_pin_required);
 
   const [unlocked, setUnlockedState] = useState(false);
 
   // When PIN is required, always require entry (no persistence). When not required, pass through.
   useEffect(() => {
-    if (!isFinanceOrPayroll) return;
+    if (!isProtectedPath) return;
     if (securityLoading) return;
     if (!required) {
       setUnlockedState(true);
       return;
     }
     setUnlockedState(false);
-  }, [isFinanceOrPayroll, required, securityLoading]);
+  }, [isProtectedPath, required, securityLoading]);
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +72,7 @@ export const FinancePinGate: React.FC<FinancePinGateProps> = ({ children }) => {
   };
 
   // Not a protected path: render children
-  if (!isFinanceOrPayroll) {
+  if (!isProtectedPath) {
     return <>{children}</>;
   }
   // Still loading: block access until we know if PIN is required (avoids briefly showing content)

@@ -151,6 +151,8 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const getStatusText = (status: string) => {
     switch (status) {
       case 'scheduled': return t('appointments.scheduled');
+      case 'confirmed': return t('appointments.confirmed');
+      case 'in_progress': return t('appointments.inProgress');
       case 'completed': return t('appointments.completed');
       case 'cancelled': return t('appointments.cancelled');
       case 'no_show': return t('appointments.noShow');
@@ -337,6 +339,27 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       toast({
         title: t('appointments.error'),
         description: t('appointments.failedToCancel'),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleMarkInProgress = async () => {
+    try {
+      const { data } = await updateAppointment.mutateAsync({
+        id: appointment.id,
+        status: 'in_progress',
+      });
+      setDisplayAppointment(data);
+      toast({
+        title: t('appointments.success'),
+        description: t('appointments.appointmentInProgress'),
+      });
+    } catch (error) {
+      console.error('Error marking appointment in progress:', error);
+      toast({
+        title: t('appointments.error'),
+        description: t('appointments.failedToUpdate'),
         variant: 'destructive',
       });
     }
@@ -669,8 +692,17 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   </div>
                 ) : (
                   <div className="flex space-x-2">
-                    <Button 
-                      variant="default" 
+                    {apt.status !== 'in_progress' && (
+                      <Button
+                        variant="secondary"
+                        onClick={handleMarkInProgress}
+                        disabled={updateAppointment.isPending}
+                      >
+                        {t('appointments.markInProgress')}
+                      </Button>
+                    )}
+                    <Button
+                      variant="default"
                       onClick={handleMarkAsCompleted}
                       disabled={updateAppointment.isPending}
                     >
@@ -1058,7 +1090,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
           </TabsContent>
 
           <TabsContent value="reschedule" className="space-y-4">
-            {apt.status !== 'cancelled' && apt.status !== 'completed' ? (
+            {apt.status !== 'cancelled' && apt.status !== 'completed' && apt.status !== 'in_progress' ? (
               <Card className="bg-muted/20 border-border">
                 <CardHeader>
                   <CardTitle className="text-lg text-foreground">{t('appointments.rescheduleAppointment')}</CardTitle>

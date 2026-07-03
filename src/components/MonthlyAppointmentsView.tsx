@@ -18,32 +18,14 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/useAuth';
+import { getTherapistColor } from '@/lib/therapist-colors';
+import { getStatusDotColor } from '@/lib/appointment-status';
 
 interface MonthlyAppointmentsViewProps {
   currentDate: Date;
   onDateSelect?: (date: Date) => void;
   searchTerm?: string;
 }
-
-// Google Calendar default colors
-const GOOGLE_CALENDAR_COLORS = [
-  { id: '1', name: 'Lavender', background: '#7986cb', foreground: '#ffffff' },
-  { id: '2', name: 'Sage', background: '#33b679', foreground: '#ffffff' },
-  { id: '3', name: 'Grape', background: '#8e63ce', foreground: '#ffffff' },
-  { id: '4', name: 'Flamingo', background: '#e67c73', foreground: '#ffffff' },
-  { id: '5', name: 'Banana', background: '#f6c026', foreground: '#000000' },
-  { id: '6', name: 'Tangerine', background: '#f4791f', foreground: '#ffffff' },
-  { id: '7', name: 'Peacock', background: '#039be5', foreground: '#ffffff' },
-  { id: '8', name: 'Graphite', background: '#616161', foreground: '#ffffff' },
-  { id: '9', name: 'Blueberry', background: '#3f51b5', foreground: '#ffffff' },
-  { id: '10', name: 'Basil', background: '#0b8043', foreground: '#ffffff' },
-  { id: '11', name: 'Tomato', background: '#d60000', foreground: '#ffffff' },
-];
-
-// Utility function to get therapist color
-const getTherapistColor = (colorId?: string) => {
-  return GOOGLE_CALENDAR_COLORS.find(color => color.id === colorId) || GOOGLE_CALENDAR_COLORS[0];
-};
 
 const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
   currentDate,
@@ -126,6 +108,10 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
         return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400';
       case 'no_show':
         return 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400';
+      case 'in_progress':
+        return 'bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-400';
+      case 'confirmed':
+        return 'bg-teal-100 text-teal-800 dark:bg-teal-900/20 dark:text-teal-400';
       default:
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400';
     }
@@ -139,6 +125,10 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
         return t('appointments.statusCancelled');
       case 'no_show':
         return t('appointments.statusNoShow');
+      case 'in_progress':
+        return t('appointments.statusInProgress');
+      case 'confirmed':
+        return t('appointments.statusConfirmed');
       default:
         return t('appointments.statusScheduled');
     }
@@ -255,21 +245,24 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
 
                   {/* Appointments Preview */}
                   <div className="space-y-1">
-                    {dayAppointments.slice(0, 2).map((appointment: any) => (
+                    {dayAppointments.slice(0, 2).map((appointment: any) => {
+                      const color = getTherapistColor(appointment.therapists?.calendar_color_id);
+                      const isCancelled = appointment.status === 'cancelled';
+                      return (
                       <div
                         key={appointment.id}
-                        className={`
-                          text-xs p-1 rounded cursor-pointer
-                          ${getStatusColor(appointment.status)}
-                          hover:opacity-80 transition-opacity
-                        `}
+                        className={`text-xs p-1 rounded cursor-pointer overflow-hidden hover:opacity-90 transition-opacity ${isCancelled ? 'line-through opacity-60' : ''}`}
+                        style={{ backgroundColor: color.background, color: color.foreground }}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleAppointmentClick(appointment);
                         }}
                       >
-                        <div className="flex items-center space-x-1">
-                          <Clock className="h-2.5 w-2.5" />
+                        <div className="flex items-center gap-1">
+                          <span
+                            className="w-2 h-2 rounded-full flex-shrink-0 ring-1 ring-black/20"
+                            style={{ backgroundColor: getStatusDotColor(appointment.status) }}
+                          />
                           <span className="font-medium">
                             {new Intl.DateTimeFormat('en-US', {
                               hour: '2-digit',
@@ -282,17 +275,12 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
                         <div className="truncate font-medium">
                           {appointment.clients?.first_name} {appointment.clients?.last_name}
                         </div>
-                        <div className="text-xs opacity-75">
-                          <div className="flex items-center gap-1">
-                            <div
-                              className="w-2 h-2 rounded-full border border-border"
-                              style={{ backgroundColor: getTherapistColor(appointment.therapists?.calendar_color_id).background }}
-                            />
-                            {appointment.therapists?.first_name} {appointment.therapists?.last_name}
-                          </div>
+                        <div className="truncate opacity-90">
+                          {appointment.therapists?.first_name} {appointment.therapists?.last_name}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                     
                     {dayAppointments.length > 2 && (
                       <div

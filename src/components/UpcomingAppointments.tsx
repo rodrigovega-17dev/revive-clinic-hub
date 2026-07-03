@@ -18,6 +18,8 @@ const UpcomingAppointments = ({ onAppointmentClick }: UpcomingAppointmentsProps)
   const getStatusText = (status: string) => {
     switch (status) {
       case 'scheduled': return t('appointments.scheduled');
+      case 'confirmed': return t('appointments.confirmed');
+      case 'in_progress': return t('appointments.inProgress');
       case 'completed': return t('appointments.completed');
       case 'cancelled': return t('appointments.cancelled');
       case 'no_show': return t('appointments.noShow');
@@ -28,6 +30,8 @@ const UpcomingAppointments = ({ onAppointmentClick }: UpcomingAppointmentsProps)
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'scheduled': return 'bg-blue-100 text-blue-800';
+      case 'confirmed': return 'bg-teal-100 text-teal-800';
+      case 'in_progress': return 'bg-amber-100 text-amber-800';
       case 'completed': return 'bg-green-100 text-green-800';
       case 'cancelled': return 'bg-red-100 text-red-800';
       case 'no_show': return 'bg-orange-100 text-orange-800';

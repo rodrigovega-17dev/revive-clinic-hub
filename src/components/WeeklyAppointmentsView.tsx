@@ -11,6 +11,8 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useClinicSettings } from '@/hooks/useClinic';
 import { Skeleton } from '@/components/ui/skeleton';
 import AppointmentDetails from './AppointmentDetails';
+import { getTherapistColor } from '@/lib/therapist-colors';
+import { getStatusDotColor } from '@/lib/appointment-status';
 
 interface WeeklyAppointmentsViewProps {
   currentDate: Date;
@@ -46,27 +48,13 @@ interface PositionedAppointment extends Appointment {
   isAllDay?: boolean;
 }
 
-// Google Calendar default colors
-const GOOGLE_CALENDAR_COLORS = [
-  { id: '1', name: 'Lavender', background: '#7986cb', foreground: '#ffffff' },
-  { id: '2', name: 'Sage', background: '#33b679', foreground: '#ffffff' },
-  { id: '3', name: 'Grape', background: '#8e63ce', foreground: '#ffffff' },
-  { id: '4', name: 'Flamingo', background: '#e67c73', foreground: '#ffffff' },
-  { id: '5', name: 'Banana', background: '#f6c026', foreground: '#000000' },
-  { id: '6', name: 'Tangerine', background: '#f4791f', foreground: '#ffffff' },
-  { id: '7', name: 'Peacock', background: '#039be5', foreground: '#ffffff' },
-  { id: '8', name: 'Graphite', background: '#616161', foreground: '#ffffff' },
-  { id: '9', name: 'Blueberry', background: '#3f51b5', foreground: '#ffffff' },
-  { id: '10', name: 'Basil', background: '#0b8043', foreground: '#ffffff' },
-  { id: '11', name: 'Tomato', background: '#d60000', foreground: '#ffffff' },
-];
-
 // Time slots from 00:00 to 23:00 (24 hours total)
 const TIME_SLOTS = Array.from({ length: 24 }, (_, i) => i); // 00:00 to 23:00
 const INITIAL_SCROLL_HOUR = 7;
 const ALL_DAY_HEIGHT = 40;
 const TIME_SLOT_HEIGHT = 60;
-const DAY_COLUMN_WIDTH = 160; // Day column width; horizontal scroll on narrow viewports
+const TIME_COLUMN_WIDTH = 80; // Left time-label column
+const MIN_DAY_WIDTH = 130; // Columns grow to fill width; scroll only when narrower than this
 // Offset before time grid (header + all-day) – used so initial scroll shows 7am at top
 const HEADER_ESTIMATE_PX = 52;
 const SCROLL_OFFSET_TO_7AM = HEADER_ESTIMATE_PX + ALL_DAY_HEIGHT + INITIAL_SCROLL_HOUR * TIME_SLOT_HEIGHT;
@@ -168,6 +156,18 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
   const [selectedWeek, setSelectedWeek] = useState(currentDate);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showAppointmentDetails, setShowAppointmentDetails] = useState(false);
+  const [showWeekends, setShowWeekends] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('weekly-show-weekends') !== 'false';
+  });
+
+  const toggleWeekends = () => {
+    setShowWeekends((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') localStorage.setItem('weekly-show-weekends', String(next));
+      return next;
+    });
+  };
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   
   const locale = currentLanguage === 'es' ? es : enUS;
@@ -176,6 +176,13 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
   const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 1 }); // Monday start
   const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: 1 });
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
+  // Optionally hide Saturday (6) and Sunday (0)
+  const visibleDays = showWeekends
+    ? weekDays
+    : weekDays.filter((day) => day.getDay() !== 0 && day.getDay() !== 6);
+  const numDays = visibleDays.length;
+  const gridTemplate = `${TIME_COLUMN_WIDTH}px repeat(${numDays}, minmax(${MIN_DAY_WIDTH}px, 1fr))`;
+  const minGridWidth = TIME_COLUMN_WIDTH + numDays * MIN_DAY_WIDTH;
 
   // Fetch appointments for the week
   const { data: appointments, isLoading } = useQuery({
@@ -255,23 +262,6 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
   const handleAppointmentClick = (appointment: Appointment) => {
     setSelectedAppointment(appointment);
     setShowAppointmentDetails(true);
-  };
-
-  const getTherapistColor = (colorId?: string) => {
-    return GOOGLE_CALENDAR_COLORS.find(color => color.id === colorId) || GOOGLE_CALENDAR_COLORS[0];
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400';
-      case 'cancelled':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400';
-      case 'no_show':
-        return 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400';
-      default:
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400';
-    }
   };
 
   const getClinicTimeParts = (date: Date) => {
@@ -357,6 +347,14 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
         </div>
         <div className="flex items-center space-x-2">
           <Button
+            variant={showWeekends ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={toggleWeekends}
+            title={t('appointments.toggleWeekends')}
+          >
+            {showWeekends ? t('appointments.hideWeekends') : t('appointments.showWeekends')}
+          </Button>
+          <Button
             variant="outline"
             size="sm"
             onClick={() => setSelectedWeek(new Date())}
@@ -374,18 +372,17 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
           className="overflow-auto scrollbar-hide w-full"
           style={{ height: '700px', maxWidth: '100%' }}
         >
-          <div style={{ width: `${80 + 7 * DAY_COLUMN_WIDTH}px` }}>
+          <div className="w-full" style={{ minWidth: `${minGridWidth}px` }}>
             {/* Header with day names */}
-            <div className="grid border-b border-border sticky top-0 z-40" style={{ gridTemplateColumns: `80px repeat(7, ${DAY_COLUMN_WIDTH}px)` }}>
+            <div className="grid border-b border-border sticky top-0 z-40" style={{ gridTemplateColumns: gridTemplate }}>
               <div className="w-20 border-r border-border sticky left-0 z-30" style={{ backgroundColor: 'var(--time-column-bg, #f6f8fb)' }}></div> {/* Time column header */}
-              {weekDays.map((day) => {
+              {visibleDays.map((day) => {
                 const isCurrentDay = isToday(day);
                 return (
                   <div
                     key={format(day, 'yyyy-MM-dd')}
                     className={`p-2 text-center border-r last:border-r-0 border-border font-semibold`}
                     style={{
-                      width: `${DAY_COLUMN_WIDTH}px`,
                       backgroundColor: isCurrentDay ? 'var(--weekly-header-current-bg)' : 'var(--weekly-header-bg)',
                       color: isCurrentDay ? '#2563eb' : 'var(--foreground)'
                     }}
@@ -402,11 +399,11 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
             </div>
 
             {/* All-day events section */}
-            <div className="grid border-b border-border" style={{ gridTemplateColumns: `80px repeat(7, ${DAY_COLUMN_WIDTH}px)` }}>
+            <div className="grid border-b border-border" style={{ gridTemplateColumns: gridTemplate }}>
               <div className="w-20 border-r border-border flex items-center justify-center text-xs text-muted-foreground font-medium sticky left-0 z-30" style={{ backgroundColor: 'var(--time-column-bg, #f6f8fb)' }}>
                 {t('appointments.allDay')}
               </div>
-              {weekDays.map((day) => {
+              {visibleDays.map((day) => {
                 const dayKey = format(day, 'yyyy-MM-dd');
                 const dayData = appointmentsByDay[dayKey] || [];
                 const allDayEvents = dayData.filter(apt => apt.isAllDay);
@@ -415,28 +412,32 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
                   <div
                     key={dayKey}
                     className="border-r last:border-r-0 relative border-border"
-                    style={{ height: `${ALL_DAY_HEIGHT}px`, width: `${DAY_COLUMN_WIDTH}px` }}
+                    style={{ height: `${ALL_DAY_HEIGHT}px` }}
                   >
                     {allDayEvents.map((apt) => {
                       const width = 100 / apt.columns;
                       const left = apt.column * width;
+                      const color = getTherapistColor(apt.therapists?.calendar_color_id);
+                      const isCancelled = apt.status === 'cancelled';
                       return (
                         <div
                           key={apt.id}
-                          className={`absolute rounded text-xs cursor-pointer hover:shadow-md transition-all border border-border ${getStatusColor(apt.status)}`}
+                          className={`absolute rounded text-xs cursor-pointer hover:shadow-md transition-all ${isCancelled ? 'line-through opacity-60' : ''}`}
                           style={{
                             width: `${width}%`,
                             left: `${left}%`,
                             top: '2px',
                             bottom: '2px',
                             zIndex: 10,
+                            backgroundColor: color.background,
+                            color: color.foreground,
                           }}
                           onClick={() => handleAppointmentClick(apt)}
                         >
-                          <div className="rounded px-2 py-1 h-full flex items-center gap-2 overflow-hidden">
+                          <div className="rounded px-2 py-1 h-full flex items-center gap-1.5 overflow-hidden">
                             <span
-                              className="w-2 h-2 rounded-full border border-border"
-                              style={{ backgroundColor: getTherapistColor(apt.therapists?.calendar_color_id).background }}
+                              className="w-2 h-2 rounded-full flex-shrink-0 ring-1 ring-black/20"
+                              style={{ backgroundColor: getStatusDotColor(apt.status) }}
                             />
                             <div className="truncate font-medium">
                               {apt.clients?.first_name} {apt.clients?.last_name}
@@ -451,7 +452,7 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
             </div>
 
             {/* Time grid */}
-            <div className="grid bg-card" style={{ gridTemplateColumns: `80px repeat(7, ${DAY_COLUMN_WIDTH}px)` }}>
+            <div className="grid bg-card" style={{ gridTemplateColumns: gridTemplate }}>
               {/* Time labels column */}
               <div className="w-20 border-r border-border sticky left-0 z-30" style={{ backgroundColor: 'var(--time-column-bg, #f6f8fb)' }}>
                 {TIME_SLOTS.map((hour) => (
@@ -470,7 +471,7 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
               </div>
 
               {/* Day columns */}
-              {weekDays.map((day) => {
+              {visibleDays.map((day) => {
                 const dayKey = format(day, 'yyyy-MM-dd');
                 const dayData = appointmentsByDay[dayKey] || [];
                 const timedEvents = dayData.filter(apt => !apt.isAllDay);
@@ -482,9 +483,8 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
                     className={`border-r last:border-r-0 relative border-border ${
                       isCurrentDay ? 'bg-primary/5' : ''
                     }`}
-                    style={{ 
-                      height: `${TIME_SLOTS.length * TIME_SLOT_HEIGHT}px`,
-                      width: `${DAY_COLUMN_WIDTH}px`
+                    style={{
+                      height: `${TIME_SLOTS.length * TIME_SLOT_HEIGHT}px`
                     }}
                   >
                     {/* Time grid lines */}
@@ -519,33 +519,37 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
                     {/* Timed appointments */}
                     {timedEvents.map((apt) => {
                       const startTime = formatClinicTime(apt.start_time);
-                      const endTime = formatClinicTime(apt.end_time);
                       const top = getTimePosition(apt.start_time);
                       const height = getDuration(apt.start_time, apt.end_time);
                       const width = 100 / apt.columns;
                       const left = apt.column * width;
 
+                      const color = getTherapistColor(apt.therapists?.calendar_color_id);
+                      const isCancelled = apt.status === 'cancelled';
+
                       return (
                         <div
                           key={apt.id}
-                          className={`absolute rounded text-xs cursor-pointer hover:shadow-lg transition-all border border-border ${getStatusColor(apt.status)}`}
+                          className={`absolute rounded text-xs cursor-pointer hover:shadow-lg hover:brightness-105 transition-all overflow-hidden ${isCancelled ? 'line-through opacity-60' : ''}`}
                           style={{
-                            width: `${width}%`,
+                            width: `calc(${width}% - 2px)`,
                             left: `${left}%`,
                             top: `${top}px`,
                             height: `${height}px`,
                             minHeight: '20px',
                             zIndex: 10 + apt.column,
+                            backgroundColor: color.background,
+                            color: color.foreground,
                           }}
                           onClick={() => handleAppointmentClick(apt)}
                         >
                           <div className="rounded p-1 h-full overflow-hidden">
                             <div className="flex items-center gap-1">
-                              <span className="font-medium text-xs mb-0.5">{startTime}</span>
                               <span
-                                className="w-2 h-2 rounded-full border border-border"
-                                style={{ backgroundColor: getTherapistColor(apt.therapists?.calendar_color_id).background }}
+                                className="w-2 h-2 rounded-full flex-shrink-0 ring-1 ring-black/20"
+                                style={{ backgroundColor: getStatusDotColor(apt.status) }}
                               />
+                              <span className="font-medium text-xs">{startTime}</span>
                             </div>
                             <div className="text-xs font-medium truncate">
                               {apt.clients?.first_name} {apt.clients?.last_name}
@@ -556,7 +560,7 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
                               </div>
                             )}
                             {height > 60 && (
-                              <div className="text-xs opacity-75 truncate">
+                              <div className="text-xs opacity-80 truncate">
                                 {apt.therapists?.first_name} {apt.therapists?.last_name}
                               </div>
                             )}

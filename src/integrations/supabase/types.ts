@@ -1711,7 +1711,7 @@ export type Database = {
       }
     }
     Enums: {
-      appointment_status: "scheduled" | "completed" | "cancelled" | "no_show"
+      appointment_status: "scheduled" | "confirmed" | "in_progress" | "completed" | "cancelled" | "no_show"
       cfdi_status: "draft" | "issued" | "canceled"
       cfdi_type: "ingreso" | "egreso" | "pago"
       gender: "male" | "female" | "other" | "prefer_not_to_say"
@@ -1833,7 +1833,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      appointment_status: ["scheduled", "completed", "cancelled", "no_show"],
+      appointment_status: ["scheduled", "confirmed", "in_progress", "completed", "cancelled", "no_show"],
       cfdi_status: ["draft", "issued", "canceled"],
       cfdi_type: ["ingreso", "egreso", "pago"],
       gender: ["male", "female", "other", "prefer_not_to_say"],
