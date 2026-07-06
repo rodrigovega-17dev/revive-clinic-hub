@@ -32,10 +32,9 @@ export const useUpcomingAppointments = () => {
           treatments (name, duration_minutes)
         `)
         .eq('clinic_id', clinicId)
-        .gte('start_time', new Date().toISOString())
-        .eq('status', 'scheduled')
+        .in('status', ['in_progress', 'waiting_checkout'])
         .order('start_time', { ascending: true })
-        .limit(10);
+        .limit(15);
       
       if (error) throw error;
       return data;

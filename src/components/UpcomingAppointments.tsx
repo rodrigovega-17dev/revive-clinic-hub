@@ -17,24 +17,16 @@ const UpcomingAppointments = ({ onAppointmentClick }: UpcomingAppointmentsProps)
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'scheduled': return t('appointments.scheduled');
-      case 'confirmed': return t('appointments.confirmed');
       case 'in_progress': return t('appointments.inProgress');
-      case 'completed': return t('appointments.completed');
-      case 'cancelled': return t('appointments.cancelled');
-      case 'no_show': return t('appointments.noShow');
+      case 'waiting_checkout': return t('appointments.waitingCheckout');
       default: return status;
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'scheduled': return 'bg-blue-100 text-blue-800';
-      case 'confirmed': return 'bg-teal-100 text-teal-800';
       case 'in_progress': return 'bg-amber-100 text-amber-800';
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      case 'no_show': return 'bg-orange-100 text-orange-800';
+      case 'waiting_checkout': return 'bg-violet-100 text-violet-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -43,8 +35,8 @@ const UpcomingAppointments = ({ onAppointmentClick }: UpcomingAppointmentsProps)
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('dashboard.upcomingAppointmentsTitle')}</CardTitle>
-          <CardDescription>{t('dashboard.nextScheduledSessions')}</CardDescription>
+          <CardTitle>{t('dashboard.activeAppointmentsTitle')}</CardTitle>
+          <CardDescription>{t('dashboard.activeAppointmentsSubtitle')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -70,13 +62,13 @@ const UpcomingAppointments = ({ onAppointmentClick }: UpcomingAppointmentsProps)
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('dashboard.upcomingAppointmentsTitle')}</CardTitle>
-          <CardDescription>{t('dashboard.nextScheduledSessions')}</CardDescription>
+          <CardTitle>{t('dashboard.activeAppointmentsTitle')}</CardTitle>
+          <CardDescription>{t('dashboard.activeAppointmentsSubtitle')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center text-muted-foreground py-8">
             <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
-            <p>{t('dashboard.noUpcomingAppointments')}</p>
+            <p>{t('dashboard.noActiveAppointments')}</p>
           </div>
         </CardContent>
       </Card>
@@ -86,8 +78,8 @@ const UpcomingAppointments = ({ onAppointmentClick }: UpcomingAppointmentsProps)
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t('dashboard.upcomingAppointmentsTitle')}</CardTitle>
-        <CardDescription>{t('dashboard.nextScheduledSessions')}</CardDescription>
+        <CardTitle>{t('dashboard.activeAppointmentsTitle')}</CardTitle>
+        <CardDescription>{t('dashboard.activeAppointmentsSubtitle')}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">

@@ -157,6 +157,7 @@ const openDocumentWindow = (instance: DocumentInstance, options?: { autoPrint?: 
   // Must be defined before renderSignatureBlock uses them
   const responsibleName = (variables as any).responsibleName as string | undefined;
   const responsibleSignatureUrl = (variables as any).responsibleSignatureUrl as string | undefined;
+  const clinicLogoUrl = (variables as any).clinicLogoUrl as string | undefined;
 
   // If template already has a responsible (therapist) signature, don't add the extra trailing block
   const hasResponsibleSignatureInSchema = sections.some((s) => {
@@ -272,7 +273,9 @@ const openDocumentWindow = (instance: DocumentInstance, options?: { autoPrint?: 
         <meta charset="utf-8" />
         <style>
           body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 28px; color: #111827; background: #f9fafb; }
-          .page { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 28px; }
+          .page { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 28px; position: relative; overflow: hidden; }
+          .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 380px; height: 380px; background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.06; pointer-events: none; z-index: 0; }
+          .page > * { position: relative; z-index: 1; }
           h1 { font-size: 20px; margin-bottom: 4px; }
           h2 { font-size: 14px; margin-top: 0; margin-bottom: 8px; color: #6b7280; }
           .meta { font-size: 12px; color: #6b7280; }
@@ -283,6 +286,7 @@ const openDocumentWindow = (instance: DocumentInstance, options?: { autoPrint?: 
       </head>
       <body>
         <div class="page">
+          ${clinicLogoUrl ? `<div class="watermark" style="background-image: url('${clinicLogoUrl}');"></div>` : ''}
           <header style="margin-bottom: 16px;">
             <div class="meta">${clinicName}</div>
             <h1>${docTitle}</h1>

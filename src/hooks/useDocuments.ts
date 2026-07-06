@@ -152,7 +152,7 @@ export const useCreateDocumentInstance = () => {
 
       const { data: clinic, error: clinicError } = await supabase
         .from('clinics')
-        .select('id, name, slug')
+        .select('id, name, slug, logo_url')
         .eq('id', clinicId)
         .single();
       if (clinicError) throw clinicError;
@@ -198,6 +198,7 @@ export const useCreateDocumentInstance = () => {
         treatmentName: treatment?.name ?? null,
         clinicName: clinic.name,
         clinicSlug: clinic.slug,
+        clinicLogoUrl: (clinic as any).logo_url ?? null,
       };
 
       const mergedVariables = {

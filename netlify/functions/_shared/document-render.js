@@ -57,6 +57,7 @@ function renderDocumentHtml(instance, opts = {}) {
 
   const responsibleName = variables.responsibleName || null;
   const responsibleSignatureUrl = variables.responsibleSignatureUrl || null;
+  const clinicLogoUrl = variables.clinicLogoUrl || null;
 
   const infoRows = [
     { label: 'Paciente', value: variables.clientFullName },
@@ -171,8 +172,14 @@ function renderDocumentHtml(instance, opts = {}) {
       </div>`
     : '';
 
+  const watermarkHtml = clinicLogoUrl
+    ? `<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 380px; height: 380px; background-image: url('${escapeHtml(clinicLogoUrl)}'); background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.06; pointer-events: none; z-index: 0;"></div>`
+    : '';
+
   const pageContent = `
-    <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 28px; max-width: 720px; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827;">
+    <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 28px; max-width: 720px; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; position: relative; overflow: hidden;">
+      ${watermarkHtml}
+      <div style="position: relative; z-index: 1;">
       <header style="margin-bottom: 16px;">
         <div style="font-size: 12px; color: #6b7280;">${escapeHtml(clinicName)}</div>
         <h1 style="font-size: 20px; margin-bottom: 4px;">${escapeHtml(title)}</h1>
@@ -181,6 +188,7 @@ function renderDocumentHtml(instance, opts = {}) {
       ${infoGridHtml}
       ${sectionHtml}
       ${signatureBlockHtml}
+      </div>
     </div>`;
 
   if (!includeFullPage) {

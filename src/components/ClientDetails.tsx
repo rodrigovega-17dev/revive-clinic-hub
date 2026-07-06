@@ -537,7 +537,13 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
                     <TableBody>
                       {appointmentsHistory.map((apt) => (
                         <TableRow key={apt.id}>
-                          <TableCell>{format(new Date(apt.start_time), 'MMM d, yyyy')}</TableCell>
+                          <TableCell>{formatClinicDate(apt.start_time, {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}</TableCell>
                           <TableCell>{apt.treatments?.name ?? 'N/A'}</TableCell>
                           <TableCell>
                             {apt.therapists
