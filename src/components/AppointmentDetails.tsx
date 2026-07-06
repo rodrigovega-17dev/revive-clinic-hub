@@ -991,9 +991,9 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   </div>
                   
                   {apt.payment_status === 'paid' && apt.status !== 'completed' && (
-                    <Button 
+                    <Button
                       variant="default"
-                      onClick={handleMarkAsCompleted} 
+                      onClick={() => handleStatusChange('completed')}
                       disabled={updateAppointment.isPending}
                       className="w-full"
                     >
