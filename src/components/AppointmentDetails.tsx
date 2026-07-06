@@ -15,7 +15,8 @@ import { useTherapists } from '@/hooks/useTherapists';
 import { useTreatments } from '@/hooks/useTreatments';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Calendar, User, Clock, DollarSign, CreditCard, CalendarDays, ExternalLink, AlertTriangle, CheckCircle, FileText, Upload, MessageCircle } from 'lucide-react';
+import { Loader2, Calendar, User, Clock, DollarSign, CreditCard, CalendarDays, ExternalLink, AlertTriangle, CheckCircle, FileText, Upload, MessageCircle, ChevronDown } from 'lucide-react';
+import { getStatusDotColor } from '@/lib/appointment-status';
 import { format } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
@@ -332,77 +333,66 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
     }
   };
 
-  const handleCancelAppointment = async () => {
-    try {
-      await updateAppointment.mutateAsync({
-        id: appointment.id,
-        status: 'cancelled',
-      });
-
-      toast({
-        title: t('appointments.success'),
-        description: t('appointments.appointmentCancelled'),
-      });
-      
-      onClose();
-    } catch (error) {
-      console.error('Error cancelling appointment:', error);
-      toast({
-        title: t('appointments.error'),
-        description: t('appointments.failedToCancel'),
-        variant: 'destructive',
-      });
-    }
+  const STATUS_TRANSITIONS: Record<string, string[]> = {
+    scheduled:        ['confirmed', 'in_progress', 'waiting_checkout', 'completed', 'cancelled', 'no_show'],
+    confirmed:        ['in_progress', 'waiting_checkout', 'completed', 'cancelled', 'no_show'],
+    in_progress:      ['waiting_checkout', 'completed', 'cancelled'],
+    waiting_checkout: ['completed', 'cancelled'],
+    completed:        [],
+    cancelled:        [],
+    no_show:          [],
   };
 
-  const handleMarkInProgress = async () => {
+  const STATUS_LABELS: Record<string, string> = {
+    confirmed:        t('appointments.confirmed'),
+    in_progress:      t('appointments.inProgress'),
+    waiting_checkout: t('appointments.waitingCheckout'),
+    completed:        t('appointments.completed'),
+    cancelled:        t('appointments.cancelAppointment'),
+    no_show:          t('appointments.noShow'),
+  };
+
+  const STATUS_MESSAGES: Record<string, string> = {
+    confirmed:        t('appointments.confirmed'),
+    in_progress:      t('appointments.appointmentInProgress'),
+    waiting_checkout: t('appointments.waitingCheckoutMarked'),
+    completed:        t('appointments.appointmentCompleted'),
+    cancelled:        t('appointments.appointmentCancelled'),
+    no_show:          t('appointments.noShowMarked'),
+  };
+
+  const handleStatusChange = async (nextStatus: string) => {
     try {
       const { data } = await updateAppointment.mutateAsync({
         id: appointment.id,
-        status: 'in_progress',
+        status: nextStatus as any,
       });
       setDisplayAppointment(data);
+
       toast({
         title: t('appointments.success'),
-        description: t('appointments.appointmentInProgress'),
+        description: STATUS_MESSAGES[nextStatus] || t('appointments.statusUpdated'),
       });
+
+      if (nextStatus === 'completed') {
+        queryClient.invalidateQueries({ queryKey: ['client-balance'] });
+        queryClient.invalidateQueries({ queryKey: ['all-client-balances'] });
+        queryClient.invalidateQueries({ queryKey: ['client-pending-appointments'] });
+        if (appointment?.client_id && clinicId) {
+          queryClient.invalidateQueries({ queryKey: ['client-appointments-history', appointment.client_id, clinicId] });
+        }
+        queryClient.invalidateQueries({ queryKey: ['payroll'] });
+        setActiveTab('payment');
+      }
+
+      if (nextStatus === 'cancelled') {
+        onClose();
+      }
     } catch (error) {
-      console.error('Error marking appointment in progress:', error);
+      console.error('Error changing appointment status:', error);
       toast({
         title: t('appointments.error'),
         description: t('appointments.failedToUpdate'),
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleMarkAsCompleted = async () => {
-    try {
-      const { data } = await updateAppointment.mutateAsync({
-        id: appointment.id,
-        status: 'completed',
-      });
-      setDisplayAppointment(data);
-
-      toast({
-        title: t('appointments.success'),
-        description: t('appointments.appointmentCompleted'),
-      });
-
-      queryClient.invalidateQueries({ queryKey: ['client-balance'] });
-      queryClient.invalidateQueries({ queryKey: ['all-client-balances'] });
-      queryClient.invalidateQueries({ queryKey: ['client-pending-appointments'] });
-      if (appointment?.client_id && clinicId) {
-        queryClient.invalidateQueries({ queryKey: ['client-appointments-history', appointment.client_id, clinicId] });
-      }
-      queryClient.invalidateQueries({ queryKey: ['payroll'] });
-
-      setActiveTab('payment');
-    } catch (error) {
-      console.error('Error marking appointment as completed:', error);
-      toast({
-        title: t('appointments.error'),
-        description: t('appointments.failedToComplete'),
         variant: 'destructive',
       });
     }
@@ -686,11 +676,11 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
               </CardContent>
             </Card>
 
-            <div className="flex justify-between space-x-3">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-wrap justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
                 {apt.status === 'cancelled' ? (
-                  <Button 
-                    variant="destructive" 
+                  <Button
+                    variant="destructive"
                     onClick={handleDeleteAppointment}
                     disabled={updateAppointment.isPending}
                   >
@@ -701,34 +691,38 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                     <CheckCircle className="h-5 w-5 text-green-600" />
                     <span className="text-green-600 font-medium">{t('appointments.completed')}</span>
                   </div>
-                ) : (
-                  <div className="flex space-x-2">
-                    {apt.status !== 'in_progress' && (
-                      <Button
-                        variant="secondary"
-                        onClick={handleMarkInProgress}
-                        disabled={updateAppointment.isPending}
-                      >
-                        {t('appointments.markInProgress')}
-                      </Button>
-                    )}
-                    <Button
-                      variant="default"
-                      onClick={handleMarkAsCompleted}
-                      disabled={updateAppointment.isPending}
-                    >
-                      {updateAppointment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      <CheckCircle className="mr-2 h-4 w-4" />
-                      {t('appointments.markAsCompleted')}
-                    </Button>
-                    <Button 
-                      variant="destructive" 
-                      onClick={handleCancelAppointment}
-                      disabled={updateAppointment.isPending}
-                    >
-                      {t('appointments.cancelAppointment')}
-                    </Button>
+                ) : apt.status === 'no_show' ? (
+                  <div className="flex items-center space-x-2 text-muted-foreground">
+                    <span className="w-2 h-2 rounded-full bg-gray-400 inline-block" />
+                    <span className="font-medium">{t('appointments.noShow')}</span>
                   </div>
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" disabled={updateAppointment.isPending}>
+                        {updateAppointment.isPending
+                          ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          : null}
+                        {t('appointments.changeStatus')}
+                        <ChevronDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      {(STATUS_TRANSITIONS[apt.status] ?? []).map(nextStatus => (
+                        <DropdownMenuItem
+                          key={nextStatus}
+                          onClick={() => handleStatusChange(nextStatus)}
+                          className={nextStatus === 'cancelled' ? 'text-destructive focus:text-destructive' : ''}
+                        >
+                          <span
+                            className="w-2 h-2 rounded-full mr-2 shrink-0 inline-block"
+                            style={{ backgroundColor: getStatusDotColor(nextStatus) }}
+                          />
+                          {STATUS_LABELS[nextStatus] ?? nextStatus}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
                 {formatPhoneForWhatsApp(apt.clients?.phone || '') && (
                   <DropdownMenu>

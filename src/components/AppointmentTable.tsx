@@ -48,6 +48,7 @@ const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: Appointme
       case 'scheduled': return 'bg-primary/10 text-primary border-primary/20';
       case 'confirmed': return 'bg-teal-500/10 text-teal-600 border-teal-500/20 dark:text-teal-400';
       case 'in_progress': return 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400';
+      case 'waiting_checkout': return 'bg-violet-500/10 text-violet-600 border-violet-500/20 dark:text-violet-400';
       case 'completed': return 'bg-green-500/10 text-green-600 border-green-500/20 dark:text-green-400';
       case 'cancelled': return 'bg-destructive/10 text-destructive border-destructive/20';
       case 'no_show': return 'bg-orange-500/10 text-orange-600 border-orange-500/20 dark:text-orange-400';
@@ -69,6 +70,7 @@ const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: Appointme
       case 'scheduled': return t('appointments.scheduled');
       case 'confirmed': return t('appointments.confirmed');
       case 'in_progress': return t('appointments.inProgress');
+      case 'waiting_checkout': return t('appointments.waitingCheckout');
       case 'completed': return t('appointments.completed');
       case 'cancelled': return t('appointments.cancelled');
       case 'no_show': return t('appointments.noShow');
@@ -107,22 +109,23 @@ const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: Appointme
             </CardTitle>
           </CardHeader>
           <CardContent>
+            <div className="overflow-x-auto -mx-6 px-6">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('appointments.time')}</TableHead>
                   <TableHead>{t('appointments.client')}</TableHead>
-                  <TableHead>{t('appointments.duration')}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('appointments.duration')}</TableHead>
                   <TableHead>{t('appointments.amount')}</TableHead>
                   <TableHead>{t('appointments.status')}</TableHead>
-                  <TableHead>{t('appointments.payment')}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('appointments.payment')}</TableHead>
                   <TableHead className="text-right">{t('appointments.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {appointments.map((appointment) => (
                   <TableRow key={appointment.id} className="hover:bg-muted/50">
-                    <TableCell className="font-medium">
+                    <TableCell className="font-medium whitespace-nowrap">
                       {new Intl.DateTimeFormat('en-US', {
                         hour: '2-digit',
                         minute: '2-digit',
@@ -143,27 +146,27 @@ const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: Appointme
                           {appointment.clients?.first_name} {appointment.clients?.last_name}
                         </div>
                         {appointment.clients?.phone && (
-                          <div className="text-sm text-muted-foreground">
+                          <div className="text-sm text-muted-foreground hidden md:block">
                             {appointment.clients.phone}
                           </div>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      {appointment.treatments?.duration_minutes || 
+                    <TableCell className="hidden md:table-cell">
+                      {appointment.treatments?.duration_minutes ||
                        (new Date(appointment.end_time).getTime() - new Date(appointment.start_time).getTime()) / 60000} {t('appointments.min')}
                     </TableCell>
                     <TableCell>
-                      <p className="text-sm font-medium text-foreground">
+                      <p className="text-sm font-medium text-foreground whitespace-nowrap">
                         {formatCurrencyWithClinic(appointment.payment_amount || 0)}
                       </p>
                     </TableCell>
                     <TableCell>
-                      <Badge className={`${getStatusColor(appointment.status)} border`}>
+                      <Badge className={`${getStatusColor(appointment.status)} border whitespace-nowrap`}>
                         {getStatusText(appointment.status)}
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell">
                       <Badge className={`${getPaymentStatusColor(appointment.payment_status)} border`}>
                         {getPaymentStatusText(appointment.payment_status)}
                       </Badge>
@@ -175,13 +178,14 @@ const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: Appointme
                         onClick={() => onAppointmentClick(appointment)}
                       >
                         <Eye className="h-4 w-4 mr-1" />
-                        {t('appointments.view')}
+                        <span className="hidden sm:inline">{t('appointments.view')}</span>
                       </Button>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       ))}

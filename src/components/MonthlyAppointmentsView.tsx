@@ -110,6 +110,8 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
         return 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400';
       case 'in_progress':
         return 'bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-400';
+      case 'waiting_checkout':
+        return 'bg-violet-100 text-violet-800 dark:bg-violet-900/20 dark:text-violet-400';
       case 'confirmed':
         return 'bg-teal-100 text-teal-800 dark:bg-teal-900/20 dark:text-teal-400';
       default:
@@ -127,6 +129,8 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
         return t('appointments.statusNoShow');
       case 'in_progress':
         return t('appointments.statusInProgress');
+      case 'waiting_checkout':
+        return t('appointments.waitingCheckout');
       case 'confirmed':
         return t('appointments.statusConfirmed');
       default:

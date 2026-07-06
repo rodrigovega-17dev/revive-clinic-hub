@@ -139,9 +139,9 @@ const Appointments = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">{t('appointments.title')}</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">{t('appointments.title')}</h1>
           <p className="text-muted-foreground">{t('common.manageAppointments')}</p>
         </div>
         <Button onClick={() => setShowForm(true)}>
@@ -151,19 +151,19 @@ const Appointments = () => {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-start gap-4">
-          <DateFilter 
-                selectedDate={format(selectedDate, 'yyyy-MM-dd')} 
-                onDateChange={handleDateChange} 
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
+          <DateFilter
+                selectedDate={format(selectedDate, 'yyyy-MM-dd')}
+                onDateChange={handleDateChange}
           />
-          <div className="space-y-2">
+          <div className="space-y-2 w-full sm:w-auto">
             <Label className="text-sm text-foreground">{t('appointments.searchByClient')}</Label>
             <SearchInput
               value={searchTerm}
               onChange={setSearchTerm}
               placeholder={t('appointments.searchByClient')}
-              className="w-[240px]"
+              className="w-full sm:w-[240px]"
             />
           </div>
         </div>

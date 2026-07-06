@@ -4,6 +4,7 @@ export type AppointmentStatus =
   | 'scheduled'
   | 'confirmed'
   | 'in_progress'
+  | 'waiting_checkout'
   | 'completed'
   | 'cancelled'
   | 'no_show';
@@ -14,6 +15,8 @@ export const getStatusDotColor = (status?: string): string => {
       return '#22c55e'; // green
     case 'in_progress':
       return '#f59e0b'; // amber
+    case 'waiting_checkout':
+      return '#8b5cf6'; // violet
     case 'confirmed':
       return '#14b8a6'; // teal
     case 'cancelled':
