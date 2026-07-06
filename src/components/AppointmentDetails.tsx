@@ -12,6 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useUpdateAppointment, useTherapistAvailability } from '@/hooks/useAppointments';
 import { useClientBalance } from '@/hooks/useClientBalance';
 import { useTherapists } from '@/hooks/useTherapists';
+import { useTreatments } from '@/hooks/useTreatments';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
 import { Loader2, Calendar, User, Clock, DollarSign, CreditCard, CalendarDays, ExternalLink, AlertTriangle, CheckCircle, FileText, Upload, MessageCircle } from 'lucide-react';
@@ -63,10 +64,12 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const [requiereFactura, setRequiereFactura] = useState(false);
   const [rescheduleData, setRescheduleData] = useState({
     start_time: appointment ? format(new Date(appointment.start_time), "yyyy-MM-dd'T'HH:mm") : '',
-    duration: appointment ? 
-      Math.round((new Date(appointment.end_time).getTime() - new Date(appointment.start_time).getTime()) / 60000).toString() : 
+    duration: appointment ?
+      Math.round((new Date(appointment.end_time).getTime() - new Date(appointment.start_time).getTime()) / 60000).toString() :
       '60',
     therapist_id: appointment?.therapist_id || '',
+    treatment_id: appointment?.treatment_id || '',
+    payment_amount: appointment?.payment_amount != null ? String(appointment.payment_amount) : '',
   });
   
   // Extract date and time for availability check
@@ -86,6 +89,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   
   const updateAppointment = useUpdateAppointment();
   const { data: therapists } = useTherapists();
+  const { data: treatments } = useTreatments();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isAuthenticated, syncAppointment } = useClinicGoogleCalendar();
@@ -303,7 +307,14 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
         therapist_id: rescheduleData.therapist_id || appointment.therapist_id,
+        treatment_id: rescheduleData.treatment_id || appointment.treatment_id,
+        payment_amount: rescheduleData.payment_amount === ''
+          ? appointment.payment_amount
+          : Number(rescheduleData.payment_amount),
       });
+
+      queryClient.invalidateQueries({ queryKey: ['client-balance'] });
+      queryClient.invalidateQueries({ queryKey: ['all-client-balances'] });
 
       toast({
         title: t('appointments.success'),
@@ -1139,6 +1150,47 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit_treatment" className="text-foreground">{t('appointments.treatment')}</Label>
+                      <Select
+                        value={rescheduleData.treatment_id}
+                        onValueChange={(value) => {
+                          const tr = treatments?.find((x: any) => x.id === value);
+                          setRescheduleData(prev => ({
+                            ...prev,
+                            treatment_id: value,
+                            payment_amount: tr && tr.price != null ? String(tr.price) : prev.payment_amount,
+                          }));
+                        }}
+                      >
+                        <SelectTrigger className="bg-input border-border text-foreground">
+                          <SelectValue placeholder={t('appointments.selectTreatment')} />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover border-border">
+                          {treatments?.map((treatment: any) => (
+                            <SelectItem key={treatment.id} value={treatment.id}>
+                              {treatment.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="edit_price" className="text-foreground">{t('appointments.price')}</Label>
+                      <Input
+                        id="edit_price"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={rescheduleData.payment_amount}
+                        onChange={(e) => setRescheduleData(prev => ({ ...prev, payment_amount: e.target.value }))}
+                        className="bg-input border-border text-foreground"
+                      />
                     </div>
                   </div>
 
