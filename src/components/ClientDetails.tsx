@@ -11,7 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import type { Tables } from '@/integrations/supabase/types';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, getBalanceColorClass, getBalanceSign } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
 import { useClinicSettings } from '@/hooks/useClinic';
@@ -389,8 +389,8 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
                   </div>
                   <div className="text-center">
                     <p className="text-sm text-muted-foreground">{t('clients.currentBalance')}</p>
-                    <p className={`text-2xl font-bold ${balance.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {balance.balance >= 0 ? '+' : ''}{formatCurrencyWithClinic(balance.balance)}
+                    <p className={`text-2xl font-bold ${getBalanceColorClass(balance.balance)}`}>
+                      {getBalanceSign(balance.balance)}{formatCurrencyWithClinic(balance.balance)}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">{t('clients.balanceDescription')}</p>
                   </div>

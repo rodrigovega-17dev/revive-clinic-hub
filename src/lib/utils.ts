@@ -69,11 +69,27 @@ export function formatNumber(
  * @returns Formatted currency string
  */
 export function formatCurrency(
-  value: number | string | null | undefined, 
+  value: number | string | null | undefined,
   decimals: number = 2,
   currencyCode: string = 'USD'
 ): string {
   return formatNumber(value, decimals, true, currencyCode);
+}
+
+/**
+ * Text color class for a balance amount: green when positive, red when
+ * negative, neutral when exactly zero (a zero balance is neither a credit
+ * nor a debt, so it shouldn't read as a "good" green number).
+ */
+export function getBalanceColorClass(balance: number): string {
+  if (balance > 0) return 'text-green-600';
+  if (balance < 0) return 'text-red-600';
+  return 'text-muted-foreground';
+}
+
+/** "+" prefix for a balance amount; omitted for zero and negative values. */
+export function getBalanceSign(balance: number): string {
+  return balance > 0 ? '+' : '';
 }
 
 /**

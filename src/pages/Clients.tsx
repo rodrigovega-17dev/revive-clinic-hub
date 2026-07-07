@@ -18,7 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { format, differenceInYears } from 'date-fns';
 import { useSearchParams } from 'react-router-dom';
 import type { Tables } from '@/integrations/supabase/types';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, getBalanceColorClass, getBalanceSign } from '@/lib/utils';
 import { useClinicSettings } from '@/hooks/useClinic';
 import { hasCfdiData } from '@/lib/cfdi-catalogs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -197,10 +197,9 @@ const Clients = () => {
                 <p className="text-2xl font-bold text-foreground">
                   {(() => {
                     const totalBalance = clientBalances?.reduce((sum, balance) => sum + balance.balance, 0) || 0;
-                    const isPositive = totalBalance >= 0;
                     return (
-                      <span className={isPositive ? 'text-green-600' : 'text-red-600'}>
-                        {isPositive ? '+' : ''}{formatCurrencyWithClinic(totalBalance)}
+                      <span className={getBalanceColorClass(totalBalance)}>
+                        {getBalanceSign(totalBalance)}{formatCurrencyWithClinic(totalBalance)}
                       </span>
                     );
                   })()}
@@ -318,11 +317,10 @@ const Clients = () => {
                       {(() => {
                         const balance = balanceMap.get(client.id);
                         if (balance) {
-                          const isPositive = balance.balance >= 0;
                           return (
                             <div className="text-sm font-medium">
-                              <span className={isPositive ? 'text-green-600' : 'text-red-600'}>
-                                {isPositive ? '+' : ''}{formatCurrencyWithClinic(balance.balance)}
+                              <span className={getBalanceColorClass(balance.balance)}>
+                                {getBalanceSign(balance.balance)}{formatCurrencyWithClinic(balance.balance)}
                               </span>
                             </div>
                           );

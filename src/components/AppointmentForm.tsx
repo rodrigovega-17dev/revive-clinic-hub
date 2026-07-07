@@ -20,7 +20,7 @@ import { useClientBalance } from '@/hooks/useClientBalance';
 import { useQueryClient } from '@tanstack/react-query';
 import { format, addMinutes, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
-import { convertToTimezone, formatCurrency } from '@/lib/utils';
+import { convertToTimezone, formatCurrency, getBalanceColorClass, getBalanceSign } from '@/lib/utils';
 import { useClinicGoogleCalendar } from '@/hooks/useClinicGoogleCalendar';
 import { AlertTriangle, Clock, User, Stethoscope, DollarSign, MessageSquare, MapPin, Loader2, Plus, X } from 'lucide-react';
 import { useClinicSettings } from '@/hooks/useClinic';
@@ -327,8 +327,8 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">{t('appointments.currentBalance')}</span>
-                <span className={`font-semibold ${Number(clientBalance?.balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {Number(clientBalance?.balance || 0) >= 0 ? '+' : ''}
+                <span className={`font-semibold ${getBalanceColorClass(Number(clientBalance?.balance || 0))}`}>
+                  {getBalanceSign(Number(clientBalance?.balance || 0))}
                   {formatCurrencyWithClinic(Number(clientBalance?.balance || 0))}
                 </span>
               </div>

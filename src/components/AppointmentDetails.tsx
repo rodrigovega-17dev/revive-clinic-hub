@@ -21,7 +21,7 @@ import { format } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, getBalanceColorClass, getBalanceSign } from '@/lib/utils';
 import { useClinicGoogleCalendar } from '@/hooks/useClinicGoogleCalendar';
 import { useDeleteAppointment } from '@/hooks/useAppointments';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -866,8 +866,8 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   <div className="rounded-lg border border-border bg-muted/30 p-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">{t('appointments.currentBalance')}</span>
-                      <span className={`font-semibold ${clientBalance?.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {clientBalance?.balance >= 0 ? '+' : ''}
+                      <span className={`font-semibold ${getBalanceColorClass(Number(clientBalance?.balance || 0))}`}>
+                        {getBalanceSign(Number(clientBalance?.balance || 0))}
                         {formatCurrencyWithClinic(Number(clientBalance?.balance || 0))}
                       </span>
                     </div>
