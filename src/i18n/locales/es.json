@@ -1078,6 +1078,7 @@
     "ivaWithheld": "IVA",
     "retentionLabel": "Retención",
     "grossLabel": "Bruto",
+    "commissionShort": "comisión",
     "incentiveApplied": "Incentivo aplicado",
     "expensesShort": "Gastos",
     "clinicEarnings": "Ganancias de la Clínica",

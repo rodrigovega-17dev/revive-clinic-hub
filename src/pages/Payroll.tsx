@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, DollarSign, TrendingUp, Users, Download, Loader2, FileText, Paperclip } from 'lucide-react';
+import { Calendar, DollarSign, TrendingUp, Users, Download, Loader2, FileText, Paperclip, Info } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -820,9 +821,6 @@ const Payroll = () => {
                   <TableHead className="text-foreground">{t('payroll.therapist')}</TableHead>
                   <TableHead className="text-foreground">{t('common.sessions')}</TableHead>
                   <TableHead className="text-foreground">{t('payroll.totalRevenue')}</TableHead>
-                  <TableHead className="text-foreground">{t('payroll.revenuePreIVA')}</TableHead>
-                  <TableHead className="text-foreground">{t('payroll.totalIVA')}</TableHead>
-                  <TableHead className="text-foreground">{t('payroll.compensationModel')}</TableHead>
                   <TableHead className="text-foreground">{t('payroll.therapistShare')}</TableHead>
                   <TableHead className="text-foreground">{t('payroll.clinicShare')}</TableHead>
                   <TableHead className="text-foreground">{t('common.status')}</TableHead>
@@ -846,50 +844,46 @@ const Payroll = () => {
                       <div className="font-medium text-foreground">
                         {therapist.name}
                       </div>
+                      <div className="text-xs text-muted-foreground">
+                        {therapist.compensationType === 'percentage'
+                          ? `${Number(therapist.effectiveCommissionPercentage || 0).toFixed(0)}% ${t('payroll.commissionShort')}`
+                          : `${formatCurrencyWithClinic(Number(therapist.effectiveFixedSessionAmount || 0))}/${t('common.sessions')}`}
+                        {therapist.incentiveApplied && ` · ${t('payroll.incentiveApplied')}`}
+                      </div>
                     </TableCell>
                     <TableCell className="text-foreground">
                       {therapist.totalAppointments}
                     </TableCell>
                     <TableCell className="text-foreground">
-                      {formatCurrencyWithClinic(Number(therapist.totalRevenue))}
-                    </TableCell>
-                    <TableCell className="text-foreground">
-                      {formatCurrencyWithClinic(Number(therapist.totalRevenueBeforeIVA))} (Pre-IVA)
-                    </TableCell>
-                    <TableCell className="text-foreground">
-                      {formatCurrencyWithClinic(Number(therapist.totalIVA))} (IVA)
-                    </TableCell>
-                    <TableCell className="text-foreground">
-                      {therapist.compensationType === 'percentage' ? (
-                        <>
-                          {Number(therapist.effectiveCommissionPercentage || 0).toFixed(2)}%
-                          {therapist.incentiveApplied && (
-                            <div className="text-xs text-muted-foreground">
-                              {t('payroll.incentiveApplied')}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {formatCurrencyWithClinic(Number(therapist.effectiveFixedSessionAmount || 0))}/{t('common.sessions')}
-                          {therapist.incentiveApplied && (
-                            <div className="text-xs text-muted-foreground">
-                              {t('payroll.incentiveApplied')}
-                            </div>
-                          )}
-                        </>
-                      )}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center gap-1 cursor-help decoration-dotted underline underline-offset-4">
+                            {formatCurrencyWithClinic(Number(therapist.totalRevenue))}
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{t('payroll.revenuePreIVA')}: {formatCurrencyWithClinic(Number(therapist.totalRevenueBeforeIVA))}</p>
+                          <p>{t('payroll.totalIVA')}: {formatCurrencyWithClinic(Number(therapist.totalIVA))}</p>
+                        </TooltipContent>
+                      </Tooltip>
                     </TableCell>
                     <TableCell>
-                      <div className="font-medium text-green-600">
-                        {formatCurrencyWithClinic(netPayable)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {t('payroll.grossLabel')} {formatCurrencyWithClinic(gross)} − {t('payroll.retentionLabel')} ({retentionRate.toFixed(2)}%) {formatCurrencyWithClinic(retentionAmount)}
-                        {attributedExpenses > 0 && (
-                          <> − {t('payroll.expensesShort')} {formatCurrencyWithClinic(attributedExpenses)}</>
-                        )}
-                      </div>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="font-medium text-green-600 inline-flex items-center gap-1 cursor-help decoration-dotted underline underline-offset-4">
+                            {formatCurrencyWithClinic(netPayable)}
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{t('payroll.grossLabel')}: {formatCurrencyWithClinic(gross)}</p>
+                          <p>{t('payroll.retentionLabel')} ({retentionRate.toFixed(0)}%): −{formatCurrencyWithClinic(retentionAmount)}</p>
+                          {attributedExpenses > 0 && (
+                            <p>{t('payroll.expensesShort')}: −{formatCurrencyWithClinic(attributedExpenses)}</p>
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatCurrencyWithClinic(Number(therapist.clinicEarnings))}

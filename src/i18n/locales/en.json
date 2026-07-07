@@ -1082,6 +1082,7 @@
     "ivaWithheld": "IVA",
     "retentionLabel": "Retention",
     "grossLabel": "Gross",
+    "commissionShort": "commission",
     "incentiveApplied": "Incentive applied",
     "expensesShort": "Expenses",
     "clinicEarnings": "Clinic Earnings",
