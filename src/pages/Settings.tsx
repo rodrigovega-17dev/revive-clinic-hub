@@ -1013,7 +1013,7 @@ const Settings = (): JSX.Element => {
                   ) : (
                     <Download className="h-4 w-4 mr-2" />
                   )}
-                  {t('settings.exportPayments', 'Pagos (CSV)')}
+                  {t('settings.exportPayments', 'Ingresos (CSV)')}
                 </Button>
               </div>
               <Separator />

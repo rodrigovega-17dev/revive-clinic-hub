@@ -143,8 +143,8 @@ export function useDataExport() {
       const columns = ['client_name', 'amount', 'payment_date', 'method', 'appointment_start_time'] as const;
       const csv = toCsv(rows, columns);
       const date = new Date().toISOString().slice(0, 10);
-      downloadFile(csv, `pagos_${date}.csv`);
-      toast({ title: t('common.success'), description: t('settings.exportPaymentsSuccess', 'Pagos exportados correctamente.') });
+      downloadFile(csv, `ingresos_${date}.csv`);
+      toast({ title: t('common.success'), description: t('settings.exportPaymentsSuccess', 'Ingresos exportados correctamente.') });
     } catch (e) {
       toast({ title: t('common.error'), description: (e as Error).message, variant: 'destructive' });
     } finally {

@@ -83,7 +83,7 @@ const Finance = () => {
                 ) : (
                   <Download className="h-4 w-4 mr-2" />
                 )}
-                {t('finance.exportPayments', 'Pagos (CSV)')}
+                {t('finance.exportPayments', 'Ingresos (CSV)')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => clinicId && exportExpensesToCsv(clinicId)}
