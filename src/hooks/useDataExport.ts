@@ -2,7 +2,13 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { computeTherapistPayroll, getPayrollQuarterRange, summarizeAppointmentPayments } from '@/lib/payroll';
+import {
+  computeTherapistPayroll,
+  getPayrollQuarterRange,
+  summarizeAppointmentPayments,
+  resolveAppointmentPayrollConfig,
+  type TherapistCompensationConfig,
+} from '@/lib/payroll';
 
 /** Escape value for CSV (wrap in quotes if contains comma, newline, or quote). */
 function csvEscape(val: unknown): string {
@@ -182,7 +188,19 @@ export function useDataExport() {
         .from('appointments')
         .select(`
           payment_amount, therapist_id,
-          therapists (first_name, last_name),
+          therapists (
+            first_name,
+            last_name,
+            compensation_type,
+            commission_percentage,
+            fixed_session_amount,
+            retention_enabled,
+            retention_rate,
+            incentive_enabled,
+            incentive_threshold_sessions,
+            incentive_percentage_bonus,
+            incentive_fixed_bonus
+          ),
           payroll_compensation_type,
           payroll_commission_percentage,
           payroll_fixed_session_amount,
@@ -192,6 +210,7 @@ export function useDataExport() {
           payroll_incentive_threshold_sessions,
           payroll_incentive_percentage_bonus,
           payroll_incentive_fixed_bonus,
+          payroll_snapshot_at,
           payments (amount, facturado, iva_amount)
         `)
         .eq('clinic_id', clinicId)
@@ -214,61 +233,77 @@ export function useDataExport() {
         return acc;
       }, {});
 
+      // Each appointment's payroll terms come from its frozen snapshot if one exists (i.e. it
+      // was already covered by a payout), otherwise from the therapist's current live config —
+      // matching the same non-retroactive-at-payout logic used in the Payroll page.
       const therapistStats: Record<string, any> = {};
       (appointments || []).forEach((apt: any) => {
         const tid = apt.therapist_id;
         const therapist = apt.therapists || {};
+        const quarterSessions = quarterSessionsByTherapist[tid] || 0;
+
+        const liveConfig: TherapistCompensationConfig = {
+          compensationType: therapist.compensation_type,
+          commissionPercentage: therapist.commission_percentage,
+          fixedSessionAmount: therapist.fixed_session_amount,
+          retentionEnabled: therapist.retention_enabled,
+          retentionRate: therapist.retention_rate,
+          incentiveEnabled: therapist.incentive_enabled,
+          incentiveThresholdSessions: therapist.incentive_threshold_sessions,
+          incentivePercentageBonus: therapist.incentive_percentage_bonus,
+          incentiveFixedBonus: therapist.incentive_fixed_bonus,
+        };
+
+        const appointmentConfig = resolveAppointmentPayrollConfig(apt, liveConfig);
         const summary = summarizeAppointmentPayments({
           payment_amount: apt.payment_amount,
           payments: apt.payments || [],
         });
+        const computed = computeTherapistPayroll({
+          periodSessions: 1,
+          periodPreIvaRevenue: summary.preIvaRevenue,
+          quarterSessions,
+          config: appointmentConfig,
+        });
+
         if (!therapistStats[tid]) {
           therapistStats[tid] = {
             name: `${therapist.first_name ?? ''} ${therapist.last_name ?? ''}`.trim(),
-            compensationType: apt.payroll_compensation_type || 'percentage',
-            commissionPercentage: Number(apt.payroll_commission_percentage || 0),
-            fixedSessionAmount: Number(apt.payroll_fixed_session_amount || 0),
-            retentionEnabled: !!apt.payroll_retention_enabled,
-            retentionRate: Number(apt.payroll_retention_rate || 0),
-            incentiveEnabled: !!apt.payroll_incentive_enabled,
-            incentiveThresholdSessions: Number(apt.payroll_incentive_threshold_sessions || 0),
-            incentivePercentageBonus: Number(apt.payroll_incentive_percentage_bonus || 0),
-            incentiveFixedBonus: Number(apt.payroll_incentive_fixed_bonus || 0),
+            liveConfig,
+            quarterSessions,
             sessions: 0,
             revenue: 0,
             revenueBeforeIva: 0,
             ivaTotal: 0,
+            therapistEarnings: 0,
+            retentionAmount: 0,
+            therapistEarningsNet: 0,
+            clinicEarnings: 0,
           };
         }
         therapistStats[tid].sessions += 1;
         therapistStats[tid].revenue += summary.totalCollected;
         therapistStats[tid].revenueBeforeIva += summary.preIvaRevenue;
         therapistStats[tid].ivaTotal += summary.totalIva;
+        therapistStats[tid].therapistEarnings += computed.grossEarnings;
+        therapistStats[tid].retentionAmount += computed.retentionAmount;
+        therapistStats[tid].therapistEarningsNet += computed.netEarnings;
+        therapistStats[tid].clinicEarnings += computed.clinicEarnings;
       });
-      Object.entries(therapistStats).forEach(([tid, s]: any) => {
-        const computed = computeTherapistPayroll({
-          periodSessions: s.sessions,
-          periodPreIvaRevenue: s.revenueBeforeIva,
-          quarterSessions: quarterSessionsByTherapist[tid] || s.sessions,
-          config: {
-            compensationType: s.compensationType,
-            commissionPercentage: s.commissionPercentage,
-            fixedSessionAmount: s.fixedSessionAmount,
-            retentionEnabled: s.retentionEnabled,
-            retentionRate: s.retentionRate,
-            incentiveEnabled: s.incentiveEnabled,
-            incentiveThresholdSessions: s.incentiveThresholdSessions,
-            incentivePercentageBonus: s.incentivePercentageBonus,
-            incentiveFixedBonus: s.incentiveFixedBonus,
-          },
+
+      // Display-only fields (current compensation model, whether the incentive is currently
+      // active) derived from each therapist's live config.
+      Object.values(therapistStats).forEach((s: any) => {
+        const display = computeTherapistPayroll({
+          periodSessions: 0,
+          periodPreIvaRevenue: 0,
+          quarterSessions: s.quarterSessions,
+          config: s.liveConfig,
         });
-        s.effectiveCommissionPercentage = computed.effectiveCommissionPercentage;
-        s.effectiveFixedSessionAmount = computed.effectiveFixedSessionAmount;
-        s.therapistEarnings = computed.grossEarnings;
-        s.retentionAmount = computed.retentionAmount;
-        s.therapistEarningsNet = computed.netEarnings;
-        s.clinicEarnings = computed.clinicEarnings;
-        s.incentiveApplied = computed.incentiveApplied;
+        s.compensationType = display.compensationType;
+        s.effectiveCommissionPercentage = display.effectiveCommissionPercentage;
+        s.effectiveFixedSessionAmount = display.effectiveFixedSessionAmount;
+        s.incentiveApplied = display.incentiveApplied;
       });
 
       const { data: payouts } = await supabase

@@ -81,6 +81,59 @@ export const summarizeAppointmentPayments = (appointment: AppointmentLike) => {
   return summary;
 };
 
+export type AppointmentPayrollFields = {
+  payroll_snapshot_at?: string | null;
+  payroll_compensation_type?: string | null;
+  payroll_commission_percentage?: number | null;
+  payroll_fixed_session_amount?: number | null;
+  payroll_retention_enabled?: boolean | null;
+  payroll_retention_rate?: number | null;
+  payroll_incentive_enabled?: boolean | null;
+  payroll_incentive_threshold_sessions?: number | null;
+  payroll_incentive_percentage_bonus?: number | null;
+  payroll_incentive_fixed_bonus?: number | null;
+};
+
+/**
+ * An appointment's payroll terms come from its frozen snapshot once one exists
+ * (i.e. a payout has been registered that covered it); otherwise it uses the
+ * therapist's current live compensation config. This is what makes payroll
+ * non-retroactive from the moment of payout, while still reflecting config
+ * changes for anything not yet paid out.
+ */
+export const resolveAppointmentPayrollConfig = (
+  appointment: AppointmentPayrollFields,
+  liveConfig: TherapistCompensationConfig,
+): TherapistCompensationConfig => {
+  if (!appointment.payroll_snapshot_at) return liveConfig;
+
+  return {
+    compensationType: appointment.payroll_compensation_type,
+    commissionPercentage: appointment.payroll_commission_percentage,
+    fixedSessionAmount: appointment.payroll_fixed_session_amount,
+    retentionEnabled: appointment.payroll_retention_enabled,
+    retentionRate: appointment.payroll_retention_rate,
+    incentiveEnabled: appointment.payroll_incentive_enabled,
+    incentiveThresholdSessions: appointment.payroll_incentive_threshold_sessions,
+    incentivePercentageBonus: appointment.payroll_incentive_percentage_bonus,
+    incentiveFixedBonus: appointment.payroll_incentive_fixed_bonus,
+  };
+};
+
+/** Build the payroll_* snapshot column values to freeze onto an appointment at payout time. */
+export const buildPayrollSnapshotColumns = (liveConfig: TherapistCompensationConfig) => ({
+  payroll_compensation_type: normalizeCompensationType(liveConfig.compensationType),
+  payroll_commission_percentage: liveConfig.commissionPercentage ?? 0,
+  payroll_fixed_session_amount: liveConfig.fixedSessionAmount ?? null,
+  payroll_retention_enabled: !!liveConfig.retentionEnabled,
+  payroll_retention_rate: liveConfig.retentionRate ?? 16,
+  payroll_incentive_enabled: !!liveConfig.incentiveEnabled,
+  payroll_incentive_threshold_sessions: liveConfig.incentiveThresholdSessions ?? null,
+  payroll_incentive_percentage_bonus: liveConfig.incentivePercentageBonus ?? null,
+  payroll_incentive_fixed_bonus: liveConfig.incentiveFixedBonus ?? null,
+  payroll_snapshot_at: new Date().toISOString(),
+});
+
 export const getPayrollQuarterRange = (periodStartDate: Date) => {
   const year = periodStartDate.getFullYear();
   const month = periodStartDate.getMonth();

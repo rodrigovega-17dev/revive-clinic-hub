@@ -22,7 +22,14 @@ import { useDataExport } from '@/hooks/useDataExport';
 import { CfdiUploadModal } from '@/components/CfdiUploadModal';
 import { parseCfdiXml } from '@/lib/cfdi-xml';
 import { getCfdiFileUrl } from '@/hooks/useCfdiFileUrl';
-import { computeTherapistPayroll, getPayrollQuarterRange, summarizeAppointmentPayments } from '@/lib/payroll';
+import {
+  computeTherapistPayroll,
+  getPayrollQuarterRange,
+  summarizeAppointmentPayments,
+  resolveAppointmentPayrollConfig,
+  buildPayrollSnapshotColumns,
+  type TherapistCompensationConfig,
+} from '@/lib/payroll';
 
 const Payroll = () => {
   const { t } = useTranslation();
@@ -153,7 +160,16 @@ const Payroll = () => {
           therapists (
             id,
             first_name,
-            last_name
+            last_name,
+            compensation_type,
+            commission_percentage,
+            fixed_session_amount,
+            retention_enabled,
+            retention_rate,
+            incentive_enabled,
+            incentive_threshold_sessions,
+            incentive_percentage_bonus,
+            incentive_fixed_bonus
           ),
           clients (
             first_name,
@@ -174,7 +190,8 @@ const Payroll = () => {
           payroll_incentive_enabled,
           payroll_incentive_threshold_sessions,
           payroll_incentive_percentage_bonus,
-          payroll_incentive_fixed_bonus
+          payroll_incentive_fixed_bonus,
+          payroll_snapshot_at
         `)
         .eq('clinic_id', clinicId)
         .eq('status', 'completed')
@@ -199,82 +216,89 @@ const Payroll = () => {
         return acc;
       }, {});
 
-      // Calculate payroll data by therapist
+      // Calculate payroll data by therapist. Each appointment's payroll terms come from its
+      // frozen snapshot if one exists (i.e. it was already covered by a payout), otherwise
+      // from the therapist's current live config — so pending/unpaid sessions always reflect
+      // the latest compensation settings, and only actually-paid-out sessions stay frozen.
       const therapistStats = appointments.reduce((acc: Record<string, any>, appointment) => {
         const therapistId = appointment.therapist_id;
-        const therapistName = `${appointment.therapists?.first_name || ''} ${appointment.therapists?.last_name || ''}`.trim();
+        const therapist = appointment.therapists;
+        const therapistName = `${therapist?.first_name || ''} ${therapist?.last_name || ''}`.trim();
+        const quarterSessions = quarterSessionsByTherapist[therapistId] || 0;
+
+        const liveConfig: TherapistCompensationConfig = {
+          compensationType: therapist?.compensation_type,
+          commissionPercentage: therapist?.commission_percentage,
+          fixedSessionAmount: therapist?.fixed_session_amount,
+          retentionEnabled: therapist?.retention_enabled,
+          retentionRate: therapist?.retention_rate,
+          incentiveEnabled: therapist?.incentive_enabled,
+          incentiveThresholdSessions: therapist?.incentive_threshold_sessions,
+          incentivePercentageBonus: therapist?.incentive_percentage_bonus,
+          incentiveFixedBonus: therapist?.incentive_fixed_bonus,
+        };
+
+        const appointmentConfig = resolveAppointmentPayrollConfig(appointment, liveConfig);
         const paymentSummary = summarizeAppointmentPayments({
           payment_amount: appointment.payment_amount,
           payments: appointment.payments || [],
         });
-        
+        const computed = computeTherapistPayroll({
+          periodSessions: 1,
+          periodPreIvaRevenue: paymentSummary.preIvaRevenue,
+          quarterSessions,
+          config: appointmentConfig,
+        });
+
         if (!acc[therapistId]) {
           acc[therapistId] = {
             id: therapistId,
             name: therapistName,
-            compensationType: appointment.payroll_compensation_type || 'percentage',
-            commissionPercentage: Number(appointment.payroll_commission_percentage || 0),
-            fixedSessionAmount: Number(appointment.payroll_fixed_session_amount || 0),
-            retentionEnabled: !!appointment.payroll_retention_enabled,
-            retentionRate: Number(appointment.payroll_retention_rate || 0),
-            incentiveEnabled: !!appointment.payroll_incentive_enabled,
-            incentiveThresholdSessions: Number(appointment.payroll_incentive_threshold_sessions || 0),
-            incentivePercentageBonus: Number(appointment.payroll_incentive_percentage_bonus || 0),
-            incentiveFixedBonus: Number(appointment.payroll_incentive_fixed_bonus || 0),
+            liveConfig,
+            quarterSessions,
             totalAppointments: 0,
             totalRevenue: 0,
             totalRevenueBeforeIVA: 0,
             totalIVA: 0,
-            quarterSessions: quarterSessionsByTherapist[therapistId] || 0,
-            effectiveCommissionPercentage: Number(appointment.payroll_commission_percentage || 0),
-            effectiveFixedSessionAmount: Number(appointment.payroll_fixed_session_amount || 0),
-            incentiveApplied: false,
             therapistEarnings: 0,
             therapistRetentionAmount: 0,
-            therapistRetentionRateApplied: 0,
+            therapistEarningsNet: 0,
             clinicEarnings: 0,
             appointments: []
           };
         }
-        
+
         acc[therapistId].totalAppointments += 1;
         acc[therapistId].totalRevenue += paymentSummary.totalCollected;
         acc[therapistId].totalRevenueBeforeIVA += paymentSummary.preIvaRevenue;
         acc[therapistId].totalIVA += paymentSummary.totalIva;
+        acc[therapistId].therapistEarnings += computed.grossEarnings;
+        acc[therapistId].therapistRetentionAmount += computed.retentionAmount;
+        acc[therapistId].therapistEarningsNet += computed.netEarnings;
+        acc[therapistId].clinicEarnings += computed.clinicEarnings;
         acc[therapistId].appointments.push(appointment);
-        
+
         return acc;
       }, {});
 
-      // Calculate gross, retention and net using therapist-specific compensation settings.
+      // Derive display-only fields (current compensation model, whether the incentive is
+      // currently active) from each therapist's live config — these represent "what applies
+      // going forward", independent of how individual past appointments were computed above.
       Object.values(therapistStats).forEach((stats: any) => {
-        const quarterSessions = stats.quarterSessions || stats.totalAppointments;
-        const computed = computeTherapistPayroll({
-          periodSessions: stats.totalAppointments,
-          periodPreIvaRevenue: stats.totalRevenueBeforeIVA,
-          quarterSessions,
-          config: {
-            compensationType: stats.compensationType,
-            commissionPercentage: stats.commissionPercentage,
-            fixedSessionAmount: stats.fixedSessionAmount,
-            retentionEnabled: stats.retentionEnabled,
-            retentionRate: stats.retentionRate,
-            incentiveEnabled: stats.incentiveEnabled,
-            incentiveThresholdSessions: stats.incentiveThresholdSessions,
-            incentivePercentageBonus: stats.incentivePercentageBonus,
-            incentiveFixedBonus: stats.incentiveFixedBonus,
-          },
+        const display = computeTherapistPayroll({
+          periodSessions: 0,
+          periodPreIvaRevenue: 0,
+          quarterSessions: stats.quarterSessions,
+          config: stats.liveConfig,
         });
 
-        stats.compensationType = computed.compensationType;
-        stats.effectiveCommissionPercentage = computed.effectiveCommissionPercentage;
-        stats.effectiveFixedSessionAmount = computed.effectiveFixedSessionAmount;
-        stats.incentiveApplied = computed.incentiveApplied;
-        stats.therapistEarnings = computed.grossEarnings;
-        stats.therapistRetentionAmount = computed.retentionAmount;
-        stats.therapistRetentionRateApplied = computed.retentionRateApplied;
-        stats.therapistEarningsNet = computed.netEarnings;
-        stats.clinicEarnings = computed.clinicEarnings;
+        stats.compensationType = display.compensationType;
+        stats.effectiveCommissionPercentage = display.effectiveCommissionPercentage;
+        stats.effectiveFixedSessionAmount = display.effectiveFixedSessionAmount;
+        stats.incentiveApplied = display.incentiveApplied;
+        stats.therapistRetentionRateApplied = stats.liveConfig.retentionEnabled
+          ? Number(stats.liveConfig.retentionRate || 0)
+          : 0;
       });
 
       const totalRevenue = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.totalRevenue, 0);
@@ -478,6 +502,53 @@ const Payroll = () => {
         .single();
 
       if (payoutError) throw payoutError;
+
+      // Freeze payroll terms on any not-yet-frozen appointments covered by this payout, using
+      // the therapist's live config at this exact moment. This is the one point where payroll
+      // becomes non-retroactive: once paid out, later compensation edits won't change these
+      // sessions' numbers, but anything still unpaid keeps following live config.
+      const unfrozenAppointmentIds = (payoutTherapist.appointments || [])
+        .filter((apt: any) => !apt.payroll_snapshot_at)
+        .map((apt: any) => apt.id);
+
+      if (unfrozenAppointmentIds.length > 0) {
+        const { data: freshTherapist, error: therapistFetchError } = await supabase
+          .from('therapists')
+          .select(`
+            compensation_type,
+            commission_percentage,
+            fixed_session_amount,
+            retention_enabled,
+            retention_rate,
+            incentive_enabled,
+            incentive_threshold_sessions,
+            incentive_percentage_bonus,
+            incentive_fixed_bonus
+          `)
+          .eq('id', payoutTherapist.id)
+          .single();
+
+        if (therapistFetchError) throw therapistFetchError;
+
+        const snapshotColumns = buildPayrollSnapshotColumns({
+          compensationType: freshTherapist.compensation_type,
+          commissionPercentage: freshTherapist.commission_percentage,
+          fixedSessionAmount: freshTherapist.fixed_session_amount,
+          retentionEnabled: freshTherapist.retention_enabled,
+          retentionRate: freshTherapist.retention_rate,
+          incentiveEnabled: freshTherapist.incentive_enabled,
+          incentiveThresholdSessions: freshTherapist.incentive_threshold_sessions,
+          incentivePercentageBonus: freshTherapist.incentive_percentage_bonus,
+          incentiveFixedBonus: freshTherapist.incentive_fixed_bonus,
+        });
+
+        const { error: freezeError } = await supabase
+          .from('appointments')
+          .update(snapshotColumns)
+          .in('id', unfrozenAppointmentIds);
+
+        if (freezeError) throw freezeError;
+      }
 
       const expenseDescription = t('payroll.payoutExpenseDescription', {
         therapist: payoutTherapist.name,
@@ -814,7 +885,7 @@ const Payroll = () => {
                         {formatCurrencyWithClinic(netPayable)}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {formatCurrencyWithClinic(gross)} − {t('payroll.retentionLabel')} ({retentionRate.toFixed(2)}%) {formatCurrencyWithClinic(retentionAmount)}
+                        {t('payroll.grossLabel')} {formatCurrencyWithClinic(gross)} − {t('payroll.retentionLabel')} ({retentionRate.toFixed(2)}%) {formatCurrencyWithClinic(retentionAmount)}
                         {attributedExpenses > 0 && (
                           <> − {t('payroll.expensesShort')} {formatCurrencyWithClinic(attributedExpenses)}</>
                         )}
