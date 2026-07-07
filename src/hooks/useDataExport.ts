@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { computeTherapistPayroll, getPayrollQuarterRange, summarizeAppointmentPayments } from '@/lib/payroll';
 
 /** Escape value for CSV (wrap in quotes if contains comma, newline, or quote). */
 function csvEscape(val: unknown): string {
@@ -181,39 +182,93 @@ export function useDataExport() {
         .from('appointments')
         .select(`
           payment_amount, therapist_id,
-          therapists (first_name, last_name, commission_percentage),
-          payments (facturado, iva_amount)
+          therapists (first_name, last_name),
+          payroll_compensation_type,
+          payroll_commission_percentage,
+          payroll_fixed_session_amount,
+          payroll_retention_enabled,
+          payroll_retention_rate,
+          payroll_incentive_enabled,
+          payroll_incentive_threshold_sessions,
+          payroll_incentive_percentage_bonus,
+          payroll_incentive_fixed_bonus,
+          payments (amount, facturado, iva_amount)
         `)
         .eq('clinic_id', clinicId)
         .eq('status', 'completed')
-        .eq('payment_status', 'paid')
         .gte('start_time', periodStart.toISOString())
         .lte('start_time', periodEnd.toISOString());
+
+      const quarterRange = getPayrollQuarterRange(periodStart);
+      const { data: quarterAppointments } = await supabase
+        .from('appointments')
+        .select('therapist_id')
+        .eq('clinic_id', clinicId)
+        .eq('status', 'completed')
+        .gte('start_time', quarterRange.startDate.toISOString())
+        .lte('start_time', quarterRange.endDate.toISOString());
+
+      const quarterSessionsByTherapist = (quarterAppointments || []).reduce((acc: Record<string, number>, appointment: any) => {
+        const therapistId = String(appointment.therapist_id);
+        acc[therapistId] = (acc[therapistId] || 0) + 1;
+        return acc;
+      }, {});
 
       const therapistStats: Record<string, any> = {};
       (appointments || []).forEach((apt: any) => {
         const tid = apt.therapist_id;
         const therapist = apt.therapists || {};
-        const payment = apt.payments?.[0];
-        const iva = Number(payment?.iva_amount || 0);
-        const amt = Number(apt.payment_amount || 0);
-        const amtBeforeIva = payment?.facturado && iva > 0 ? amt - iva : amt;
+        const summary = summarizeAppointmentPayments({
+          payment_amount: apt.payment_amount,
+          payments: apt.payments || [],
+        });
         if (!therapistStats[tid]) {
           therapistStats[tid] = {
             name: `${therapist.first_name ?? ''} ${therapist.last_name ?? ''}`.trim(),
-            commissionPct: (therapist.commission_percentage || 0) / 100,
+            compensationType: apt.payroll_compensation_type || 'percentage',
+            commissionPercentage: Number(apt.payroll_commission_percentage || 0),
+            fixedSessionAmount: Number(apt.payroll_fixed_session_amount || 0),
+            retentionEnabled: !!apt.payroll_retention_enabled,
+            retentionRate: Number(apt.payroll_retention_rate || 0),
+            incentiveEnabled: !!apt.payroll_incentive_enabled,
+            incentiveThresholdSessions: Number(apt.payroll_incentive_threshold_sessions || 0),
+            incentivePercentageBonus: Number(apt.payroll_incentive_percentage_bonus || 0),
+            incentiveFixedBonus: Number(apt.payroll_incentive_fixed_bonus || 0),
             sessions: 0,
             revenue: 0,
             revenueBeforeIva: 0,
+            ivaTotal: 0,
           };
         }
         therapistStats[tid].sessions += 1;
-        therapistStats[tid].revenue += amt;
-        therapistStats[tid].revenueBeforeIva += amtBeforeIva;
+        therapistStats[tid].revenue += summary.totalCollected;
+        therapistStats[tid].revenueBeforeIva += summary.preIvaRevenue;
+        therapistStats[tid].ivaTotal += summary.totalIva;
       });
-      Object.values(therapistStats).forEach((s: any) => {
-        s.therapistEarnings = s.revenueBeforeIva * s.commissionPct;
-        s.clinicEarnings = s.revenueBeforeIva * (1 - s.commissionPct);
+      Object.entries(therapistStats).forEach(([tid, s]: any) => {
+        const computed = computeTherapistPayroll({
+          periodSessions: s.sessions,
+          periodPreIvaRevenue: s.revenueBeforeIva,
+          quarterSessions: quarterSessionsByTherapist[tid] || s.sessions,
+          config: {
+            compensationType: s.compensationType,
+            commissionPercentage: s.commissionPercentage,
+            fixedSessionAmount: s.fixedSessionAmount,
+            retentionEnabled: s.retentionEnabled,
+            retentionRate: s.retentionRate,
+            incentiveEnabled: s.incentiveEnabled,
+            incentiveThresholdSessions: s.incentiveThresholdSessions,
+            incentivePercentageBonus: s.incentivePercentageBonus,
+            incentiveFixedBonus: s.incentiveFixedBonus,
+          },
+        });
+        s.effectiveCommissionPercentage = computed.effectiveCommissionPercentage;
+        s.effectiveFixedSessionAmount = computed.effectiveFixedSessionAmount;
+        s.therapistEarnings = computed.grossEarnings;
+        s.retentionAmount = computed.retentionAmount;
+        s.therapistEarningsNet = computed.netEarnings;
+        s.clinicEarnings = computed.clinicEarnings;
+        s.incentiveApplied = computed.incentiveApplied;
       });
 
       const { data: payouts } = await supabase
@@ -233,14 +288,33 @@ export function useDataExport() {
         sessions: s.sessions,
         total_revenue: s.revenue,
         revenue_pre_iva: s.revenueBeforeIva,
-        commission_pct: Math.round((s.commissionPct || 0) * 100) + '%',
-        therapist_earnings: s.therapistEarnings,
+        total_iva: s.ivaTotal,
+        compensation_model:
+          s.compensationType === 'percentage'
+            ? `${Number(s.effectiveCommissionPercentage || 0).toFixed(2)}%`
+            : `fixed ${Number(s.effectiveFixedSessionAmount || 0).toFixed(2)}`,
+        therapist_earnings_gross: s.therapistEarnings,
+        therapist_retention: s.retentionAmount,
+        therapist_earnings_net: s.therapistEarningsNet,
         clinic_earnings: s.clinicEarnings,
         total_paid: paidByTherapist[tid] || 0,
-        remaining: Math.max(0, (s.therapistEarnings || 0) - (paidByTherapist[tid] || 0)),
+        remaining: Math.max(0, (s.therapistEarningsNet || 0) - (paidByTherapist[tid] || 0)),
       }));
 
-      const columns = ['therapist_name', 'sessions', 'total_revenue', 'revenue_pre_iva', 'commission_pct', 'therapist_earnings', 'clinic_earnings', 'total_paid', 'remaining'] as const;
+      const columns = [
+        'therapist_name',
+        'sessions',
+        'total_revenue',
+        'revenue_pre_iva',
+        'total_iva',
+        'compensation_model',
+        'therapist_earnings_gross',
+        'therapist_retention',
+        'therapist_earnings_net',
+        'clinic_earnings',
+        'total_paid',
+        'remaining',
+      ] as const;
       const csv = toCsv(rows, columns as (keyof typeof rows[0])[]);
       const safeLabel = periodLabel.replace(/[^a-zA-Z0-9-_]/g, '_').slice(0, 30);
       downloadFile(csv, `nómina_${safeLabel}.csv`);

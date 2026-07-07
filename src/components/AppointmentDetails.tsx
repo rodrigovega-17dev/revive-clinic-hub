@@ -185,7 +185,71 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
     }
   };
 
+  const resolvePayrollSnapshot = async () => {
+    const snapshotFromAppointment = {
+      payroll_compensation_type: apt?.payroll_compensation_type,
+      payroll_commission_percentage: apt?.payroll_commission_percentage,
+      payroll_fixed_session_amount: apt?.payroll_fixed_session_amount,
+      payroll_retention_enabled: apt?.payroll_retention_enabled,
+      payroll_retention_rate: apt?.payroll_retention_rate,
+      payroll_incentive_enabled: apt?.payroll_incentive_enabled,
+      payroll_incentive_threshold_sessions: apt?.payroll_incentive_threshold_sessions,
+      payroll_incentive_percentage_bonus: apt?.payroll_incentive_percentage_bonus,
+      payroll_incentive_fixed_bonus: apt?.payroll_incentive_fixed_bonus,
+      payroll_snapshot_at: apt?.payroll_snapshot_at,
+    };
+
+    if (snapshotFromAppointment.payroll_compensation_type) {
+      return snapshotFromAppointment;
+    }
+
+    if (!clinicId) {
+      return {};
+    }
+
+    const { data: therapistConfig, error: therapistConfigError } = await supabase
+      .from('therapists')
+      .select(`
+        compensation_type,
+        commission_percentage,
+        fixed_session_amount,
+        retention_enabled,
+        retention_rate,
+        incentive_enabled,
+        incentive_threshold_sessions,
+        incentive_percentage_bonus,
+        incentive_fixed_bonus
+      `)
+      .eq('clinic_id', clinicId)
+      .eq('id', apt?.therapist_id || appointment.therapist_id)
+      .single();
+
+    if (therapistConfigError) throw therapistConfigError;
+
+    return {
+      payroll_compensation_type: therapistConfig?.compensation_type || 'percentage',
+      payroll_commission_percentage: therapistConfig?.commission_percentage ?? 0,
+      payroll_fixed_session_amount: therapistConfig?.fixed_session_amount ?? null,
+      payroll_retention_enabled: therapistConfig?.retention_enabled ?? false,
+      payroll_retention_rate: therapistConfig?.retention_rate ?? 16,
+      payroll_incentive_enabled: therapistConfig?.incentive_enabled ?? false,
+      payroll_incentive_threshold_sessions: therapistConfig?.incentive_threshold_sessions ?? null,
+      payroll_incentive_percentage_bonus: therapistConfig?.incentive_percentage_bonus ?? null,
+      payroll_incentive_fixed_bonus: therapistConfig?.incentive_fixed_bonus ?? null,
+      payroll_snapshot_at: new Date().toISOString(),
+    };
+  };
+
   const handleMarkAsPaid = async () => {
+    if (!clinicId) {
+      toast({
+        title: t('appointments.error'),
+        description: t('common.noClinicAccess'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (amountDue > 0 && !paymentData.method) {
       toast({
         title: t('appointments.error'),
@@ -196,11 +260,14 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
     }
 
     try {
+      const payrollSnapshot = await resolvePayrollSnapshot();
+
       const { data } = await updateAppointment.mutateAsync({
         id: appointment.id,
         payment_status: 'paid',
         payment_method: amountDue > 0 ? paymentData.method : 'balance',
         payment_date: new Date().toISOString(),
+        ...payrollSnapshot,
       });
       setDisplayAppointment(data);
 
@@ -363,9 +430,11 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
 
   const handleStatusChange = async (nextStatus: string) => {
     try {
+      const payrollSnapshot = nextStatus === 'completed' ? await resolvePayrollSnapshot() : {};
       const { data } = await updateAppointment.mutateAsync({
         id: appointment.id,
         status: nextStatus as any,
+        ...payrollSnapshot,
       });
       setDisplayAppointment(data);
 

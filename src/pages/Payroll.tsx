@@ -22,6 +22,7 @@ import { useDataExport } from '@/hooks/useDataExport';
 import { CfdiUploadModal } from '@/components/CfdiUploadModal';
 import { parseCfdiXml } from '@/lib/cfdi-xml';
 import { getCfdiFileUrl } from '@/hooks/useCfdiFileUrl';
+import { computeTherapistPayroll, getPayrollQuarterRange, summarizeAppointmentPayments } from '@/lib/payroll';
 
 const Payroll = () => {
   const { t } = useTranslation();
@@ -124,10 +125,11 @@ const Payroll = () => {
   const currentPeriod = periods.find(p => p.value === selectedPeriod) || periods[0];
   const todayStart = startOfDay(new Date());
   const isPastPeriod = endOfDay(currentPeriod.endDate) < todayStart;
+  const currentQuarter = useMemo(() => getPayrollQuarterRange(currentPeriod.startDate), [currentPeriod.startDate]);
 
   // Fetch payroll data
   const { data: payrollData, isLoading } = useQuery({
-    queryKey: ['payroll', currentPeriod.startDate, currentPeriod.endDate, clinicId],
+    queryKey: ['payroll', currentPeriod.startDate, currentPeriod.endDate, currentQuarter.startDate, currentQuarter.endDate, clinicId],
     queryFn: async () => {
       if (!clinicId) return {
         therapistStats: [],
@@ -136,6 +138,7 @@ const Payroll = () => {
           totalRevenueBeforeIVA: 0,
           totalIVA: 0,
           totalTherapistEarnings: 0,
+          totalTherapistRetention: 0,
           totalTherapistIVAWithheld: 0,
           totalTherapistEarningsNet: 0,
           totalClinicEarnings: 0,
@@ -150,8 +153,7 @@ const Payroll = () => {
           therapists (
             id,
             first_name,
-            last_name,
-            commission_percentage
+            last_name
           ),
           clients (
             first_name,
@@ -161,76 +163,125 @@ const Payroll = () => {
             id,
             amount,
             facturado,
-            iva_amount
-          )
+            iva_amount,
+            method
+          ),
+          payroll_compensation_type,
+          payroll_commission_percentage,
+          payroll_fixed_session_amount,
+          payroll_retention_enabled,
+          payroll_retention_rate,
+          payroll_incentive_enabled,
+          payroll_incentive_threshold_sessions,
+          payroll_incentive_percentage_bonus,
+          payroll_incentive_fixed_bonus
         `)
         .eq('clinic_id', clinicId)
         .eq('status', 'completed')
-        .eq('payment_status', 'paid')
         .gte('start_time', startOfDay(currentPeriod.startDate).toISOString())
         .lte('start_time', endOfDay(currentPeriod.endDate).toISOString());
 
       if (error) throw error;
 
-      // Calculate payroll data by therapist
-      const therapistStats = appointments.reduce((acc, appointment) => {
-        const therapistId = appointment.therapist_id;
-        const therapistName = `${appointment.therapists.first_name} ${appointment.therapists.last_name}`;
-        const commissionPercentage = appointment.therapists.commission_percentage || 0; // Default to 0% if not set
-        
-        // Get payment data for IVA calculations
-        const payment = appointment.payments?.[0]; // Assuming one payment per appointment
-        const isFacturado = payment?.facturado || false;
-        const ivaAmount = Number(payment?.iva_amount || 0);
-        const paymentTotal = Number(payment?.amount ?? appointment.payment_amount ?? 0);
+      const { data: quarterAppointments, error: quarterError } = await supabase
+        .from('appointments')
+        .select('therapist_id')
+        .eq('clinic_id', clinicId)
+        .eq('status', 'completed')
+        .gte('start_time', startOfDay(currentQuarter.startDate).toISOString())
+        .lte('start_time', endOfDay(currentQuarter.endDate).toISOString());
 
-        // Pre-IVA base: when facturado with IVA, payment.amount is total (base+IVA), so base = total - IVA.
-        // Otherwise appointment.payment_amount is the base (service price).
-        const amountBeforeIVA = isFacturado && ivaAmount > 0
-          ? paymentTotal - ivaAmount
-          : Number(appointment.payment_amount || 0);
+      if (quarterError) throw quarterError;
+
+      const quarterSessionsByTherapist = (quarterAppointments || []).reduce((acc: Record<string, number>, appointment) => {
+        const therapistId = String(appointment.therapist_id);
+        acc[therapistId] = (acc[therapistId] || 0) + 1;
+        return acc;
+      }, {});
+
+      // Calculate payroll data by therapist
+      const therapistStats = appointments.reduce((acc: Record<string, any>, appointment) => {
+        const therapistId = appointment.therapist_id;
+        const therapistName = `${appointment.therapists?.first_name || ''} ${appointment.therapists?.last_name || ''}`.trim();
+        const paymentSummary = summarizeAppointmentPayments({
+          payment_amount: appointment.payment_amount,
+          payments: appointment.payments || [],
+        });
         
         if (!acc[therapistId]) {
           acc[therapistId] = {
             id: therapistId,
             name: therapistName,
-            commissionPercentage,
+            compensationType: appointment.payroll_compensation_type || 'percentage',
+            commissionPercentage: Number(appointment.payroll_commission_percentage || 0),
+            fixedSessionAmount: Number(appointment.payroll_fixed_session_amount || 0),
+            retentionEnabled: !!appointment.payroll_retention_enabled,
+            retentionRate: Number(appointment.payroll_retention_rate || 0),
+            incentiveEnabled: !!appointment.payroll_incentive_enabled,
+            incentiveThresholdSessions: Number(appointment.payroll_incentive_threshold_sessions || 0),
+            incentivePercentageBonus: Number(appointment.payroll_incentive_percentage_bonus || 0),
+            incentiveFixedBonus: Number(appointment.payroll_incentive_fixed_bonus || 0),
             totalAppointments: 0,
             totalRevenue: 0,
             totalRevenueBeforeIVA: 0,
             totalIVA: 0,
+            quarterSessions: quarterSessionsByTherapist[therapistId] || 0,
+            effectiveCommissionPercentage: Number(appointment.payroll_commission_percentage || 0),
+            effectiveFixedSessionAmount: Number(appointment.payroll_fixed_session_amount || 0),
+            incentiveApplied: false,
             therapistEarnings: 0,
+            therapistRetentionAmount: 0,
+            therapistRetentionRateApplied: 0,
             clinicEarnings: 0,
             appointments: []
           };
         }
         
         acc[therapistId].totalAppointments += 1;
-        // When we have payment data use it (total collected); else use appointment amount
-        acc[therapistId].totalRevenue += paymentTotal > 0 ? paymentTotal : Number(appointment.payment_amount || 0);
-        acc[therapistId].totalRevenueBeforeIVA += amountBeforeIVA;
-        acc[therapistId].totalIVA += ivaAmount;
+        acc[therapistId].totalRevenue += paymentSummary.totalCollected;
+        acc[therapistId].totalRevenueBeforeIVA += paymentSummary.preIvaRevenue;
+        acc[therapistId].totalIVA += paymentSummary.totalIva;
         acc[therapistId].appointments.push(appointment);
         
         return acc;
       }, {});
 
-      // Calculate earnings using individual therapist percentages (based on amount before IVA)
+      // Calculate gross, retention and net using therapist-specific compensation settings.
       Object.values(therapistStats).forEach((stats: any) => {
-        const therapistPercentage = stats.commissionPercentage / 100;
-        const clinicPercentage = 1 - therapistPercentage;
-        stats.therapistEarnings = stats.totalRevenueBeforeIVA * therapistPercentage;
-        stats.clinicEarnings = stats.totalRevenueBeforeIVA * clinicPercentage;
-        // Withhold 16% IVA from the therapist's payout (net = gross × 0.84).
-        stats.therapistIVAWithheld = stats.therapistEarnings * 0.16;
-        stats.therapistEarningsNet = stats.therapistEarnings - stats.therapistIVAWithheld;
+        const quarterSessions = stats.quarterSessions || stats.totalAppointments;
+        const computed = computeTherapistPayroll({
+          periodSessions: stats.totalAppointments,
+          periodPreIvaRevenue: stats.totalRevenueBeforeIVA,
+          quarterSessions,
+          config: {
+            compensationType: stats.compensationType,
+            commissionPercentage: stats.commissionPercentage,
+            fixedSessionAmount: stats.fixedSessionAmount,
+            retentionEnabled: stats.retentionEnabled,
+            retentionRate: stats.retentionRate,
+            incentiveEnabled: stats.incentiveEnabled,
+            incentiveThresholdSessions: stats.incentiveThresholdSessions,
+            incentivePercentageBonus: stats.incentivePercentageBonus,
+            incentiveFixedBonus: stats.incentiveFixedBonus,
+          },
+        });
+
+        stats.compensationType = computed.compensationType;
+        stats.effectiveCommissionPercentage = computed.effectiveCommissionPercentage;
+        stats.effectiveFixedSessionAmount = computed.effectiveFixedSessionAmount;
+        stats.incentiveApplied = computed.incentiveApplied;
+        stats.therapistEarnings = computed.grossEarnings;
+        stats.therapistRetentionAmount = computed.retentionAmount;
+        stats.therapistRetentionRateApplied = computed.retentionRateApplied;
+        stats.therapistEarningsNet = computed.netEarnings;
+        stats.clinicEarnings = computed.clinicEarnings;
       });
 
       const totalRevenue = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.totalRevenue, 0);
       const totalRevenueBeforeIVA = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.totalRevenueBeforeIVA, 0);
       const totalIVA = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.totalIVA, 0);
       const totalTherapistEarnings = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.therapistEarnings, 0);
-      const totalTherapistIVAWithheld = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.therapistIVAWithheld, 0);
+      const totalTherapistRetention = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.therapistRetentionAmount, 0);
       const totalTherapistEarningsNet = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.therapistEarningsNet, 0);
       const totalClinicEarnings = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.clinicEarnings, 0);
 
@@ -241,7 +292,9 @@ const Payroll = () => {
           totalRevenueBeforeIVA,
           totalIVA,
           totalTherapistEarnings,
-          totalTherapistIVAWithheld,
+          totalTherapistRetention,
+          // Legacy key kept to avoid breaking older UI references.
+          totalTherapistIVAWithheld: totalTherapistRetention,
           totalTherapistEarningsNet,
           totalClinicEarnings,
           totalAppointments: appointments.length
@@ -297,7 +350,7 @@ const Payroll = () => {
   });
 
   const getAttributedExpenses = (therapistId: string) => Number(therapistExpenses?.[therapistId] || 0);
-  // Final payout = gross earnings − 16% IVA − therapist-attributed expenses for the period.
+  // Final payout = gross earnings − configured retention − therapist-attributed expenses.
   const getNetPayable = (therapist: any) =>
     Number(therapist?.therapistEarningsNet || 0) - getAttributedExpenses(therapist?.id);
 
@@ -698,7 +751,7 @@ const Payroll = () => {
                   <TableHead className="text-foreground">{t('payroll.totalRevenue')}</TableHead>
                   <TableHead className="text-foreground">{t('payroll.revenuePreIVA')}</TableHead>
                   <TableHead className="text-foreground">{t('payroll.totalIVA')}</TableHead>
-                  <TableHead className="text-foreground">{t('common.commission')} %</TableHead>
+                  <TableHead className="text-foreground">{t('payroll.compensationModel')}</TableHead>
                   <TableHead className="text-foreground">{t('payroll.therapistShare')}</TableHead>
                   <TableHead className="text-foreground">{t('payroll.clinicShare')}</TableHead>
                   <TableHead className="text-foreground">{t('common.status')}</TableHead>
@@ -710,7 +763,8 @@ const Payroll = () => {
                   (() => {
                     const status = getPayoutStatus(therapist.id);
                     const gross = Number(therapist.therapistEarnings || 0);
-                    const ivaWithheld = Number(therapist.therapistIVAWithheld || 0);
+                    const retentionAmount = Number(therapist.therapistRetentionAmount || 0);
+                    const retentionRate = Number(therapist.therapistRetentionRateApplied || 0);
                     const attributedExpenses = getAttributedExpenses(therapist.id);
                     const netPayable = getNetPayable(therapist);
                     const remainingAmount = getRemainingAmount(therapist.id, netPayable);
@@ -735,14 +789,32 @@ const Payroll = () => {
                       {formatCurrencyWithClinic(Number(therapist.totalIVA))} (IVA)
                     </TableCell>
                     <TableCell className="text-foreground">
-                      {therapist.commissionPercentage}%
+                      {therapist.compensationType === 'percentage' ? (
+                        <>
+                          {Number(therapist.effectiveCommissionPercentage || 0).toFixed(2)}%
+                          {therapist.incentiveApplied && (
+                            <div className="text-xs text-muted-foreground">
+                              {t('payroll.incentiveApplied')}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {formatCurrencyWithClinic(Number(therapist.effectiveFixedSessionAmount || 0))}/{t('common.sessions')}
+                          {therapist.incentiveApplied && (
+                            <div className="text-xs text-muted-foreground">
+                              {t('payroll.incentiveApplied')}
+                            </div>
+                          )}
+                        </>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="font-medium text-green-600">
                         {formatCurrencyWithClinic(netPayable)}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {formatCurrencyWithClinic(gross)} − {t('payroll.ivaWithheld')} {formatCurrencyWithClinic(ivaWithheld)}
+                        {formatCurrencyWithClinic(gross)} − {t('payroll.retentionLabel')} ({retentionRate.toFixed(2)}%) {formatCurrencyWithClinic(retentionAmount)}
                         {attributedExpenses > 0 && (
                           <> − {t('payroll.expensesShort')} {formatCurrencyWithClinic(attributedExpenses)}</>
                         )}

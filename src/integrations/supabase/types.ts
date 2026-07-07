@@ -23,6 +23,16 @@ export type Database = {
           payment_date: string | null
           payment_method: string | null
           payment_status: string | null
+          payroll_commission_percentage: number | null
+          payroll_compensation_type: string | null
+          payroll_fixed_session_amount: number | null
+          payroll_incentive_enabled: boolean | null
+          payroll_incentive_fixed_bonus: number | null
+          payroll_incentive_percentage_bonus: number | null
+          payroll_incentive_threshold_sessions: number | null
+          payroll_retention_enabled: boolean | null
+          payroll_retention_rate: number | null
+          payroll_snapshot_at: string | null
           start_time: string
           status: Database["public"]["Enums"]["appointment_status"]
           therapist_id: string
@@ -47,6 +57,16 @@ export type Database = {
           payment_date?: string | null
           payment_method?: string | null
           payment_status?: string | null
+          payroll_commission_percentage?: number | null
+          payroll_compensation_type?: string | null
+          payroll_fixed_session_amount?: number | null
+          payroll_incentive_enabled?: boolean | null
+          payroll_incentive_fixed_bonus?: number | null
+          payroll_incentive_percentage_bonus?: number | null
+          payroll_incentive_threshold_sessions?: number | null
+          payroll_retention_enabled?: boolean | null
+          payroll_retention_rate?: number | null
+          payroll_snapshot_at?: string | null
           start_time: string
           status?: Database["public"]["Enums"]["appointment_status"]
           therapist_id: string
@@ -71,6 +91,16 @@ export type Database = {
           payment_date?: string | null
           payment_method?: string | null
           payment_status?: string | null
+          payroll_commission_percentage?: number | null
+          payroll_compensation_type?: string | null
+          payroll_fixed_session_amount?: number | null
+          payroll_incentive_enabled?: boolean | null
+          payroll_incentive_fixed_bonus?: number | null
+          payroll_incentive_percentage_bonus?: number | null
+          payroll_incentive_threshold_sessions?: number | null
+          payroll_retention_enabled?: boolean | null
+          payroll_retention_rate?: number | null
+          payroll_snapshot_at?: string | null
           start_time?: string
           status?: Database["public"]["Enums"]["appointment_status"]
           therapist_id?: string
@@ -796,15 +826,23 @@ export type Database = {
           archived: boolean
           calendar_color_id: string | null
           clinic_id: string
+          compensation_type: string
           commission_percentage: number | null
           created_at: string
           email: string | null
           first_name: string | null
+          fixed_session_amount: number | null
           google_calendar_id: string | null
           id: string
+          incentive_enabled: boolean
+          incentive_fixed_bonus: number | null
+          incentive_percentage_bonus: number | null
+          incentive_threshold_sessions: number | null
           is_active: boolean
           last_name: string | null
           license_number: string | null
+          retention_enabled: boolean
+          retention_rate: number
           signature_image_url: string | null
           specialties: string[] | null
           updated_at: string
@@ -814,15 +852,23 @@ export type Database = {
           archived?: boolean
           calendar_color_id?: string | null
           clinic_id?: string
+          compensation_type?: string
           commission_percentage?: number | null
           created_at?: string
           email?: string | null
           first_name?: string | null
+          fixed_session_amount?: number | null
           google_calendar_id?: string | null
           id?: string
+          incentive_enabled?: boolean
+          incentive_fixed_bonus?: number | null
+          incentive_percentage_bonus?: number | null
+          incentive_threshold_sessions?: number | null
           is_active?: boolean
           last_name?: string | null
           license_number?: string | null
+          retention_enabled?: boolean
+          retention_rate?: number
           signature_image_url?: string | null
           specialties?: string[] | null
           updated_at?: string
@@ -832,15 +878,23 @@ export type Database = {
           archived?: boolean
           calendar_color_id?: string | null
           clinic_id?: string
+          compensation_type?: string
           commission_percentage?: number | null
           created_at?: string
           email?: string | null
           first_name?: string | null
+          fixed_session_amount?: number | null
           google_calendar_id?: string | null
           id?: string
+          incentive_enabled?: boolean
+          incentive_fixed_bonus?: number | null
+          incentive_percentage_bonus?: number | null
+          incentive_threshold_sessions?: number | null
           is_active?: boolean
           last_name?: string | null
           license_number?: string | null
+          retention_enabled?: boolean
+          retention_rate?: number
           signature_image_url?: string | null
           specialties?: string[] | null
           updated_at?: string

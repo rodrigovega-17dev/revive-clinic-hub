@@ -4,6 +4,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   useCreateTherapist,
@@ -28,7 +30,15 @@ const TherapistForm = ({ open, onClose }: TherapistFormProps) => {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
+  const [compensationType, setCompensationType] = useState<'percentage' | 'fixed_per_session'>('percentage');
   const [commissionPercentage, setCommissionPercentage] = useState('0');
+  const [fixedSessionAmount, setFixedSessionAmount] = useState('');
+  const [retentionEnabled, setRetentionEnabled] = useState(false);
+  const [retentionRate, setRetentionRate] = useState('16');
+  const [incentiveEnabled, setIncentiveEnabled] = useState(false);
+  const [incentiveThresholdSessions, setIncentiveThresholdSessions] = useState('');
+  const [incentivePercentageBonus, setIncentivePercentageBonus] = useState('');
+  const [incentiveFixedBonus, setIncentiveFixedBonus] = useState('');
   const [calendarColorId, setCalendarColorId] = useState('1');
   const [specialties, setSpecialties] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -64,6 +74,68 @@ const TherapistForm = ({ open, onClose }: TherapistFormProps) => {
     }
 
     try {
+      const parsedCommission = parseFloat(commissionPercentage);
+      const parsedFixedAmount = parseFloat(fixedSessionAmount);
+      const parsedRetentionRate = parseFloat(retentionRate);
+      const safeRetentionRate = Number.isNaN(parsedRetentionRate) ? 16 : parsedRetentionRate;
+      const parsedIncentiveThreshold = parseInt(incentiveThresholdSessions, 10);
+      const parsedIncentivePercentageBonus = parseFloat(incentivePercentageBonus);
+      const parsedIncentiveFixedBonus = parseFloat(incentiveFixedBonus);
+
+      if (compensationType === 'percentage' && (Number.isNaN(parsedCommission) || parsedCommission < 0 || parsedCommission > 100)) {
+        toast({
+          title: t('common.validationError'),
+          description: t('therapists.invalidCommissionPercentage'),
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (compensationType === 'fixed_per_session' && (Number.isNaN(parsedFixedAmount) || parsedFixedAmount <= 0)) {
+        toast({
+          title: t('common.validationError'),
+          description: t('therapists.invalidFixedSessionAmount'),
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (retentionEnabled && (Number.isNaN(parsedRetentionRate) || parsedRetentionRate < 0 || parsedRetentionRate > 100)) {
+        toast({
+          title: t('common.validationError'),
+          description: t('therapists.invalidRetentionRate'),
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (incentiveEnabled && (Number.isNaN(parsedIncentiveThreshold) || parsedIncentiveThreshold < 1)) {
+        toast({
+          title: t('common.validationError'),
+          description: t('therapists.invalidIncentiveThreshold'),
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (incentiveEnabled && compensationType === 'percentage' && (Number.isNaN(parsedIncentivePercentageBonus) || parsedIncentivePercentageBonus <= 0)) {
+        toast({
+          title: t('common.validationError'),
+          description: t('therapists.invalidIncentivePercentageBonus'),
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (incentiveEnabled && compensationType === 'fixed_per_session' && (Number.isNaN(parsedIncentiveFixedBonus) || parsedIncentiveFixedBonus <= 0)) {
+        toast({
+          title: t('common.validationError'),
+          description: t('therapists.invalidIncentiveFixedBonus'),
+          variant: 'destructive',
+        });
+        return;
+      }
+
       if (hasInvalidSchedule) {
         toast({
           title: t('common.validationError'),
@@ -79,7 +151,17 @@ const TherapistForm = ({ open, onClose }: TherapistFormProps) => {
         last_name: lastName.trim(),
         email: email.trim(),
         license_number: licenseNumber.trim() || null,
-        commission_percentage: parseFloat(commissionPercentage) || 0,
+        compensation_type: compensationType,
+        commission_percentage: compensationType === 'percentage' ? (parseFloat(commissionPercentage) || 0) : null,
+        fixed_session_amount: compensationType === 'fixed_per_session' ? parsedFixedAmount : null,
+        retention_enabled: retentionEnabled,
+        retention_rate: safeRetentionRate,
+        incentive_enabled: incentiveEnabled,
+        incentive_threshold_sessions: incentiveEnabled ? parsedIncentiveThreshold : null,
+        incentive_percentage_bonus:
+          incentiveEnabled && compensationType === 'percentage' ? parsedIncentivePercentageBonus : null,
+        incentive_fixed_bonus:
+          incentiveEnabled && compensationType === 'fixed_per_session' ? parsedIncentiveFixedBonus : null,
         calendar_color_id: calendarColorId,
         user_id: null,
       });
@@ -99,7 +181,15 @@ const TherapistForm = ({ open, onClose }: TherapistFormProps) => {
       setLastName('');
       setEmail('');
       setLicenseNumber('');
+      setCompensationType('percentage');
       setCommissionPercentage('0');
+      setFixedSessionAmount('');
+      setRetentionEnabled(false);
+      setRetentionRate('16');
+      setIncentiveEnabled(false);
+      setIncentiveThresholdSessions('');
+      setIncentivePercentageBonus('');
+      setIncentiveFixedBonus('');
       setCalendarColorId('1');
       setScheduleRules(scheduleRulesQuery.data || createDefaultScheduleRules());
     } catch (error) {
@@ -121,7 +211,15 @@ const TherapistForm = ({ open, onClose }: TherapistFormProps) => {
       setLastName('');
       setEmail('');
       setLicenseNumber('');
+      setCompensationType('percentage');
       setCommissionPercentage('0');
+      setFixedSessionAmount('');
+      setRetentionEnabled(false);
+      setRetentionRate('16');
+      setIncentiveEnabled(false);
+      setIncentiveThresholdSessions('');
+      setIncentivePercentageBonus('');
+      setIncentiveFixedBonus('');
       setCalendarColorId('1');
       setScheduleRules(scheduleRulesQuery.data || createDefaultScheduleRules());
     }
@@ -205,18 +303,124 @@ const TherapistForm = ({ open, onClose }: TherapistFormProps) => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="commissionPercentage">{t('therapists.commissionPercentage')}</Label>
-                <Input
-                  id="commissionPercentage"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  value={commissionPercentage}
-                  onChange={(e) => setCommissionPercentage(e.target.value)}
-                  placeholder="0"
-                  className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
-                />
+                <Label>{t('therapists.compensationType')}</Label>
+                <Select value={compensationType} onValueChange={(value) => setCompensationType(value as 'percentage' | 'fixed_per_session')}>
+                  <SelectTrigger className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percentage">{t('therapists.compensationPercentage')}</SelectItem>
+                    <SelectItem value="fixed_per_session">{t('therapists.compensationFixedPerSession')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {compensationType === 'percentage' ? (
+                <div className="space-y-2">
+                  <Label htmlFor="commissionPercentage">{t('therapists.commissionPercentage')}</Label>
+                  <Input
+                    id="commissionPercentage"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={commissionPercentage}
+                    onChange={(e) => setCommissionPercentage(e.target.value)}
+                    placeholder="0"
+                    className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="fixedSessionAmount">{t('therapists.fixedSessionAmount')}</Label>
+                  <Input
+                    id="fixedSessionAmount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={fixedSessionAmount}
+                    onChange={(e) => setFixedSessionAmount(e.target.value)}
+                    placeholder="0"
+                    className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
+                  />
+                </div>
+              )}
+
+              <div className="rounded-md border border-border p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="retentionEnabled">{t('therapists.retentionEnabled')}</Label>
+                  <Switch id="retentionEnabled" checked={retentionEnabled} onCheckedChange={setRetentionEnabled} />
+                </div>
+                {retentionEnabled && (
+                  <div className="space-y-2">
+                    <Label htmlFor="retentionRate">{t('therapists.retentionRate')}</Label>
+                    <Input
+                      id="retentionRate"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={retentionRate}
+                      onChange={(e) => setRetentionRate(e.target.value)}
+                      placeholder="16"
+                      className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-md border border-border p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="incentiveEnabled">{t('therapists.incentiveEnabled')}</Label>
+                  <Switch id="incentiveEnabled" checked={incentiveEnabled} onCheckedChange={setIncentiveEnabled} />
+                </div>
+                {incentiveEnabled && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="incentiveThresholdSessions">{t('therapists.incentiveThresholdSessions')}</Label>
+                      <Input
+                        id="incentiveThresholdSessions"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={incentiveThresholdSessions}
+                        onChange={(e) => setIncentiveThresholdSessions(e.target.value)}
+                        placeholder="60"
+                        className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
+                      />
+                    </div>
+                    {compensationType === 'percentage' ? (
+                      <div className="space-y-2">
+                        <Label htmlFor="incentivePercentageBonus">{t('therapists.incentivePercentageBonus')}</Label>
+                        <Input
+                          id="incentivePercentageBonus"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={incentivePercentageBonus}
+                          onChange={(e) => setIncentivePercentageBonus(e.target.value)}
+                          placeholder="5"
+                          className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
+                        />
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Label htmlFor="incentiveFixedBonus">{t('therapists.incentiveFixedBonus')}</Label>
+                        <Input
+                          id="incentiveFixedBonus"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={incentiveFixedBonus}
+                          onChange={(e) => setIncentiveFixedBonus(e.target.value)}
+                          placeholder="50"
+                          className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
               <CalendarColorPicker
