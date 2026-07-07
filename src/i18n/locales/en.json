@@ -879,7 +879,7 @@
     "incentiveEnabled": "Enable Volume Incentive",
     "incentiveThresholdSessions": "Quarter Threshold Sessions",
     "incentivePercentageBonus": "Commission Bonus (percentage points)",
-    "incentiveFixedBonus": "Fixed Bonus Per Session",
+    "incentiveFixedBonus": "Added Fixed Bonus Per Session",
     "invalidCommissionPercentage": "Enter a valid commission percentage between 0 and 100.",
     "invalidFixedSessionAmount": "Enter a valid fixed amount greater than 0.",
     "invalidRetentionRate": "Enter a valid retention rate between 0 and 100.",
