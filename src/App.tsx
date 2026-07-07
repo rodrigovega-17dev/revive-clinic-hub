@@ -78,7 +78,7 @@ const App = () => {
               <Route path="/appointments" element={<ProtectedRoute><Layout><Appointments /></Layout></ProtectedRoute>} />
               <Route path="/clients" element={<ProtectedRoute><Layout><Clients /></Layout></ProtectedRoute>} />
               <Route path="/therapists" element={<ProtectedRoute><Layout><FinancePinGate><Therapists /></FinancePinGate></Layout></ProtectedRoute>} />
-              <Route path="/finance" element={<ProtectedRoute><Layout><FinancePinGate><Finance /></FinancePinGate></Layout></ProtectedRoute>} />
+              <Route path="/finance" element={<ProtectedRoute><Layout><Finance /></Layout></ProtectedRoute>} />
               <Route path="/payroll" element={<ProtectedRoute><Layout><FinancePinGate><Payroll /></FinancePinGate></Layout></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
               <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />

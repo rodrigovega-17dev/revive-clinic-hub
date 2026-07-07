@@ -28,7 +28,7 @@ export const FinancePinGate: React.FC<FinancePinGateProps> = ({ children }) => {
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isProtectedPath = pathname === '/finance' || pathname === '/payroll' || pathname === '/therapists';
+  const isProtectedPath = pathname === '/payroll' || pathname === '/therapists';
   const required = Boolean(securitySettings?.finance_pin_required);
 
   const [unlocked, setUnlockedState] = useState(false);
