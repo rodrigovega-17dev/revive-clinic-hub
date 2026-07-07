@@ -109,7 +109,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
 
       const { data, error } = await supabase
         .from('appointments')
-        .select('status, client_id')
+        .select('status')
         .eq('clinic_id', clinicId)
         .gte('start_time', startDate.toISOString())
         .lte('start_time', endDate.toISOString());
@@ -135,7 +135,6 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
   const apptCancelled = dayAppointments?.filter(a => a.status === 'cancelled').length || 0;
   const apptNoShow = dayAppointments?.filter(a => a.status === 'no_show').length || 0;
   const apptActive = dayAppointments?.filter(a => ['scheduled', 'confirmed', 'in_progress', 'waiting_checkout'].includes(a.status)).length || 0;
-  const apptUniqueClients = new Set((dayAppointments || []).map(a => a.client_id).filter(Boolean)).size;
 
   // Clinic-aware currency formatting
   const formatCurrencyWithClinic = (value: number) => {
@@ -215,7 +214,6 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
         { label: t('finance.activeAppointments'), value: String(apptActive) },
         { label: t('finance.cancelledAppointments'), value: String(apptCancelled) },
         { label: t('finance.noShowAppointments'), value: String(apptNoShow) },
-        { label: t('finance.uniqueClients'), value: String(apptUniqueClients) },
       ],
       financialTitle: t('finance.financialSummary'),
       financialStats: [

@@ -127,7 +127,7 @@ const MonthlyFinanceSection = () => {
       if (!clinicId) return [];
       const { data, error } = await supabase
         .from('appointments')
-        .select('status, client_id')
+        .select('status')
         .eq('clinic_id', clinicId)
         .gte('start_time', currentRange.start.toISOString())
         .lte('start_time', currentRange.end.toISOString());
@@ -204,7 +204,6 @@ const MonthlyFinanceSection = () => {
     const apptCancelled = monthAppointments?.filter((a) => a.status === 'cancelled').length || 0;
     const apptNoShow = monthAppointments?.filter((a) => a.status === 'no_show').length || 0;
     const apptActive = monthAppointments?.filter((a) => ['scheduled', 'confirmed', 'in_progress', 'waiting_checkout'].includes(a.status)).length || 0;
-    const apptUniqueClients = new Set((monthAppointments || []).map((a) => a.client_id).filter(Boolean)).size;
 
     const paymentsTable: FinanceReportTable = {
       title: t('finance.paymentHistory'),
@@ -250,7 +249,6 @@ const MonthlyFinanceSection = () => {
         { label: t('finance.activeAppointments'), value: String(apptActive) },
         { label: t('finance.cancelledAppointments'), value: String(apptCancelled) },
         { label: t('finance.noShowAppointments'), value: String(apptNoShow) },
-        { label: t('finance.uniqueClients'), value: String(apptUniqueClients) },
       ],
       financialTitle: t('finance.financialSummary'),
       financialStats: [
