@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatDistanceToNow } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
@@ -9,6 +9,11 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useActivityLog, ActivityLogEntry } from '@/hooks/useActivityLog';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useClients } from '@/hooks/useClients';
+import { useTherapists } from '@/hooks/useTherapists';
+import ClientSearchSelect from '@/components/ClientSearchSelect';
+import { formatPersonName } from '@/lib/names';
+import { Label } from '@/components/ui/label';
 
 const ACTION_ICONS: Record<string, React.ElementType> = {
   appointment: CalendarDays,
@@ -34,9 +39,30 @@ const ActivityLogPage = () => {
   const locale = currentLanguage === 'es' ? es : enUS;
   const [page, setPage] = useState(0);
   const [entityFilter, setEntityFilter] = useState('all');
+  const [clientFilterId, setClientFilterId] = useState('all');
+  const [therapistFilterId, setTherapistFilterId] = useState('all');
   const [entries, setEntries] = useState<ActivityLogEntry[]>([]);
+  const { data: clients = [] } = useClients();
+  const { data: therapists = [] } = useTherapists();
 
-  const { data, isLoading } = useActivityLog(page, entityFilter);
+  const selectedClientName = useMemo(() => {
+    if (clientFilterId === 'all') return undefined;
+    const client = clients.find((item) => item.id === clientFilterId);
+    return formatPersonName(client?.first_name, client?.last_name);
+  }, [clientFilterId, clients]);
+
+  const selectedTherapistName = useMemo(() => {
+    if (therapistFilterId === 'all') return undefined;
+    const therapist = therapists.find((item) => item.id === therapistFilterId);
+    return formatPersonName(therapist?.first_name, therapist?.last_name);
+  }, [therapistFilterId, therapists]);
+
+  const { data, isLoading } = useActivityLog(
+    page,
+    entityFilter,
+    selectedClientName,
+    selectedTherapistName
+  );
 
   // Accumulate entries for infinite scroll
   const allEntries = page === 0 ? (data?.data ?? []) : [...entries, ...(data?.data ?? [])];
@@ -45,6 +71,18 @@ const ActivityLogPage = () => {
 
   const handleFilterChange = (value: string) => {
     setEntityFilter(value);
+    setPage(0);
+    setEntries([]);
+  };
+
+  const handleClientFilterChange = (value: string) => {
+    setClientFilterId(value);
+    setPage(0);
+    setEntries([]);
+  };
+
+  const handleTherapistFilterChange = (value: string) => {
+    setTherapistFilterId(value);
     setPage(0);
     setEntries([]);
   };
@@ -77,6 +115,33 @@ const ActivityLogPage = () => {
           <TabsTrigger value="payment">{t('activityLog.payments')}</TabsTrigger>
         </TabsList>
       </Tabs>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label className="text-sm text-foreground">{t('appointments.client')}</Label>
+          <ClientSearchSelect
+            value={clientFilterId}
+            onValueChange={handleClientFilterChange}
+            clients={clients}
+            allowNone
+            noneValue="all"
+            noneLabel={t('activityLog.allClients')}
+            placeholder={t('common.selectClient')}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label className="text-sm text-foreground">{t('appointments.therapist')}</Label>
+          <ClientSearchSelect
+            value={therapistFilterId}
+            onValueChange={handleTherapistFilterChange}
+            clients={therapists}
+            allowNone
+            noneValue="all"
+            noneLabel={t('activityLog.allTherapists')}
+            placeholder={t('common.selectTherapist')}
+          />
+        </div>
+      </div>
 
       <Card>
         <CardHeader className="pb-3">

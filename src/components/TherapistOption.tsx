@@ -1,5 +1,6 @@
 import React from 'react';
 import { getTherapistColor } from '@/lib/therapist-colors';
+import { formatPersonName } from '@/lib/names';
 
 interface TherapistOptionProps {
   therapist: {
@@ -16,7 +17,7 @@ const TherapistOption: React.FC<TherapistOptionProps> = ({ therapist }) => (
       className="h-3 w-3 flex-shrink-0 rounded-full border border-border"
       style={{ backgroundColor: getTherapistColor(therapist.calendar_color_id).background }}
     />
-    {therapist.first_name} {therapist.last_name}
+    {formatPersonName(therapist.first_name, therapist.last_name)}
   </span>
 );
 

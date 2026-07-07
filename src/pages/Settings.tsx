@@ -58,6 +58,7 @@ const Settings = (): JSX.Element => {
     sessionInfo,
     loading: securityLoading, 
     changePassword, 
+    changeEmail,
     signOutCurrentDevice, 
     signOutFromAllDevices,
     setFinancePin,
@@ -103,6 +104,11 @@ const Settings = (): JSX.Element => {
   const [disablePinPassword, setDisablePinPassword] = useState('');
   const [disablePinLoading, setDisablePinLoading] = useState(false);
   const [disablePinError, setDisablePinError] = useState<string | null>(null);
+  const [changeEmailDialogOpen, setChangeEmailDialogOpen] = useState(false);
+  const [newAccountEmail, setNewAccountEmail] = useState('');
+  const [changeEmailPassword, setChangeEmailPassword] = useState('');
+  const [changeEmailLoading, setChangeEmailLoading] = useState(false);
+  const [changeEmailError, setChangeEmailError] = useState<string | null>(null);
 
   // Signature management
   const { user, clinicId: authClinicId } = useAuth();
@@ -365,6 +371,43 @@ const Settings = (): JSX.Element => {
         description: t('settings.failedToSaveSettings'),
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleChangeAccountEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setChangeEmailError(null);
+
+    const nextEmail = newAccountEmail.trim().toLowerCase();
+    if (!nextEmail || !changeEmailPassword.trim()) {
+      setChangeEmailError(t('common.fillRequiredFields'));
+      return;
+    }
+
+    if (nextEmail === (user?.email || '').toLowerCase()) {
+      setChangeEmailError(t('security.emailMustBeDifferent'));
+      return;
+    }
+
+    setChangeEmailLoading(true);
+    try {
+      const result = await changeEmail(changeEmailPassword, nextEmail);
+      if (result?.error) {
+        setChangeEmailError(result.error.message || t('settings.failedToSaveSettings'));
+        return;
+      }
+
+      toast({
+        title: t('notifications.success'),
+        description: t('security.emailChangeSuccess'),
+      });
+
+      setChangeEmailDialogOpen(false);
+      setChangeEmailPassword('');
+      setChangeEmailError(null);
+      setNewAccountEmail(nextEmail);
+    } finally {
+      setChangeEmailLoading(false);
     }
   };
 
@@ -913,6 +956,95 @@ const Settings = (): JSX.Element => {
                 <h3 className="text-lg font-medium">{t('security.passwordSecurity')}</h3>
                 <PasswordChangeDialog onPasswordChange={changePassword} />
               </div>
+
+              <Separator />
+
+              {/* Account Email */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">{t('security.accountEmail')}</h3>
+                <p className="text-sm text-muted-foreground">{t('security.emailChangeDescription')}</p>
+                <div className="rounded-lg border border-border bg-muted/30 p-4 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('security.currentEmail')}</p>
+                    <p className="font-medium truncate">{user?.email || '—'}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setNewAccountEmail(user?.email || '');
+                      setChangeEmailPassword('');
+                      setChangeEmailError(null);
+                      setChangeEmailDialogOpen(true);
+                    }}
+                  >
+                    {t('security.changeEmail')}
+                  </Button>
+                </div>
+              </div>
+
+              <Dialog
+                open={changeEmailDialogOpen}
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setChangeEmailError(null);
+                    setChangeEmailPassword('');
+                  }
+                  setChangeEmailDialogOpen(open);
+                }}
+              >
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>{t('security.changeEmail')}</DialogTitle>
+                    <DialogDescription>{t('security.emailChangeDescription')}</DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleChangeAccountEmail} className="space-y-4">
+                    {changeEmailError && (
+                      <Alert variant="destructive">
+                        <AlertDescription>{changeEmailError}</AlertDescription>
+                      </Alert>
+                    )}
+                    <div className="space-y-2">
+                      <Label htmlFor="new-account-email">{t('security.newEmail')}</Label>
+                      <Input
+                        id="new-account-email"
+                        type="email"
+                        value={newAccountEmail}
+                        onChange={(e) => setNewAccountEmail(e.target.value)}
+                        placeholder={t('security.enterNewEmail')}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="change-email-password">{t('security.currentPassword')}</Label>
+                      <Input
+                        id="change-email-password"
+                        type="password"
+                        value={changeEmailPassword}
+                        onChange={(e) => setChangeEmailPassword(e.target.value)}
+                        placeholder={t('security.enterCurrentPassword')}
+                        required
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {t('security.emailChangeConfirmationHint')}
+                    </p>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setChangeEmailDialogOpen(false)}
+                        disabled={changeEmailLoading}
+                      >
+                        {t('common.cancel')}
+                      </Button>
+                      <Button type="submit" disabled={changeEmailLoading}>
+                        {changeEmailLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {t('security.changeEmail')}
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
 
               <Separator />
 

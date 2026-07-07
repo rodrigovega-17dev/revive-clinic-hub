@@ -15,10 +15,11 @@ import AppointmentTable from '@/components/AppointmentTable';
 import MonthlyAppointmentsView from '@/components/MonthlyAppointmentsView';
 import WeeklyAppointmentsView from '@/components/WeeklyAppointmentsView';
 import { Skeleton } from '@/components/ui/skeleton';
-import SearchInput from '@/components/SearchInput';
 import { Label } from '@/components/ui/label';
 import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '@/hooks/useLanguage';
+import ClientSearchSelect from '@/components/ClientSearchSelect';
+import { formatPersonName } from '@/lib/names';
 
 const Appointments = () => {
   const { t } = useTranslation();
@@ -28,6 +29,7 @@ const Appointments = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedView, setSelectedView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [searchTerm, setSearchTerm] = useState('');
+  const [clientSearchValue, setClientSearchValue] = useState('all');
   const [searchParams] = useSearchParams();
   
   const locale = currentLanguage === 'es' ? es : enUS;
@@ -83,6 +85,17 @@ const Appointments = () => {
 
   const handleMonthlyDateSelect = (date: Date) => {
     setSelectedDate(date);
+  };
+
+  const handleClientSearchSelect = (value: string) => {
+    setClientSearchValue(value);
+    if (value === 'all') {
+      setSearchTerm('');
+      return;
+    }
+
+    const selectedClient = clients?.find((client) => client.id === value);
+    setSearchTerm(formatPersonName(selectedClient?.first_name, selectedClient?.last_name));
   };
 
   const filteredGroupedAppointments = useMemo(() => {
@@ -157,13 +170,16 @@ const Appointments = () => {
                 selectedDate={format(selectedDate, 'yyyy-MM-dd')}
                 onDateChange={handleDateChange}
           />
-          <div className="space-y-2 w-full sm:w-auto">
+          <div className="space-y-2 w-full sm:w-[240px]">
             <Label className="text-sm text-foreground">{t('appointments.searchByClient')}</Label>
-            <SearchInput
-              value={searchTerm}
-              onChange={setSearchTerm}
+            <ClientSearchSelect
+              value={clientSearchValue}
+              onValueChange={handleClientSearchSelect}
+              clients={clients || []}
+              allowNone
+              noneValue="all"
+              noneLabel={t('common.all')}
               placeholder={t('appointments.searchByClient')}
-              className="w-full sm:w-[240px]"
             />
           </div>
         </div>

@@ -11,16 +11,21 @@ export interface ActivityLogEntry {
   entity_type: string;
   entity_id: string | null;
   description: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   created_at: string;
 }
 
-export const useActivityLog = (page = 0, entityType?: string) => {
+export const useActivityLog = (
+  page = 0,
+  entityType?: string,
+  clientName?: string,
+  therapistName?: string
+) => {
   const { clinicId } = useAuth();
   const PAGE_SIZE = 50;
 
   return useQuery({
-    queryKey: ['activity-log', clinicId, page, entityType],
+    queryKey: ['activity-log', clinicId, page, entityType, clientName, therapistName],
     queryFn: async () => {
       let q = supabase
         .from('activity_log')
@@ -31,6 +36,14 @@ export const useActivityLog = (page = 0, entityType?: string) => {
 
       if (entityType && entityType !== 'all') {
         q = q.eq('entity_type', entityType);
+      }
+
+      if (clientName) {
+        q = q.ilike('description', `%${clientName}%`);
+      }
+
+      if (therapistName) {
+        q = q.ilike('description', `%${therapistName}%`);
       }
 
       const { data, error, count } = await q;

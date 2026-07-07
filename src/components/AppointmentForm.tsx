@@ -27,6 +27,7 @@ import { useClinicSettings } from '@/hooks/useClinic';
 import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/hooks/useLanguage';
 import { es, enUS } from 'date-fns/locale';
+import ClientSearchSelect from '@/components/ClientSearchSelect';
 
 interface AppointmentFormProps {
   open: boolean;
@@ -309,18 +310,12 @@ const AppointmentForm = ({ open, onClose }: AppointmentFormProps) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label htmlFor="client">{t('appointments.client')} *</Label>
-            <Select value={clientId} onValueChange={handleClientChange} required>
-              <SelectTrigger className="!bg-input !border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:!border-primary">
-                <SelectValue placeholder={t('common.selectClient')} />
-              </SelectTrigger>
-              <SelectContent className="bg-popover border-border">
-                {clients?.map((client) => (
-                  <SelectItem key={client.id} value={client.id}>
-                    {client.first_name} {client.last_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ClientSearchSelect
+              value={clientId}
+              onValueChange={handleClientChange}
+              clients={clients || []}
+              placeholder={t('common.selectClient')}
+            />
           </div>
 
           {clientId && (

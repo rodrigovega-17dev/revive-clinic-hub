@@ -10,7 +10,6 @@ import { useAllClientBalances } from '@/hooks/useClientBalance';
 import ClientForm from '@/components/ClientForm';
 import EditClientForm from '@/components/EditClientForm';
 import ClientDetails from '@/components/ClientDetails';
-import SearchInput from '@/components/SearchInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -22,6 +21,8 @@ import { formatCurrency, getBalanceColorClass, getBalanceSign } from '@/lib/util
 import { useClinicSettings } from '@/hooks/useClinic';
 import { hasCfdiData } from '@/lib/cfdi-catalogs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import ClientSearchSelect from '@/components/ClientSearchSelect';
+import { formatPersonName } from '@/lib/names';
 
 type Client = Tables<'clients'>;
 
@@ -35,6 +36,7 @@ const Clients = () => {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [clientSearchValue, setClientSearchValue] = useState('all');
   const { data: clientBalances } = useAllClientBalances();
   const [searchParams] = useSearchParams();
   const { currency } = useClinicSettings();
@@ -90,6 +92,17 @@ const Clients = () => {
     } catch (e) {
       toast({ title: t('common.error'), description: (e as Error).message, variant: 'destructive' });
     }
+  };
+
+  const handleClientSearchSelect = (value: string) => {
+    setClientSearchValue(value);
+    if (value === 'all') {
+      setSearchTerm('');
+      return;
+    }
+
+    const selected = clients?.find((client) => client.id === value);
+    setSearchTerm(formatPersonName(selected?.first_name, selected?.last_name));
   };
 
   // Check URL parameters to auto-open form
@@ -212,12 +225,17 @@ const Clients = () => {
 
       {/* Search + Include archived */}
       <div className="flex flex-wrap items-center gap-4">
-        <SearchInput
-          value={searchTerm}
-          onChange={setSearchTerm}
-          placeholder={t('clients.searchClients')}
-          className="max-w-md"
-        />
+        <div className="w-full max-w-md">
+          <ClientSearchSelect
+            value={clientSearchValue}
+            onValueChange={handleClientSearchSelect}
+            clients={clients || []}
+            allowNone
+            noneValue="all"
+            noneLabel={t('common.all')}
+            placeholder={t('clients.searchClients')}
+          />
+        </div>
         <div className="flex items-center gap-2">
           <Switch id="include-archived-clients" checked={includeArchived} onCheckedChange={setIncludeArchived} />
           <Label htmlFor="include-archived-clients" className="text-sm text-muted-foreground">{t('common.showArchived')}</Label>

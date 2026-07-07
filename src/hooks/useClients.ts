@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import { toUpperNamePart } from '@/lib/names';
 
 type Client = Tables<'clients'>;
 type ClientInsert = TablesInsert<'clients'>;
@@ -20,8 +21,8 @@ export const useClients = (opts?: { includeArchived?: boolean }) => {
         .select('*')
         .eq('clinic_id', clinicId)
         .eq('is_active', true)
-        .order('last_name', { ascending: true })
-        .order('first_name', { ascending: true });
+        .order('first_name', { ascending: true })
+        .order('last_name', { ascending: true });
       if (!includeArchived) q = q.eq('archived', false);
       const { data, error } = await q;
       if (error) throw error;
@@ -41,6 +42,8 @@ export const useCreateClient = () => {
       
       const clientWithClinic: ClientInsert = {
         ...client,
+        first_name: toUpperNamePart(client.first_name),
+        last_name: toUpperNamePart(client.last_name),
         clinic_id: clinicId,
       };
       
@@ -65,9 +68,21 @@ export const useUpdateClient = () => {
 
   return useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & Partial<ClientUpdate>) => {
+      const normalizedUpdates: Partial<ClientUpdate> = {
+        ...updates,
+      };
+
+      if (updates.first_name !== undefined) {
+        normalizedUpdates.first_name = toUpperNamePart(updates.first_name);
+      }
+
+      if (updates.last_name !== undefined) {
+        normalizedUpdates.last_name = toUpperNamePart(updates.last_name);
+      }
+
       const { data, error } = await supabase
         .from('clients')
-        .update(updates)
+        .update(normalizedUpdates)
         .eq('id', id)
         .select()
         .single();

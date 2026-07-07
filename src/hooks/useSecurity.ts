@@ -229,6 +229,45 @@ export const useSecurity = () => {
     }
   };
 
+  // Change account email using Supabase Auth (requires current password verification)
+  const changeEmail = async (currentPassword: string, newEmail: string) => {
+    if (!user) return { error: { message: t('errors.userNotAuthenticated') } };
+    if (!user.email) return { error: { message: t('errors.authenticationFailed') } };
+
+    try {
+      const normalizedEmail = newEmail.trim().toLowerCase();
+      if (!normalizedEmail) {
+        return { error: { message: t('common.fillRequiredFields') } };
+      }
+
+      if (normalizedEmail === user.email.toLowerCase()) {
+        return { error: { message: t('security.emailMustBeDifferent') } };
+      }
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+
+      if (signInError) {
+        return { error: { message: t('errors.currentPasswordIncorrect') } };
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({
+        email: normalizedEmail,
+      });
+
+      if (updateError) {
+        return { error: updateError };
+      }
+
+      return { data: null, error: null };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : t('errors.authenticationFailed');
+      return { data: null, error: { message: errorMessage } };
+    }
+  };
+
   // Sign out from current device only
   const signOutCurrentDevice = async () => {
     try {
@@ -327,6 +366,7 @@ export const useSecurity = () => {
     updateSecuritySettings,
     toggleTwoFactor,
     changePassword,
+    changeEmail,
     setFinancePin,
     clearFinancePin,
     clearFinancePinWithPassword,

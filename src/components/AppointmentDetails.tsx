@@ -105,7 +105,30 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const updateClient = useUpdateClient();
   const { configured: facturapiConfigured } = useClinicFacturapiConfig();
 
-  const apt = displayAppointment ?? appointment;
+  const { data: liveAppointment } = useQuery({
+    queryKey: ['appointments', 'detail', appointment?.id, clinicId],
+    queryFn: async () => {
+      if (!appointment?.id || !clinicId) return null;
+
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          *,
+          clients (first_name, last_name, email, phone),
+          therapists (first_name, last_name, calendar_color_id, email),
+          treatments (name, price, duration_minutes)
+        `)
+        .eq('id', appointment.id)
+        .eq('clinic_id', clinicId)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!open && !!appointment?.id && !!clinicId,
+  });
+
+  const apt = liveAppointment ?? displayAppointment ?? appointment;
   const { data: appointmentPayments } = useQuery({
     queryKey: ['appointment-payments', appointment?.id, clinicId],
     queryFn: async () => {
@@ -119,7 +142,11 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       if (error) throw error;
       return data || [];
     },
-    enabled: !!appointment?.id && !!clinicId && apt?.payment_status === 'paid',
+    enabled:
+      !!appointment?.id &&
+      !!clinicId &&
+      (liveAppointment?.payment_status ?? displayAppointment?.payment_status ?? appointment?.payment_status) ===
+        'paid',
   });
 
   // 'balance'/'adjustment' payments never moved real cash today — the CFDI belongs on
@@ -139,13 +166,23 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
 
   const appointmentAmount = Number(apt?.payment_amount || 0);
 
+  const localeCode = currentLanguage === 'es' ? 'es-MX' : 'en-US';
+
   const formatClinicDate = (value: string | Date, options: Intl.DateTimeFormatOptions) => {
     const date = typeof value === 'string' ? new Date(value) : value;
-    return new Intl.DateTimeFormat('en-US', {
+    return new Intl.DateTimeFormat(localeCode, {
       timeZone: timezone,
       ...options,
     }).format(date);
   };
+
+  const formatWhatsAppDate = (value: string | Date) =>
+    formatClinicDate(value, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
   const availableCredit = Math.max(0, Number(clientBalance?.balance || 0));
   const maxApplicableCredit = Math.min(availableCredit, appointmentAmount);
   const appliedCredit = useBalanceCredit ? maxApplicableCredit : 0;
@@ -290,6 +327,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   };
 
   const handleReschedule = async () => {
+    if (!apt) return;
     if (!rescheduleData.start_time) {
       toast({
         title: t('appointments.error'),
@@ -315,13 +353,13 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
 
       await updateAppointment.mutateAsync({
-        id: appointment.id,
+        id: apt.id,
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
-        therapist_id: rescheduleData.therapist_id || appointment.therapist_id,
-        treatment_id: rescheduleData.treatment_id || appointment.treatment_id,
+        therapist_id: rescheduleData.therapist_id || apt.therapist_id,
+        treatment_id: rescheduleData.treatment_id || apt.treatment_id,
         payment_amount: rescheduleData.payment_amount === ''
-          ? appointment.payment_amount
+          ? apt.payment_amount
           : Number(rescheduleData.payment_amount),
       });
 
@@ -373,9 +411,10 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   };
 
   const handleStatusChange = async (nextStatus: string) => {
+    if (!apt) return;
     try {
       const { data } = await updateAppointment.mutateAsync({
-        id: appointment.id,
+        id: apt.id,
         status: nextStatus as any,
       });
       setDisplayAppointment(data);
@@ -410,32 +449,21 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   };
 
   const handleManualSync = async () => {
-    try {
-      await syncAppointment({ 
-        appointment,
-        options: {
-          sendInvites: true,
-          reminderMinutes: 15,
-        }
-      });
-      
-      toast({
-        title: t('appointments.success'),
-        description: t('appointments.syncedToGoogleCalendar'),
-      });
-    } catch (error) {
-      console.error('Manual sync failed:', error);
-      toast({
-        title: t('appointments.error'),
-        description: t('appointments.failedToSync'),
-        variant: 'destructive',
-      });
-    }
+    if (!apt) return;
+    // useClinicGoogleCalendar already handles success/error toasts.
+    syncAppointment({
+      appointment: apt,
+      options: {
+        sendInvites: true,
+        reminderMinutes: 15,
+      },
+    });
   };
 
   const handleDeleteAppointment = async () => {
+    if (!apt) return;
     try {
-      await deleteAppointmentMutation.mutateAsync(appointment);
+      await deleteAppointmentMutation.mutateAsync(apt);
 
       toast({
         title: t('appointments.success'),
@@ -455,8 +483,6 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
 
   useEffect(() => {
     if (!appointment) return;
-    const keeping = displayAppointment?.id === appointment.id;
-    // Always use latest appointment from parent so sync status (e.g. google_calendar_event_id) updates without reload
     setDisplayAppointment(appointment);
     setPaymentData({
       amount: appointment.payment_amount || 0,
@@ -464,14 +490,17 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
     });
     setUseBalanceCredit(false);
     setBalanceApplied(0);
-    if (!keeping) {
-      if (appointment.status === 'completed' && appointment.payment_status !== 'paid') {
-        setActiveTab('payment');
-      } else {
-        setActiveTab('details');
-      }
+    if (appointment.status === 'completed' && appointment.payment_status !== 'paid') {
+      setActiveTab('payment');
+    } else {
+      setActiveTab('details');
     }
-  }, [appointment?.id, appointment, displayAppointment?.id]);
+  }, [appointment]);
+
+  useEffect(() => {
+    if (!liveAppointment) return;
+    setDisplayAppointment(liveAppointment);
+  }, [liveAppointment]);
 
   useEffect(() => {
     if (!useBalanceCredit) return;
@@ -750,11 +779,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                           onClick={() => {
                             const msg = t('whatsapp.messageConfirmation', {
                               name: `${apt.clients?.first_name || ''} ${apt.clients?.last_name || ''}`.trim(),
-                              date: formatClinicDate(apt.start_time, {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric',
-                              }),
+                              date: formatWhatsAppDate(apt.start_time),
                               time: formatClinicDate(apt.start_time, {
                                 hour: 'numeric',
                                 minute: '2-digit',
@@ -774,11 +799,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                           onClick={() => {
                             const msg = t('whatsapp.messageReschedule', {
                               name: `${apt.clients?.first_name || ''} ${apt.clients?.last_name || ''}`.trim(),
-                              date: formatClinicDate(apt.start_time, {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric',
-                              }),
+                              date: formatWhatsAppDate(apt.start_time),
                               time: formatClinicDate(apt.start_time, {
                                 hour: 'numeric',
                                 minute: '2-digit',
@@ -797,11 +818,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                           onClick={() => {
                             const msg = t('whatsapp.messageCancellation', {
                               name: `${apt.clients?.first_name || ''} ${apt.clients?.last_name || ''}`.trim(),
-                              date: formatClinicDate(apt.start_time, {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric',
-                              }),
+                              date: formatWhatsAppDate(apt.start_time),
                               time: formatClinicDate(apt.start_time, {
                                 hour: 'numeric',
                                 minute: '2-digit',
@@ -819,11 +836,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                           onClick={() => {
                             const msg = t('whatsapp.messageReminder', {
                               name: `${apt.clients?.first_name || ''} ${apt.clients?.last_name || ''}`.trim(),
-                              date: formatClinicDate(apt.start_time, {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric',
-                              }),
+                              date: formatWhatsAppDate(apt.start_time),
                               time: formatClinicDate(apt.start_time, {
                                 hour: 'numeric',
                                 minute: '2-digit',

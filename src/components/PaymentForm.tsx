@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useClinicSettings } from '@/hooks/useClinic';
 import { Loader2, DollarSign, CreditCard, Banknote } from 'lucide-react';
+import ClientSearchSelect from '@/components/ClientSearchSelect';
 
 interface PaymentFormProps {
   open: boolean;
@@ -172,19 +173,15 @@ export default function PaymentForm({ open, onClose }: PaymentFormProps) {
           {/* Client (Optional) */}
           <div className="space-y-2">
             <Label htmlFor="client">{t('finance.clientOptional')}</Label>
-            <Select value={clientId} onValueChange={setClientId}>
-              <SelectTrigger className="bg-input border-border text-foreground">
-                <SelectValue placeholder={t('finance.selectClient')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">{t('finance.noClient')}</SelectItem>
-                {clients?.map((client) => (
-                  <SelectItem key={client.id} value={client.id}>
-                    {client.first_name} {client.last_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ClientSearchSelect
+              value={clientId}
+              onValueChange={setClientId}
+              clients={clients || []}
+              allowNone
+              noneValue="none"
+              noneLabel={t('finance.noClient')}
+              placeholder={t('finance.selectClient')}
+            />
           </div>
 
           {/* Payment Method */}
