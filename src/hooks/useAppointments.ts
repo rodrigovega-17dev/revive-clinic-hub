@@ -387,7 +387,7 @@ export const useTodayStats = () => {
 
       const totalAppointments = appointments?.length || 0;
       const completedAppointments = appointments?.filter(a => a.status === 'completed').length || 0;
-      const todayRevenue = payments?.reduce((sum, p) => (p.method === 'balance' ? sum : sum + Number(p.amount)), 0) || 0;
+      const todayRevenue = payments?.reduce((sum, p) => (p.method === 'balance' || p.method === 'adjustment' ? sum : sum + Number(p.amount)), 0) || 0;
       const uniqueClientIds = new Set((appointments || []).map((a) => a.client_id).filter(Boolean));
       const clientsWithAppointmentsToday = uniqueClientIds.size;
 
