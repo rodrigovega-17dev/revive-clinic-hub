@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useClinic, useUpdateClinic } from '@/hooks/useClinic';
@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Settings as SettingsIcon, Globe, Bell, Shield, Building2, Palette, Database, Zap, Loader2, AlertTriangle, CreditCard, FileText, Pencil, Plus, Download, Upload } from 'lucide-react';
+import { Settings as SettingsIcon, Globe, Bell, Shield, Building2, Palette, Database, Zap, Loader2, AlertTriangle, CreditCard, FileText, Pencil, Plus, Download, Upload, Image, Trash2 } from 'lucide-react';
 import ClinicGoogleCalendarConnect from '@/components/ClinicGoogleCalendarConnect';
 import ClinicFacturapiConnect from '@/components/ClinicFacturapiConnect';
 import { PasswordChangeDialog } from '@/components/PasswordChangeDialog';
@@ -110,6 +110,9 @@ const Settings = (): JSX.Element => {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [showSignatureManager, setShowSignatureManager] = useState(false);
   const [currentUserSignature, setCurrentUserSignature] = useState<string | null>(null);
+  const [clinicLogoUrl, setClinicLogoUrl] = useState<string | null>(null);
+  const [isUploadingClinicLogo, setIsUploadingClinicLogo] = useState(false);
+  const clinicLogoInputRef = useRef<HTMLInputElement | null>(null);
 
   // Load current user signature from profile
   useEffect(() => {
@@ -136,8 +139,117 @@ const Settings = (): JSX.Element => {
       setClinicEmail(clinic.email || '');
       setCurrency(clinic.currency || 'USD');
       setTimezone(clinic.timezone || 'UTC');
+      setClinicLogoUrl(clinic.logo_url || null);
     }
   }, [clinic]);
+
+  const handleClinicLogoUpload = async (file: File) => {
+    if (!clinic?.id) return;
+
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml'];
+    if (!validTypes.includes(file.type)) {
+      toast({
+        title: t('notifications.error'),
+        description: t('settings.logoInvalidType'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: t('notifications.error'),
+        description: t('settings.logoInvalidSize'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsUploadingClinicLogo(true);
+    try {
+      const extensionFromName = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() : null;
+      const extension =
+        extensionFromName ||
+        (file.type === 'image/svg+xml'
+          ? 'svg'
+          : file.type === 'image/jpeg' || file.type === 'image/jpg'
+            ? 'jpg'
+            : 'png');
+
+      // We keep a deterministic path so the latest logo always overwrites.
+      const filePath = `${clinic.id}/logo.${extension}`;
+      const { error: uploadError } = await supabase.storage
+        .from('clinic-logos')
+        .upload(filePath, file, {
+          upsert: true,
+          cacheControl: '60',
+          contentType: file.type,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage.from('clinic-logos').getPublicUrl(filePath);
+      const publicUrl = publicUrlData.publicUrl;
+
+      await updateClinicMutation.mutateAsync({ logo_url: publicUrl });
+      setClinicLogoUrl(publicUrl);
+
+      toast({
+        title: t('notifications.success'),
+        description: t('settings.logoUploaded'),
+      });
+    } catch (error) {
+      console.error('Error uploading clinic logo:', error);
+      toast({
+        title: t('notifications.error'),
+        description: t('settings.logoUploadError'),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploadingClinicLogo(false);
+    }
+  };
+
+  const handleClinicLogoClear = async () => {
+    if (!clinic?.id) return;
+
+    setIsUploadingClinicLogo(true);
+    try {
+      // Remove any previous logo file variants under the clinic folder.
+      const { data: files, error: listError } = await supabase.storage
+        .from('clinic-logos')
+        .list(clinic.id, { limit: 100 });
+
+      if (listError) throw listError;
+
+      const logoPaths =
+        files
+          ?.filter((file) => file.name.startsWith('logo.'))
+          .map((file) => `${clinic.id}/${file.name}`) || [];
+
+      if (logoPaths.length > 0) {
+        const { error: removeError } = await supabase.storage.from('clinic-logos').remove(logoPaths);
+        if (removeError) throw removeError;
+      }
+
+      await updateClinicMutation.mutateAsync({ logo_url: null });
+      setClinicLogoUrl(null);
+
+      toast({
+        title: t('notifications.success'),
+        description: t('settings.logoRemoved'),
+      });
+    } catch (error) {
+      console.error('Error clearing clinic logo:', error);
+      toast({
+        title: t('notifications.error'),
+        description: t('settings.logoRemoveError'),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploadingClinicLogo(false);
+    }
+  };
 
   // Load user preferences into form when available
   useEffect(() => {
@@ -529,6 +641,75 @@ const Settings = (): JSX.Element => {
                   {t('settings.saveSettings')}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Image className="h-5 w-5" />
+                {t('settings.clinicLogo')}
+              </CardTitle>
+              <CardDescription>
+                {t('settings.clinicLogoDescription')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {clinicLogoUrl ? (
+                <div className="space-y-3">
+                  <div className="border rounded-lg p-4 bg-muted/30">
+                    <img
+                      src={clinicLogoUrl}
+                      alt={t('settings.clinicLogo')}
+                      className="max-h-32 max-w-full object-contain mx-auto"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => clinicLogoInputRef.current?.click()}
+                      disabled={isUploadingClinicLogo}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      {t('settings.replaceClinicLogo')}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleClinicLogoClear}
+                      disabled={isUploadingClinicLogo}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      {t('settings.removeClinicLogo')}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={() => clinicLogoInputRef.current?.click()}
+                  disabled={isUploadingClinicLogo}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {t('settings.uploadClinicLogo')}
+                </Button>
+              )}
+              <p className="text-sm text-muted-foreground">
+                {t('settings.clinicLogoHelp')}
+              </p>
+
+              <input
+                ref={clinicLogoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/svg+xml"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) {
+                    void handleClinicLogoUpload(file);
+                  }
+                  event.target.value = '';
+                }}
+              />
             </CardContent>
           </Card>
 
