@@ -153,11 +153,12 @@ const MonthlyFinanceSection = () => {
     return searchableText.includes(searchTerm.toLowerCase());
   }) || [];
 
-  // Revenue = only real money; exclude balance (credit) payments
-  const totalPayments = payments?.reduce((sum, p) => (p.method === 'balance' ? sum : sum + Number(p.amount)), 0) || 0;
+  // Revenue = only real money; exclude balance (credit) payments and adjustment
+  // entries (prior-debt bookkeeping, not cash actually collected this month).
+  const totalPayments = payments?.reduce((sum, p) => (p.method === 'balance' || p.method === 'adjustment' ? sum : sum + Number(p.amount)), 0) || 0;
   const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
   const cashPayments = payments?.filter(p => p.method === 'cash').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
-  const intangiblePayments = payments?.filter(p => p.method !== 'cash' && p.method !== 'balance').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
+  const intangiblePayments = payments?.filter(p => p.method !== 'cash' && p.method !== 'balance' && p.method !== 'adjustment').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
 
   const getPaymentMethodColor = (method: string) => {
     switch (method) {
@@ -165,6 +166,7 @@ const MonthlyFinanceSection = () => {
       case 'card': return 'bg-blue-100 text-blue-800';
       case 'transfer': return 'bg-purple-100 text-purple-800';
       case 'insurance': return 'bg-orange-100 text-orange-800';
+      case 'adjustment': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -175,6 +177,7 @@ const MonthlyFinanceSection = () => {
       case 'card': return t('finance.card');
       case 'transfer': return t('finance.transfer');
       case 'insurance': return t('finance.insurance');
+      case 'adjustment': return t('finance.adjustment');
       default: return method;
     }
   };
@@ -449,7 +452,7 @@ const MonthlyFinanceSection = () => {
                         'N/A'
                       }
                     </TableCell>
-                    <TableCell className="font-medium text-foreground">
+                    <TableCell className={`font-medium ${payment.amount < 0 ? 'text-red-600' : 'text-foreground'}`}>
                       {formatCurrencyWithClinic(payment.amount)}
                     </TableCell>
                     <TableCell>

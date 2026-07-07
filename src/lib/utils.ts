@@ -52,13 +52,18 @@ export function formatNumber(
 
   const config = getCurrencyConfig(currencyCode);
 
-  // Format with thousands separators and specified decimal places
-  const formatted = numValue.toLocaleString(config.locale, {
+  // Format with thousands separators and specified decimal places. Format the
+  // absolute value and place the minus sign before the currency symbol
+  // ourselves ("-$500.00"), since toLocaleString would otherwise put it
+  // between the symbol and the digits ("$-500.00").
+  const isNegative = numValue < 0;
+  const formatted = Math.abs(numValue).toLocaleString(config.locale, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
+  const sign = isNegative ? '-' : '';
 
-  return currency ? `${config.symbol}${formatted}` : formatted;
+  return currency ? `${sign}${config.symbol}${formatted}` : `${sign}${formatted}`;
 }
 
 /**

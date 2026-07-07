@@ -19,6 +19,7 @@ import { hasCfdiData } from '@/lib/cfdi-catalogs';
 import { getCfdiFileUrl } from '@/hooks/useCfdiFileUrl';
 import { CfdiUploadModal } from '@/components/CfdiUploadModal';
 import { DocumentSection } from '@/components/DocumentSection';
+import BalanceAdjustmentForm from '@/components/BalanceAdjustmentForm';
 import { openWhatsApp } from '@/lib/whatsapp';
 
 type Client = Tables<'clients'>;
@@ -40,6 +41,7 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [isAppointmentDetailsOpen, setIsAppointmentDetailsOpen] = useState(false);
   const [showCfdiUploadModal, setShowCfdiUploadModal] = useState(false);
+  const [showBalanceAdjustment, setShowBalanceAdjustment] = useState(false);
   
   const { data: paymentHistory } = useQuery({
     queryKey: ['client-payments', client.id, clinicId],
@@ -246,6 +248,7 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
       case 'transfer': return t('finance.transfer');
       case 'insurance': return t('finance.insurance');
       case 'balance': return t('finance.balance');
+      case 'adjustment': return t('finance.adjustment');
       default: return method;
     }
   };
@@ -361,11 +364,14 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
 
           {/* Financial Summary */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
               <CardTitle className="flex items-center gap-2">
                 <DollarSign className="h-5 w-5" />
                 {t('clients.financialSummary')}
               </CardTitle>
+              <Button variant="outline" size="sm" onClick={() => setShowBalanceAdjustment(true)}>
+                {t('clients.recordPriorBalance')}
+              </Button>
             </CardHeader>
             <CardContent>
               {balanceLoading ? (
@@ -493,7 +499,7 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
                             {getPaymentMethodText(payment.method)}
                           </Badge>
                         </TableCell>
-                        <TableCell className="font-medium text-foreground">
+                        <TableCell className={`font-medium ${payment.amount < 0 ? 'text-red-600' : 'text-foreground'}`}>
                           {formatCurrencyWithClinic(payment.amount)}
                         </TableCell>
                       </TableRow>
@@ -705,6 +711,12 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
         paymentIds={nonInvoicedPaymentIds}
       />
     )}
+    <BalanceAdjustmentForm
+      clientId={client.id}
+      clientName={`${client.first_name} ${client.last_name}`.trim()}
+      open={showBalanceAdjustment}
+      onClose={() => setShowBalanceAdjustment(false)}
+    />
     </>
   );
 } 

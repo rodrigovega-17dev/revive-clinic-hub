@@ -120,13 +120,14 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
     enabled: !!clinicId,
   });
 
-  // Revenue = only real money; exclude balance (credit) payments so gains don't go negative
-  const totalRevenue = payments?.reduce((sum, p) => (p.method === 'balance' ? sum : sum + Number(p.amount)), 0) || 0;
+  // Revenue = only real money received today; exclude balance (credit) payments and
+  // adjustment entries (prior-debt bookkeeping, not cash actually collected today).
+  const totalRevenue = payments?.reduce((sum, p) => (p.method === 'balance' || p.method === 'adjustment' ? sum : sum + Number(p.amount)), 0) || 0;
   const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
   const netProfit = totalRevenue - totalExpenses;
 
   const totalCash = payments?.filter(p => p.method === 'cash').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
-  const totalIntangible = payments?.filter(p => p.method !== 'cash' && p.method !== 'balance').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+  const totalIntangible = payments?.filter(p => p.method !== 'cash' && p.method !== 'balance' && p.method !== 'adjustment').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
   const amountInCashier = totalCash - totalExpenses;
 
   // Appointment counts for the day (for the printable report)
@@ -160,14 +161,14 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
     });
 
     const reportTotalRevenue = reportPayments.reduce(
-      (sum, payment) => (payment.method === 'balance' ? sum : sum + Number(payment.amount)),
+      (sum, payment) => (payment.method === 'balance' || payment.method === 'adjustment' ? sum : sum + Number(payment.amount)),
       0,
     );
     const reportTotalCash = reportPayments
       .filter((payment) => payment.method === 'cash')
       .reduce((sum, payment) => sum + Number(payment.amount), 0);
     const reportTotalIntangible = reportPayments
-      .filter((payment) => payment.method !== 'cash' && payment.method !== 'balance')
+      .filter((payment) => payment.method !== 'cash' && payment.method !== 'balance' && payment.method !== 'adjustment')
       .reduce((sum, payment) => sum + Number(payment.amount), 0);
     const reportAmountInCashier = reportTotalCash - totalExpenses;
     const reportNetProfit = reportTotalRevenue - totalExpenses;
@@ -238,6 +239,8 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
         return <ArrowLeftRight className="h-4 w-4 text-purple-600" />;
       case 'insurance':
         return <Shield className="h-4 w-4 text-orange-600" />;
+      case 'adjustment':
+        return <TrendingDown className="h-4 w-4 text-red-600" />;
       default:
         return <DollarSign className="h-4 w-4 text-gray-600" />;
     }
@@ -249,6 +252,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
       case 'card': return t('finance.card');
       case 'transfer': return t('finance.transfer');
       case 'insurance': return t('finance.insurance');
+      case 'adjustment': return t('finance.adjustment');
       default: return method;
     }
   };
@@ -409,7 +413,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                       }
                     </TableCell>
                     <TableCell>
-                      <span className="font-medium text-green-600">
+                      <span className={`font-medium ${payment.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
                         {formatCurrencyWithClinic(payment.amount)}
                       </span>
                     </TableCell>
