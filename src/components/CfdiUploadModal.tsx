@@ -154,15 +154,19 @@ export function CfdiUploadModal({
         return;
       }
 
+      // 'balance'/'adjustment' payments never moved real cash — the CFDI belongs on
+      // whichever payment originally created the credit (or nothing, for a debt adjustment).
       let payments: { id: string; amount: number }[] = [];
       if (mode === 'individual' && paymentIds.length) {
         const { data: rows, error: payErr } = await supabase
           .from('payments')
-          .select('id, amount, invoice_state')
+          .select('id, amount, method, invoice_state')
           .in('id', paymentIds)
           .eq('clinic_id', clinicId);
         if (payErr) throw new Error('Failed to fetch payments');
-        const nonInvoiced = (rows ?? []).filter((p) => p.invoice_state === 'non_invoiced');
+        const nonInvoiced = (rows ?? []).filter(
+          (p) => p.invoice_state === 'non_invoiced' && p.method !== 'balance' && p.method !== 'adjustment'
+        );
         if (!nonInvoiced.length) throw new Error('Selected payment(s) already invoiced');
         payments = nonInvoiced.map((p) => ({ id: p.id, amount: Number(p.amount) }));
       } else if (mode === 'global' && periodStart && periodEnd) {
@@ -173,6 +177,8 @@ export function CfdiUploadModal({
           .select('id, amount, appointment_id')
           .eq('clinic_id', clinicId)
           .eq('invoice_state', 'non_invoiced')
+          .neq('method', 'balance')
+          .neq('method', 'adjustment')
           .gte('payment_date', start.toISOString())
           .lte('payment_date', end.toISOString())
           .is('refunded_at', null);

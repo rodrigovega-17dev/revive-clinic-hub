@@ -112,7 +112,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       if (!clinicId || !appointment?.id) return [];
       const { data, error } = await supabase
         .from('payments')
-        .select('id, amount, facturado, invoice_state')
+        .select('id, amount, method, facturado, invoice_state')
         .eq('appointment_id', appointment.id)
         .eq('clinic_id', clinicId)
         .gte('amount', 0);
@@ -122,8 +122,10 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
     enabled: !!appointment?.id && !!clinicId && apt?.payment_status === 'paid',
   });
 
+  // 'balance'/'adjustment' payments never moved real cash today — the CFDI belongs on
+  // whichever payment originally created the credit (or nothing, for a debt adjustment).
   const cfdiEligiblePayments = (appointmentPayments || []).filter(
-    (p) => p.invoice_state === 'non_invoiced'
+    (p) => p.invoice_state === 'non_invoiced' && p.method !== 'balance' && p.method !== 'adjustment'
   );
 
   const registeredAmount = (appointmentPayments || [])

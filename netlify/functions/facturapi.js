@@ -171,6 +171,11 @@ async function issueIndividualInvoice(payload) {
 
   for (const p of payments) {
     if (p.invoice_state !== 'non_invoiced') throw new Error('Payment already invoiced');
+    // 'balance'/'adjustment' payments never moved real cash — the CFDI belongs on
+    // whichever payment originally created the credit (or nothing, for a debt adjustment).
+    if (p.method === 'balance' || p.method === 'adjustment') {
+      throw new Error('Balance credit and adjustment entries cannot be invoiced directly');
+    }
   }
 
   const appointmentIds = [...new Set(payments.map((p) => p.appointment_id).filter(Boolean))];
@@ -307,11 +312,15 @@ async function issueGlobalInvoice(payload) {
 
   const start = new Date(periodStart);
   const end = new Date(periodEnd);
+  // 'balance'/'adjustment' payments never moved real cash — the CFDI belongs on
+  // whichever payment originally created the credit (or nothing, for a debt adjustment).
   const { data: payments, error: payErr } = await supabase
     .from('payments')
     .select('id, amount, method, appointment_id, refunded_at')
     .eq('clinic_id', clinicId)
     .eq('invoice_state', 'non_invoiced')
+    .neq('method', 'balance')
+    .neq('method', 'adjustment')
     .gte('payment_date', start.toISOString())
     .lte('payment_date', end.toISOString())
     .is('refunded_at', null);

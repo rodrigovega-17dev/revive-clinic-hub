@@ -157,8 +157,13 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
 
   const nonInvoicedPaymentIds = useMemo(() => {
     const payments = paymentHistory ?? [];
+    // 'balance'/'adjustment' payments never moved real cash — the CFDI belongs on
+    // whichever payment originally created the credit (or nothing, for a debt adjustment).
     return payments
-      .filter((p) => (p as { invoice_state?: string }).invoice_state === 'non_invoiced')
+      .filter((p) => {
+        const row = p as { invoice_state?: string; method?: string };
+        return row.invoice_state === 'non_invoiced' && row.method !== 'balance' && row.method !== 'adjustment';
+      })
       .map((p) => p.id);
   }, [paymentHistory]);
 
