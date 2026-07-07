@@ -4,15 +4,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Eye, ArrowLeftRight, Shield } from 'lucide-react';
+import { Calendar, DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Eye, ArrowLeftRight, Shield, Printer } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format, startOfDay, endOfDay, subDays } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
-import { useClinicSettings } from '@/hooks/useClinic';
+import { useClinic, useClinicSettings } from '@/hooks/useClinic';
 import { useLanguage } from '@/hooks/useLanguage';
+import { openFinanceReport, FinanceReportTable } from '@/lib/finance-report';
 import DateFilter from '@/components/DateFilter';
 import PaymentForm from './PaymentForm';
 import ExpenseForm from './ExpenseForm';
@@ -25,6 +26,7 @@ interface DailyFinanceSectionProps {
 const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSectionProps) => {
   const { t } = useTranslation();
   const { clinicId } = useAuth();
+  const { data: clinic } = useClinic();
   const { currency, timezone } = useClinicSettings();
   const { currentLanguage } = useLanguage();
   const locale = currentLanguage === 'es' ? es : enUS;
@@ -97,6 +99,27 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
     enabled: !!clinicId,
   });
 
+  // Fetch daily appointments (for the report's appointment summary)
+  const { data: dayAppointments } = useQuery({
+    queryKey: ['daily-appointments-stats', selectedDate, clinicId],
+    queryFn: async () => {
+      if (!clinicId) return [];
+      const startDate = startOfDay(selectedDate);
+      const endDate = endOfDay(selectedDate);
+
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('status, client_id')
+        .eq('clinic_id', clinicId)
+        .gte('start_time', startDate.toISOString())
+        .lte('start_time', endDate.toISOString());
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!clinicId,
+  });
+
   // Revenue = only real money; exclude balance (credit) payments so gains don't go negative
   const totalRevenue = payments?.reduce((sum, p) => (p.method === 'balance' ? sum : sum + Number(p.amount)), 0) || 0;
   const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
@@ -106,9 +129,105 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
   const totalIntangible = payments?.filter(p => p.method !== 'cash' && p.method !== 'balance').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
   const amountInCashier = totalCash - totalExpenses;
 
+  // Appointment counts for the day (for the printable report)
+  const apptTotal = dayAppointments?.length || 0;
+  const apptCompleted = dayAppointments?.filter(a => a.status === 'completed').length || 0;
+  const apptCancelled = dayAppointments?.filter(a => a.status === 'cancelled').length || 0;
+  const apptNoShow = dayAppointments?.filter(a => a.status === 'no_show').length || 0;
+  const apptActive = dayAppointments?.filter(a => ['scheduled', 'confirmed', 'in_progress', 'waiting_checkout'].includes(a.status)).length || 0;
+  const apptUniqueClients = new Set((dayAppointments || []).map(a => a.client_id).filter(Boolean)).size;
+
   // Clinic-aware currency formatting
   const formatCurrencyWithClinic = (value: number) => {
     return formatCurrency(value, 2, currency);
+  };
+
+  const formatReportTime = (value: string) =>
+    new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: timezone,
+    }).format(new Date(value));
+
+  const handlePrintReport = () => {
+    // Keep the printable "corte del dia" strictly scoped to the selected date,
+    // even if the on-screen table is toggled to "Show All".
+    const reportDayStart = startOfDay(selectedDate);
+    const reportDayEnd = endOfDay(selectedDate);
+    const reportPayments = (payments || []).filter((payment) => {
+      const paymentDate = new Date(payment.payment_date);
+      return paymentDate >= reportDayStart && paymentDate <= reportDayEnd;
+    });
+
+    const reportTotalRevenue = reportPayments.reduce(
+      (sum, payment) => (payment.method === 'balance' ? sum : sum + Number(payment.amount)),
+      0,
+    );
+    const reportTotalCash = reportPayments
+      .filter((payment) => payment.method === 'cash')
+      .reduce((sum, payment) => sum + Number(payment.amount), 0);
+    const reportTotalIntangible = reportPayments
+      .filter((payment) => payment.method !== 'cash' && payment.method !== 'balance')
+      .reduce((sum, payment) => sum + Number(payment.amount), 0);
+    const reportAmountInCashier = reportTotalCash - totalExpenses;
+    const reportNetProfit = reportTotalRevenue - totalExpenses;
+
+    const paymentsTable: FinanceReportTable = {
+      title: t('finance.dailyPayments'),
+      columns: [t('finance.time'), t('finance.client'), t('finance.therapist'), t('finance.method'), t('finance.amount')],
+      numericColumns: [4],
+      emptyText: t('finance.noPaymentsToday'),
+      rows: reportPayments.map((p) => [
+        formatReportTime(p.payment_date),
+        p.clients ? `${p.clients.first_name} ${p.clients.last_name}` : 'N/A',
+        p.appointments?.therapists ? `${p.appointments.therapists.first_name} ${p.appointments.therapists.last_name}` : 'N/A',
+        getPaymentMethodText(p.method),
+        formatCurrencyWithClinic(p.amount),
+      ]),
+      footer: [t('finance.totalEarnings'), '', '', '', formatCurrencyWithClinic(reportTotalRevenue)],
+    };
+
+    const expensesTable: FinanceReportTable = {
+      title: t('finance.dailyExpenses'),
+      columns: [t('finance.time'), t('finance.description'), t('finance.category'), t('finance.amount')],
+      numericColumns: [3],
+      emptyText: t('finance.noExpensesToday'),
+      rows: (expenses || []).map((e) => [
+        formatReportTime(e.created_at),
+        e.description || '-',
+        e.category || 'general',
+        formatCurrencyWithClinic(e.amount),
+      ]),
+      footer: [t('finance.expensesCash'), '', '', formatCurrencyWithClinic(totalExpenses)],
+    };
+
+    openFinanceReport({
+      clinicName: clinic?.name || t('finance.title'),
+      clinicLogoUrl: clinic?.logo_url,
+      reportTitle: t('finance.reportDailyTitle'),
+      periodLabel: format(selectedDate, 'PPPP', { locale }),
+      generatedLabel: `${t('finance.reportGenerated')}: ${format(new Date(), 'PPpp', { locale })}`,
+      appointmentsTitle: t('finance.appointmentsSummary'),
+      appointmentStats: [
+        { label: t('finance.totalAppointments'), value: String(apptTotal) },
+        { label: t('finance.completedAppointments'), value: String(apptCompleted) },
+        { label: t('finance.activeAppointments'), value: String(apptActive) },
+        { label: t('finance.cancelledAppointments'), value: String(apptCancelled) },
+        { label: t('finance.noShowAppointments'), value: String(apptNoShow) },
+        { label: t('finance.uniqueClients'), value: String(apptUniqueClients) },
+      ],
+      financialTitle: t('finance.financialSummary'),
+      financialStats: [
+        { label: t('finance.totalEarnings'), value: formatCurrencyWithClinic(reportTotalRevenue) },
+        { label: t('finance.totalCash'), value: formatCurrencyWithClinic(reportTotalCash) },
+        { label: t('finance.totalIntangible'), value: formatCurrencyWithClinic(reportTotalIntangible) },
+        { label: t('finance.expensesCash'), value: formatCurrencyWithClinic(totalExpenses) },
+        { label: t('finance.amountInCashier'), value: formatCurrencyWithClinic(reportAmountInCashier), highlight: true },
+        { label: t('finance.netProfit'), value: formatCurrencyWithClinic(reportNetProfit), highlight: true },
+      ],
+      tables: [paymentsTable, expensesTable],
+    });
   };
 
   const getPaymentMethodIcon = (method: string) => {
@@ -150,13 +269,19 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
       {/* Date Selector */}
       <Card className="bg-card border-border">
         <CardContent className="pt-6">
-          <DateFilter
-            selectedDate={format(selectedDate, 'yyyy-MM-dd')}
-            onDateChange={(dateString) => {
-              const newDate = new Date(dateString + 'T00:00:00');
-              onDateChange(newDate);
-            }}
-          />
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+            <DateFilter
+              selectedDate={format(selectedDate, 'yyyy-MM-dd')}
+              onDateChange={(dateString) => {
+                const newDate = new Date(dateString + 'T00:00:00');
+                onDateChange(newDate);
+              }}
+            />
+            <Button variant="outline" size="sm" onClick={handlePrintReport} className="w-full sm:w-auto">
+              <Printer className="h-4 w-4 mr-2" />
+              {t('finance.printDailyReport')}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

@@ -4,8 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/lib/utils';
-import { useClinicSettings } from '@/hooks/useClinic';
-import { DollarSign, TrendingUp, Minus, Receipt } from 'lucide-react';
+import { useClinic, useClinicSettings } from '@/hooks/useClinic';
+import { DollarSign, TrendingUp, Minus, Receipt, Printer } from 'lucide-react';
+import { openFinanceReport, FinanceReportTable } from '@/lib/finance-report';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
@@ -29,7 +30,8 @@ const MonthlyFinanceSection = () => {
   const { t } = useTranslation();
   const { currentLanguage } = useLanguage();
   const { clinicId } = useAuth();
-  const { currency } = useClinicSettings();
+  const { data: clinic } = useClinic();
+  const { currency, timezone } = useClinicSettings();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedPeriod, setSelectedPeriod] = useState<'current' | 'previous' | 'custom'>('current');
@@ -118,6 +120,24 @@ const MonthlyFinanceSection = () => {
     enabled: !!clinicId,
   });
 
+  // Fetch appointments for the period (for the report's appointment summary)
+  const { data: monthAppointments } = useQuery({
+    queryKey: ['monthly-appointments-stats', selectedPeriod, customMonth, customYear, clinicId],
+    queryFn: async () => {
+      if (!clinicId) return [];
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('status, client_id')
+        .eq('clinic_id', clinicId)
+        .gte('start_time', currentRange.start.toISOString())
+        .lte('start_time', currentRange.end.toISOString());
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!clinicId,
+  });
+
   const filteredPayments = payments?.filter(payment => {
     if (!searchTerm.trim()) return true;
     
@@ -137,6 +157,7 @@ const MonthlyFinanceSection = () => {
   const totalPayments = payments?.reduce((sum, p) => (p.method === 'balance' ? sum : sum + Number(p.amount)), 0) || 0;
   const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
   const cashPayments = payments?.filter(p => p.method === 'cash').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
+  const intangiblePayments = payments?.filter(p => p.method !== 'cash' && p.method !== 'balance').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
 
   const getPaymentMethodColor = (method: string) => {
     switch (method) {
@@ -163,6 +184,86 @@ const MonthlyFinanceSection = () => {
     return formatCurrency(value, 2, currency);
   };
 
+  const formatReportDateTime = (value: string) =>
+    new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: timezone,
+    }).format(new Date(value));
+
+  const handlePrintReport = () => {
+    const reportPayments = payments || [];
+    const reportExpenses = expenses || [];
+
+    const apptTotal = monthAppointments?.length || 0;
+    const apptCompleted = monthAppointments?.filter((a) => a.status === 'completed').length || 0;
+    const apptCancelled = monthAppointments?.filter((a) => a.status === 'cancelled').length || 0;
+    const apptNoShow = monthAppointments?.filter((a) => a.status === 'no_show').length || 0;
+    const apptActive = monthAppointments?.filter((a) => ['scheduled', 'confirmed', 'in_progress', 'waiting_checkout'].includes(a.status)).length || 0;
+    const apptUniqueClients = new Set((monthAppointments || []).map((a) => a.client_id).filter(Boolean)).size;
+
+    const paymentsTable: FinanceReportTable = {
+      title: t('finance.paymentHistory'),
+      columns: [t('finance.date'), t('finance.client'), t('finance.therapist'), t('finance.method'), t('finance.amount')],
+      numericColumns: [4],
+      emptyText: t('finance.noPaymentsYet'),
+      rows: reportPayments.map((payment) => [
+        formatReportDateTime(payment.payment_date),
+        payment.clients ? `${payment.clients.first_name} ${payment.clients.last_name}` : 'N/A',
+        payment.appointments?.therapists
+          ? `${payment.appointments.therapists.first_name} ${payment.appointments.therapists.last_name}`
+          : 'N/A',
+        getPaymentMethodText(payment.method),
+        formatCurrencyWithClinic(payment.amount),
+      ]),
+      footer: [t('finance.totalRevenue'), '', '', '', formatCurrencyWithClinic(totalPayments)],
+    };
+
+    const expensesTable: FinanceReportTable = {
+      title: t('finance.expenses'),
+      columns: [t('finance.date'), t('finance.description'), t('finance.category'), t('finance.amount')],
+      numericColumns: [3],
+      emptyText: t('finance.noExpensesYet'),
+      rows: reportExpenses.map((expense) => [
+        formatReportDateTime(expense.created_at || expense.date),
+        expense.description || '-',
+        expense.category || 'general',
+        formatCurrencyWithClinic(expense.amount),
+      ]),
+      footer: [t('finance.totalExpenses'), '', '', formatCurrencyWithClinic(totalExpenses)],
+    };
+
+    openFinanceReport({
+      clinicName: clinic?.name || t('finance.title'),
+      clinicLogoUrl: clinic?.logo_url,
+      reportTitle: t('finance.reportMonthlyTitle'),
+      periodLabel: format(currentRange.start, 'MMMM yyyy', { locale }),
+      generatedLabel: `${t('finance.reportGenerated')}: ${format(new Date(), 'PPpp', { locale })}`,
+      appointmentsTitle: t('finance.appointmentsSummary'),
+      appointmentStats: [
+        { label: t('finance.totalAppointments'), value: String(apptTotal) },
+        { label: t('finance.completedAppointments'), value: String(apptCompleted) },
+        { label: t('finance.activeAppointments'), value: String(apptActive) },
+        { label: t('finance.cancelledAppointments'), value: String(apptCancelled) },
+        { label: t('finance.noShowAppointments'), value: String(apptNoShow) },
+        { label: t('finance.uniqueClients'), value: String(apptUniqueClients) },
+      ],
+      financialTitle: t('finance.financialSummary'),
+      financialStats: [
+        { label: t('finance.totalRevenue'), value: formatCurrencyWithClinic(totalPayments) },
+        { label: t('finance.cashRevenue'), value: formatCurrencyWithClinic(cashPayments) },
+        { label: t('finance.totalIntangible'), value: formatCurrencyWithClinic(intangiblePayments) },
+        { label: t('finance.totalExpenses'), value: formatCurrencyWithClinic(totalExpenses) },
+        { label: t('finance.netTotal'), value: formatCurrencyWithClinic(totalPayments - totalExpenses), highlight: true },
+      ],
+      tables: [paymentsTable, expensesTable],
+    });
+  };
+
   if (paymentsLoading || expensesLoading) {
     return (
       <div className="space-y-6">
@@ -183,13 +284,19 @@ const MonthlyFinanceSection = () => {
   return (
     <div className="space-y-6">
       {/* Period Selector */}
-      <Tabs value={selectedPeriod} onValueChange={(value) => setSelectedPeriod(value as 'current' | 'previous' | 'custom')}>
-        <TabsList className="bg-muted">
-          <TabsTrigger value="current">{t('finance.currentMonth')}</TabsTrigger>
-          <TabsTrigger value="previous">{t('finance.previousMonth')}</TabsTrigger>
-          <TabsTrigger value="custom">{t('finance.customMonth')}</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <Tabs value={selectedPeriod} onValueChange={(value) => setSelectedPeriod(value as 'current' | 'previous' | 'custom')}>
+          <TabsList className="bg-muted">
+            <TabsTrigger value="current">{t('finance.currentMonth')}</TabsTrigger>
+            <TabsTrigger value="previous">{t('finance.previousMonth')}</TabsTrigger>
+            <TabsTrigger value="custom">{t('finance.customMonth')}</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <Button variant="outline" size="sm" onClick={handlePrintReport} className="w-full sm:w-auto">
+          <Printer className="h-4 w-4 mr-2" />
+          {t('finance.printMonthlyReport')}
+        </Button>
+      </div>
 
       {selectedPeriod === 'custom' && (
         <div className="flex flex-wrap items-end gap-4">
