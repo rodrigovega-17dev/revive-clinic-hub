@@ -101,8 +101,8 @@ export const openFinanceReport = (data: FinanceReportData): void => {
   const win = window.open('', '_blank');
   if (!win) return;
 
-  const watermark = data.clinicLogoUrl
-    ? `<div class="watermark" style="background-image:url('${escapeHtml(data.clinicLogoUrl)}');"></div>`
+  const logo = data.clinicLogoUrl
+    ? `<img src="${escapeHtml(data.clinicLogoUrl)}" alt="Clinic logo" class="clinic-logo" />`
     : '';
 
   win.document.write(`
@@ -113,10 +113,10 @@ export const openFinanceReport = (data: FinanceReportData): void => {
         <style>
           * { box-sizing: border-box; }
           body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #111827; background: #f3f4f6; margin: 0; padding: 24px; }
-          .page { position: relative; overflow: hidden; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px; max-width: 900px; margin: 0 auto; }
-          .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 420px; height: 420px; background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.05; pointer-events: none; z-index: 0; }
-          .page > * { position: relative; z-index: 1; }
-          header { border-bottom: 2px solid #111827; padding-bottom: 12px; margin-bottom: 20px; }
+          .page { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px; max-width: 900px; margin: 0 auto; }
+          header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; border-bottom: 2px solid #111827; padding-bottom: 12px; margin-bottom: 20px; }
+          .header-text { flex: 1; min-width: 0; }
+          .clinic-logo { width: 140px; max-height: 84px; object-fit: contain; flex-shrink: 0; }
           .clinic { font-size: 13px; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; }
           h1 { font-size: 24px; margin: 4px 0 2px; }
           .period { font-size: 15px; color: #374151; font-weight: 600; }
@@ -146,12 +146,14 @@ export const openFinanceReport = (data: FinanceReportData): void => {
       <body>
         <button class="print-btn" onclick="window.print()">Imprimir / PDF</button>
         <div class="page">
-          ${watermark}
           <header>
-            <div class="clinic">${escapeHtml(data.clinicName)}</div>
-            <h1>${escapeHtml(data.reportTitle)}</h1>
-            <div class="period">${escapeHtml(data.periodLabel)}</div>
-            <div class="generated">${escapeHtml(data.generatedLabel)}</div>
+            <div class="header-text">
+              <div class="clinic">${escapeHtml(data.clinicName)}</div>
+              <h1>${escapeHtml(data.reportTitle)}</h1>
+              <div class="period">${escapeHtml(data.periodLabel)}</div>
+              <div class="generated">${escapeHtml(data.generatedLabel)}</div>
+            </div>
+            ${logo}
           </header>
 
           <h2>${escapeHtml(data.appointmentsTitle)}</h2>
