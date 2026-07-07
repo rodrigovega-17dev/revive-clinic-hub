@@ -1223,7 +1223,7 @@
     "signaturePreview": "Signature preview",
     "signatureDescription": "Add your signature for documents you sign.",
     "clinicLogo": "Clinic Logo",
-    "clinicLogoDescription": "Upload your clinic logo to use it as a background watermark in generated templates.",
+    "clinicLogoDescription": "Upload your clinic logo to display it on the right side of generated documents.",
     "clinicLogoHelp": "PNG, JPG, or SVG up to 2MB.",
     "uploadClinicLogo": "Upload Clinic Logo",
     "replaceClinicLogo": "Replace Clinic Logo",

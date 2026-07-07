@@ -1319,6 +1319,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
               context="appointment"
               clientId={apt.client_id}
               appointmentId={apt.id}
+              defaultResponsibleTherapistId={apt.therapist_id}
               clientPhone={apt.clients?.phone}
               clientName={`${apt.clients?.first_name || ''} ${apt.clients?.last_name || ''}`.trim()}
             />

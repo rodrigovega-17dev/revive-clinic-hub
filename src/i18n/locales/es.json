@@ -1219,7 +1219,7 @@
     "signaturePreview": "Vista previa de firma",
     "signatureDescription": "Agrega tu firma para los documentos que firmes.",
     "clinicLogo": "Logo de la Clínica",
-    "clinicLogoDescription": "Sube el logo de tu clínica para usarlo como marca de agua de fondo en plantillas generadas.",
+    "clinicLogoDescription": "Sube el logo de tu clínica para mostrarlo en el lado derecho de los documentos generados.",
     "clinicLogoHelp": "PNG, JPG o SVG de hasta 2MB.",
     "uploadClinicLogo": "Subir Logo de la Clínica",
     "replaceClinicLogo": "Reemplazar Logo de la Clínica",

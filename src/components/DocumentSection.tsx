@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { Tables } from '@/integrations/supabase/types';
 import {
   useDocumentTemplates,
@@ -35,6 +35,8 @@ interface DocumentSectionProps {
   context: DocumentContextType;
   clientId: string;
   appointmentId?: string | null;
+  /** Optional: preselect therapist as responsible in appointment context */
+  defaultResponsibleTherapistId?: string | null;
   /** Optional: for WhatsApp document sharing (button shown only when set) */
   clientPhone?: string | null;
   /** Optional: client full name for WhatsApp message (falls back to doc variables) */
@@ -273,9 +275,10 @@ const openDocumentWindow = (instance: DocumentInstance, options?: { autoPrint?: 
         <meta charset="utf-8" />
         <style>
           body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 28px; color: #111827; background: #f9fafb; }
-          .page { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 28px; position: relative; overflow: hidden; }
-          .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 380px; height: 380px; background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.06; pointer-events: none; z-index: 0; }
-          .page > * { position: relative; z-index: 1; }
+          .page { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 28px; }
+          .doc-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+          .doc-header-text { flex: 1; min-width: 0; }
+          .clinic-logo { width: 140px; max-height: 84px; object-fit: contain; flex-shrink: 0; }
           h1 { font-size: 20px; margin-bottom: 4px; }
           h2 { font-size: 14px; margin-top: 0; margin-bottom: 8px; color: #6b7280; }
           .meta { font-size: 12px; color: #6b7280; }
@@ -286,11 +289,13 @@ const openDocumentWindow = (instance: DocumentInstance, options?: { autoPrint?: 
       </head>
       <body>
         <div class="page">
-          ${clinicLogoUrl ? `<div class="watermark" style="background-image: url('${clinicLogoUrl}');"></div>` : ''}
-          <header style="margin-bottom: 16px;">
-            <div class="meta">${clinicName}</div>
-            <h1>${docTitle}</h1>
-            <h2>${createdAtText}</h2>
+          <header class="doc-header">
+            <div class="doc-header-text">
+              <div class="meta">${clinicName}</div>
+              <h1>${docTitle}</h1>
+              <h2>${createdAtText}</h2>
+            </div>
+            ${clinicLogoUrl ? `<img src="${clinicLogoUrl}" alt="Clinic logo" class="clinic-logo" />` : ''}
           </header>
           ${
             infoRows.length
@@ -343,6 +348,7 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
   context,
   clientId,
   appointmentId,
+  defaultResponsibleTherapistId,
   clientPhone,
   clientName: clientNameProp,
 }) => {
@@ -389,11 +395,37 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
 
   const sections = useMemo(() => getTemplateSections(selectedTemplate), [selectedTemplate]);
 
+  useEffect(() => {
+    if (!isDialogOpen) return;
+    if (context !== 'appointment') return;
+    if (!defaultResponsibleTherapistId) return;
+    if (responsiblePersonId) return;
+
+    const therapistExists = therapists.some(
+      (therapist) => therapist.id === defaultResponsibleTherapistId,
+    );
+    if (!therapistExists) return;
+
+    setResponsiblePersonType('therapist');
+    setResponsiblePersonId(defaultResponsibleTherapistId);
+  }, [
+    context,
+    defaultResponsibleTherapistId,
+    isDialogOpen,
+    responsiblePersonId,
+    therapists,
+  ]);
+
   const handleOpenDialog = () => {
+    const shouldDefaultToAppointmentTherapist =
+      context === 'appointment' &&
+      !!defaultResponsibleTherapistId &&
+      therapists.some((therapist) => therapist.id === defaultResponsibleTherapistId);
+
     setSelectedTemplateId(null);
     setFieldValues({});
-    setResponsiblePersonType(null);
-    setResponsiblePersonId(null);
+    setResponsiblePersonType(shouldDefaultToAppointmentTherapist ? 'therapist' : null);
+    setResponsiblePersonId(shouldDefaultToAppointmentTherapist ? defaultResponsibleTherapistId ?? null : null);
     setIsDialogOpen(true);
   };
 

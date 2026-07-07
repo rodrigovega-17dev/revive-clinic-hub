@@ -172,23 +172,23 @@ function renderDocumentHtml(instance, opts = {}) {
       </div>`
     : '';
 
-  const watermarkHtml = clinicLogoUrl
-    ? `<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 380px; height: 380px; background-image: url('${escapeHtml(clinicLogoUrl)}'); background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.06; pointer-events: none; z-index: 0;"></div>`
+  const clinicLogoHtml = clinicLogoUrl
+    ? `<img src="${escapeHtml(clinicLogoUrl)}" alt="Clinic logo" style="width: 140px; max-height: 84px; object-fit: contain; flex-shrink: 0;" />`
     : '';
 
   const pageContent = `
-    <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 28px; max-width: 720px; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; position: relative; overflow: hidden;">
-      ${watermarkHtml}
-      <div style="position: relative; z-index: 1;">
-      <header style="margin-bottom: 16px;">
-        <div style="font-size: 12px; color: #6b7280;">${escapeHtml(clinicName)}</div>
-        <h1 style="font-size: 20px; margin-bottom: 4px;">${escapeHtml(title)}</h1>
-        ${createdAtText ? `<h2 style="font-size: 14px; font-weight: normal; margin-top: 0; margin-bottom: 8px; color: #6b7280;">${escapeHtml(createdAtText)}</h2>` : ''}
+    <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 28px; max-width: 720px; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827;">
+      <header style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px;">
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 12px; color: #6b7280;">${escapeHtml(clinicName)}</div>
+          <h1 style="font-size: 20px; margin-bottom: 4px;">${escapeHtml(title)}</h1>
+          ${createdAtText ? `<h2 style="font-size: 14px; font-weight: normal; margin-top: 0; margin-bottom: 8px; color: #6b7280;">${escapeHtml(createdAtText)}</h2>` : ''}
+        </div>
+        ${clinicLogoHtml}
       </header>
       ${infoGridHtml}
       ${sectionHtml}
       ${signatureBlockHtml}
-      </div>
     </div>`;
 
   if (!includeFullPage) {
