@@ -1146,7 +1146,9 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-popover border-border">
+                          <SelectItem value="30" className="text-foreground">30 {t('appointments.minutes')}</SelectItem>
                           <SelectItem value="60" className="text-foreground">60 {t('appointments.minutes')}</SelectItem>
+                          <SelectItem value="90" className="text-foreground">90 {t('appointments.minutes')}</SelectItem>
                           <SelectItem value="120" className="text-foreground">120 {t('appointments.minutes')}</SelectItem>
                         </SelectContent>
                       </Select>

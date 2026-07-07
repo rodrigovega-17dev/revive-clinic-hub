@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -50,14 +50,23 @@ interface PositionedAppointment extends Appointment {
 
 // Time slots from 00:00 to 23:00 (24 hours total)
 const TIME_SLOTS = Array.from({ length: 24 }, (_, i) => i); // 00:00 to 23:00
-const INITIAL_SCROLL_HOUR = 7;
 const ALL_DAY_HEIGHT = 40;
 const TIME_SLOT_HEIGHT = 60;
 const TIME_COLUMN_WIDTH = 80; // Left time-label column
 const MIN_DAY_WIDTH = 130; // Columns grow to fill width; scroll only when narrower than this
-// Offset before time grid (header + all-day) – used so initial scroll shows 7am at top
-const HEADER_ESTIMATE_PX = 52;
-const SCROLL_OFFSET_TO_7AM = HEADER_ESTIMATE_PX + ALL_DAY_HEIGHT + INITIAL_SCROLL_HOUR * TIME_SLOT_HEIGHT;
+const APPOINTMENT_VERTICAL_GAP = 2; // small row separation between consecutive events
+const DEFAULT_SCROLL_HOUR = 8; // Fallback when no timed appointments are found
+// With sticky header, only the all-day strip should be offset in scroll calculations.
+const SCROLL_TOP_PADDING = 2; // leave a tiny gap so first row isn't flush with header
+
+const withHexAlpha = (hexColor: string, alpha: number): string => {
+  const hex = hexColor.replace('#', '');
+  if (hex.length !== 6) return hexColor;
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
 
 function computePositionedAppointments(dayAppointments: Appointment[]): PositionedAppointment[] {
   // Separate all-day and timed appointments
@@ -99,7 +108,7 @@ function computePositionedAppointments(dayAppointments: Appointment[]): Position
   }
 
   // Find clusters of overlapping appointments
-  let clusters: Appointment[][] = [];
+  const clusters: Appointment[][] = [];
   let currentCluster: Appointment[] = [];
   for (let i = 0; i < sorted.length; i++) {
     const apt = sorted[i];
@@ -248,23 +257,12 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
     setSelectedWeek(newWeek);
   };
 
-  useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    const scrollTo7am = () => {
-      el.scrollTop = SCROLL_OFFSET_TO_7AM;
-    };
-    requestAnimationFrame(() => {
-      requestAnimationFrame(scrollTo7am);
-    });
-  }, [selectedWeek]);
-
   const handleAppointmentClick = (appointment: Appointment) => {
     setSelectedAppointment(appointment);
     setShowAppointmentDetails(true);
   };
 
-  const getClinicTimeParts = (date: Date) => {
+  const getClinicTimeParts = useCallback((date: Date) => {
     const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone: timezone,
       hour: '2-digit',
@@ -275,7 +273,51 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
     const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? '0');
     const minute = Number(parts.find((part) => part.type === 'minute')?.value ?? '0');
     return { hour, minute };
-  };
+  }, [timezone]);
+
+  const initialScrollTop = useMemo(() => {
+    const targetDate =
+      currentDate >= weekStart && currentDate <= weekEnd ? currentDate : selectedWeek;
+
+    const dayAppointments = filteredAppointments.filter((apt) =>
+      isSameDay(new Date(apt.start_time), targetDate)
+    );
+
+    const timedAppointments = dayAppointments.filter((apt) => {
+      const start = new Date(apt.start_time);
+      const end = new Date(apt.end_time);
+      const startHour = getClinicTimeParts(start).hour;
+      const endHour = getClinicTimeParts(end).hour;
+      const durationMs = end.getTime() - start.getTime();
+      const isAllDay = (startHour === 0 && endHour >= 12) || durationMs > 12 * 60 * 60 * 1000;
+      return !isAllDay;
+    });
+
+    const minutesFromMidnight =
+      timedAppointments.length > 0
+        ? timedAppointments
+            .map((apt) => {
+              const parts = getClinicTimeParts(new Date(apt.start_time));
+              return parts.hour * 60 + parts.minute;
+            })
+            .reduce((min, value) => Math.min(min, value), Number.MAX_SAFE_INTEGER)
+        : DEFAULT_SCROLL_HOUR * 60;
+
+    const slotOffset = (minutesFromMidnight / 60) * TIME_SLOT_HEIGHT;
+    return Math.max(0, ALL_DAY_HEIGHT + slotOffset - SCROLL_TOP_PADDING);
+  }, [currentDate, weekStart, weekEnd, selectedWeek, filteredAppointments, getClinicTimeParts]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const scrollToTarget = () => {
+      el.scrollTop = initialScrollTop;
+    };
+    requestAnimationFrame(() => {
+      requestAnimationFrame(scrollToTarget);
+    });
+  }, [isLoading, initialScrollTop]);
 
   // 24-hour format for time column labels and appointment blocks
   const formatHourLabel = (hour: number) => {
@@ -418,18 +460,20 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
                       const width = 100 / apt.columns;
                       const left = apt.column * width;
                       const color = getTherapistColor(apt.therapists?.calendar_color_id);
-                      const isCancelled = apt.status === 'cancelled';
+                      const isInactiveStatus = apt.status === 'cancelled' || apt.status === 'no_show';
                       return (
                         <div
                           key={apt.id}
-                          className={`absolute rounded text-xs cursor-pointer hover:shadow-md transition-all ${isCancelled ? 'line-through opacity-60' : ''}`}
+                          className="absolute rounded text-xs cursor-pointer hover:shadow-md transition-all"
                           style={{
                             width: `${width}%`,
                             left: `${left}%`,
                             top: '2px',
                             bottom: '2px',
                             zIndex: 10,
-                            backgroundColor: color.background,
+                            backgroundColor: isInactiveStatus
+                              ? withHexAlpha(color.background, 0.55)
+                              : color.background,
                             color: color.foreground,
                           }}
                           onClick={() => handleAppointmentClick(apt)}
@@ -439,7 +483,7 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
                               className="w-2 h-2 rounded-full flex-shrink-0 ring-1 ring-black/20"
                               style={{ backgroundColor: getStatusDotColor(apt.status) }}
                             />
-                            <div className="truncate font-medium">
+                            <div className={`truncate font-medium ${isInactiveStatus ? 'line-through opacity-70' : ''}`}>
                               {apt.clients?.first_name} {apt.clients?.last_name}
                             </div>
                           </div>
@@ -525,20 +569,24 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
                       const left = apt.column * width;
 
                       const color = getTherapistColor(apt.therapists?.calendar_color_id);
-                      const isCancelled = apt.status === 'cancelled';
+                      const isInactiveStatus = apt.status === 'cancelled' || apt.status === 'no_show';
+                      const topWithGap = top + APPOINTMENT_VERTICAL_GAP / 2;
+                      const heightWithGap = Math.max(20, height - APPOINTMENT_VERTICAL_GAP);
 
                       return (
                         <div
                           key={apt.id}
-                          className={`absolute rounded text-xs cursor-pointer hover:shadow-lg hover:brightness-105 transition-all overflow-hidden ${isCancelled ? 'line-through opacity-60' : ''}`}
+                          className="absolute rounded text-xs cursor-pointer hover:shadow-lg hover:brightness-105 transition-all overflow-hidden"
                           style={{
                             width: `calc(${width}% - 2px)`,
                             left: `${left}%`,
-                            top: `${top}px`,
-                            height: `${height}px`,
+                            top: `${topWithGap}px`,
+                            height: `${heightWithGap}px`,
                             minHeight: '20px',
                             zIndex: 10 + apt.column,
-                            backgroundColor: color.background,
+                            backgroundColor: isInactiveStatus
+                              ? withHexAlpha(color.background, 0.55)
+                              : color.background,
                             color: color.foreground,
                           }}
                           onClick={() => handleAppointmentClick(apt)}
@@ -549,18 +597,20 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
                                 className="w-2 h-2 rounded-full flex-shrink-0 ring-1 ring-black/20"
                                 style={{ backgroundColor: getStatusDotColor(apt.status) }}
                               />
-                              <span className="font-medium text-xs">{startTime}</span>
+                              <span className={`font-medium text-xs ${isInactiveStatus ? 'line-through opacity-70' : ''}`}>
+                                {startTime}
+                              </span>
                             </div>
-                            <div className="text-xs font-medium truncate">
+                            <div className={`text-xs font-medium truncate ${isInactiveStatus ? 'line-through opacity-70' : ''}`}>
                               {apt.clients?.first_name} {apt.clients?.last_name}
                             </div>
                             {height > 40 && (
-                              <div className="text-xs opacity-90 truncate">
+                              <div className={`text-xs truncate ${isInactiveStatus ? 'line-through opacity-60' : 'opacity-90'}`}>
                                 {apt.treatments?.name}
                               </div>
                             )}
                             {height > 60 && (
-                              <div className="text-xs opacity-80 truncate">
+                              <div className={`text-xs truncate ${isInactiveStatus ? 'line-through opacity-60' : 'opacity-80'}`}>
                                 {apt.therapists?.first_name} {apt.therapists?.last_name}
                               </div>
                             )}
