@@ -930,6 +930,7 @@
     "transfer": "Transfer",
     "insurance": "Insurance",
     "adjustment": "Balance Adjustment",
+    "reportExcludedNote": "Rows in italics (Balance or Adjustment) are not new money and are excluded from the Total.",
     "pending": "Pending",
     "paid": "Paid",
     "overdue": "Overdue",

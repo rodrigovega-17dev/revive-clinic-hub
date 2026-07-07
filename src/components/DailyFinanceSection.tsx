@@ -185,6 +185,10 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
         getPaymentMethodText(p.method),
         formatCurrencyWithClinic(p.amount),
       ]),
+      mutedRows: reportPayments.map((p) => p.method === 'balance' || p.method === 'adjustment'),
+      note: reportPayments.some((p) => p.method === 'balance' || p.method === 'adjustment')
+        ? t('finance.reportExcludedNote')
+        : undefined,
       footer: [t('finance.totalEarnings'), '', '', '', formatCurrencyWithClinic(reportTotalRevenue)],
     };
 

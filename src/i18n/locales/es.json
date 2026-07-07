@@ -1044,6 +1044,7 @@
     "failedToRecordPayment": "No se pudo registrar el ingreso. Por favor intenta de nuevo.",
     "insurance": "Seguro",
     "adjustment": "Ajuste de Saldo",
+    "reportExcludedNote": "Los pagos en cursiva (Saldo o Ajuste) no representan dinero nuevo y no se incluyen en el Total.",
     "syncDescription": "Sincroniza automáticamente tus citas con Google Calendar para mejor organización y comunicación con clientes.",
     "oauthRedirect": "Redirigiendo a Google...",
     "oauthSuccess": "Autenticado exitosamente con Google",

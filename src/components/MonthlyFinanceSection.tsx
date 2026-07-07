@@ -222,6 +222,10 @@ const MonthlyFinanceSection = () => {
         getPaymentMethodText(payment.method),
         formatCurrencyWithClinic(payment.amount),
       ]),
+      mutedRows: reportPayments.map((payment) => payment.method === 'balance' || payment.method === 'adjustment'),
+      note: reportPayments.some((payment) => payment.method === 'balance' || payment.method === 'adjustment')
+        ? t('finance.reportExcludedNote')
+        : undefined,
       footer: [t('finance.totalRevenue'), '', '', '', formatCurrencyWithClinic(totalPayments)],
     };
 

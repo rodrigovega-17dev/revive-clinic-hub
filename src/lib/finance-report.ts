@@ -26,6 +26,10 @@ export interface FinanceReportTable {
   emptyText: string;
   /** Optional footer row (e.g. totals), aligned to `columns`. */
   footer?: string[];
+  /** Parallel to `rows`: dims a row (e.g. balance/adjustment entries excluded from the footer total). */
+  mutedRows?: boolean[];
+  /** Optional footnote rendered below the table, explaining muted rows. */
+  note?: string;
 }
 
 export interface FinanceReportData {
@@ -72,8 +76,8 @@ const renderTable = (table: FinanceReportTable): string => {
     table.rows.length > 0
       ? table.rows
           .map(
-            (row) =>
-              `<tr>${row
+            (row, i) =>
+              `<tr class="${table.mutedRows?.[i] ? 'muted' : ''}">${row
                 .map((cell, i) => `<td class="${numeric.has(i) ? 'num' : ''}">${escapeHtml(cell)}</td>`)
                 .join('')}</tr>`,
           )
@@ -86,6 +90,8 @@ const renderTable = (table: FinanceReportTable): string => {
         .join('')}</tr></tfoot>`
     : '';
 
+  const note = table.note ? `<p class="table-note">${escapeHtml(table.note)}</p>` : '';
+
   return `
     <section class="table-section">
       <h3>${escapeHtml(table.title)}</h3>
@@ -94,6 +100,7 @@ const renderTable = (table: FinanceReportTable): string => {
         <tbody>${body}</tbody>
         ${footer}
       </table>
+      ${note}
     </section>`;
 };
 
@@ -135,6 +142,8 @@ export const openFinanceReport = (data: FinanceReportData): void => {
           th.num, td.num { text-align: right; white-space: nowrap; }
           td.empty { text-align: center; color: #9ca3af; padding: 20px; }
           tfoot td { font-weight: 700; border-top: 2px solid #111827; border-bottom: none; }
+          tr.muted td { color: #9ca3af; font-style: italic; }
+          .table-note { font-size: 11px; color: #9ca3af; font-style: italic; margin: 6px 0 0; }
           .print-btn { display: block; margin: 0 auto 20px; padding: 10px 20px; font-size: 14px; font-weight: 600; color: #fff; background: #111827; border: none; border-radius: 8px; cursor: pointer; }
           @media print {
             body { background: #fff; padding: 0; }
