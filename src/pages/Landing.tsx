@@ -62,22 +62,25 @@ const Landing = () => {
     <div className="min-h-screen bg-background scroll-smooth font-sans antialiased">
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25">
               <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
             </div>
-            <span className="text-lg font-semibold tracking-tight text-foreground">{t("landing.brand")}</span>
+            <span className="truncate text-lg font-semibold tracking-tight text-foreground">{t("landing.brand")}</span>
           </div>
-          <nav className="flex items-center gap-2">
+          <nav className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <LanguageSelector />
-            <Button variant="ghost" size="sm" asChild className="text-muted-foreground hover:text-foreground">
+            <Button variant="ghost" size="sm" asChild className="hidden text-muted-foreground hover:text-foreground sm:inline-flex">
               <Link to="/auth">{t("landing.footerLogin")}</Link>
             </Button>
-            <Button size="sm" asChild className="rounded-lg bg-primary px-4 shadow-sm">
-              <Link to="/auth">{t("landing.ctaPrimary")}</Link>
+            <Button size="sm" asChild className="rounded-lg bg-primary px-3 shadow-sm sm:px-4">
+              <Link to="/auth">
+                <span className="sm:hidden">{t("landing.ctaPrimaryShort")}</span>
+                <span className="hidden sm:inline">{t("landing.ctaPrimary")}</span>
+              </Link>
             </Button>
           </nav>
         </div>

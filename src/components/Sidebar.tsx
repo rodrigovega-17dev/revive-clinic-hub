@@ -83,7 +83,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-sidebar-border bg-sidebar/50">
+      <div className="flex items-center justify-between p-4 pt-[calc(1rem+env(safe-area-inset-top))] border-b border-sidebar-border bg-sidebar/50">
         {!collapsed && (
           <div className="flex items-center space-x-3 md:flex hidden">
             <div className="w-10 h-10 bg-gradient-to-br from-sidebar-primary to-sidebar-primary/80 rounded-xl flex items-center justify-center shadow-md">
@@ -141,7 +141,7 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
       </nav>
 
       {/* Footer with User Info and Logout */}
-      <div className="p-4 border-t border-sidebar-border bg-sidebar/50">
+      <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-sidebar-border bg-sidebar/50">
         {!collapsed ? (
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3 flex-1 min-w-0">

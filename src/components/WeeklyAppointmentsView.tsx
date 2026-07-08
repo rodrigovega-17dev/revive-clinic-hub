@@ -367,8 +367,8 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
   return (
     <div className="space-y-4">
       {/* Week Navigation */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 sm:space-x-4">
           <Button
             variant="outline"
             size="sm"
@@ -383,11 +383,11 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <h2 className="text-lg font-semibold dark:text-white">
+          <h2 className="text-base sm:text-lg font-semibold dark:text-white">
             {format(weekStart, 'MMMM d', { locale })} - {format(weekEnd, 'MMMM d, yyyy', { locale })}
           </h2>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant={showWeekends ? 'secondary' : 'outline'}
             size="sm"
