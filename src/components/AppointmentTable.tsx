@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format } from 'date-fns';
-import { User, Eye, Edit, Trash2, Calendar, Clock } from 'lucide-react';
+import { Eye, Edit, Trash2, Calendar, Clock } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { useClinicSettings } from '@/hooks/useClinic';
@@ -93,12 +93,9 @@ const AppointmentTable = ({ groupedAppointments, onAppointmentClick }: Appointme
         <Card key={therapistId}>
           <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                <User className="h-4 w-4 text-blue-600" />
-              </div>
               <div className="flex items-center gap-2">
                 <div
-                  className="w-3 h-3 rounded-full border border-border"
+                  className="w-5 h-5 rounded-full border border-border"
                   style={{ backgroundColor: getTherapistColor(therapist?.calendar_color_id).background }}
                 />
                 {therapist?.first_name} {therapist?.last_name}

@@ -433,32 +433,32 @@ const Settings = (): JSX.Element => {
       </div>
 
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="general" className="flex items-center gap-2">
+        <TabsList className="flex w-full justify-start gap-1 overflow-x-auto sm:grid sm:grid-cols-6">
+          <TabsTrigger value="general" className="flex shrink-0 items-center gap-2">
             <Palette className="h-4 w-4" />
             {t('settings.general')}
           </TabsTrigger>
-          <TabsTrigger value="clinic" className="flex items-center gap-2">
+          <TabsTrigger value="clinic" className="flex shrink-0 items-center gap-2">
             <Building2 className="h-4 w-4" />
             {t('settings.clinic')}
           </TabsTrigger>
-          {/* <TabsTrigger value="notifications" className="flex items-center gap-2">
+          {/* <TabsTrigger value="notifications" className="flex shrink-0 items-center gap-2">
             <Bell className="h-4 w-4" />
             {t('settings.notifications')}
           </TabsTrigger> */}
-          <TabsTrigger value="security" className="flex items-center gap-2">
+          <TabsTrigger value="security" className="flex shrink-0 items-center gap-2">
             <Shield className="h-4 w-4" />
             {t('settings.security')}
           </TabsTrigger>
-          <TabsTrigger value="integrations" className="flex items-center gap-2">
+          <TabsTrigger value="integrations" className="flex shrink-0 items-center gap-2">
             <Zap className="h-4 w-4" />
             {t('settings.integrations')}
           </TabsTrigger>
-          <TabsTrigger value="subscription" className="flex items-center gap-2">
+          <TabsTrigger value="subscription" className="flex shrink-0 items-center gap-2">
             <CreditCard className="h-4 w-4" />
             {t('settings.subscription')}
           </TabsTrigger>
-          <TabsTrigger value="data" className="flex items-center gap-2">
+          <TabsTrigger value="data" className="flex shrink-0 items-center gap-2">
             <Database className="h-4 w-4" />
             {t('settings.dataExport')}
           </TabsTrigger>

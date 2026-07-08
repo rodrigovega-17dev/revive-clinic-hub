@@ -1,10 +1,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, User } from "lucide-react";
+import { Calendar, Clock } from "lucide-react";
 import { useUpcomingAppointments } from "@/hooks/useAppointments";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "react-i18next";
 import { useClinicSettings } from "@/hooks/useClinic";
+import { getTherapistColor } from "@/lib/therapist-colors";
 
 interface UpcomingAppointmentsProps {
   onAppointmentClick?: (appointment: any) => void;
@@ -102,9 +103,10 @@ const UpcomingAppointments = ({ onAppointmentClick }: UpcomingAppointmentsProps)
               className={`flex items-center space-x-4 p-4 rounded-lg border ${onAppointmentClick ? 'cursor-pointer hover:bg-muted/50 transition-colors' : ''}`}
             >
               <div className="flex-shrink-0">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                  <User className="h-6 w-6 text-blue-600" />
-                </div>
+                <div
+                  className="w-5 h-5 rounded-full border border-border"
+                  style={{ backgroundColor: getTherapistColor(appointment.therapists?.calendar_color_id).background }}
+                />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground">
@@ -112,8 +114,7 @@ const UpcomingAppointments = ({ onAppointmentClick }: UpcomingAppointmentsProps)
                 </p>
                 <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                   <span>{appointment.treatments?.name}</span>
-                  <span>•</span>
-                  <span>Dr. {appointment.therapists?.first_name} {appointment.therapists?.last_name}</span>
+                  <span>TF. {appointment.therapists?.first_name} {appointment.therapists?.last_name}</span>
                 </div>
                 <div className="flex items-center space-x-2 mt-1">
                   <Clock className="h-3 w-3 text-muted-foreground" />
