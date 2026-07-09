@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatDistanceToNow } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
-import { CalendarDays, User, DollarSign, ClipboardList, ChevronDown } from 'lucide-react';
+import { CalendarDays, User, DollarSign, ClipboardList, ChevronDown, FileText } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -19,6 +19,7 @@ const ACTION_ICONS: Record<string, React.ElementType> = {
   appointment: CalendarDays,
   client: User,
   payment: DollarSign,
+  document: FileText,
 };
 
 const getActionIcon = (entityType: string) => {
@@ -29,10 +30,17 @@ const getActionColor = (actionType: string): string => {
   if (actionType.includes('reverted')) return 'text-orange-600';
   if (actionType.includes('deleted') || actionType.includes('cancelled')) return 'text-red-500';
   if (actionType.includes('payment')) return 'text-green-600';
+  if (actionType.startsWith('document.')) return 'text-purple-600';
   if (actionType.includes('created')) return 'text-blue-600';
   if (actionType.includes('rescheduled')) return 'text-amber-600';
   return 'text-muted-foreground';
 };
+
+interface DocumentFieldSummary {
+  id: string;
+  label: string;
+  value: string;
+}
 
 const ActivityLogPage = () => {
   const { t } = useTranslation();
@@ -43,6 +51,7 @@ const ActivityLogPage = () => {
   const [clientFilterId, setClientFilterId] = useState('all');
   const [therapistFilterId, setTherapistFilterId] = useState('all');
   const [entries, setEntries] = useState<ActivityLogEntry[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const { data: clients = [] } = useClients();
   const { data: therapists = [] } = useTherapists();
 
@@ -114,6 +123,7 @@ const ActivityLogPage = () => {
           <TabsTrigger value="appointment">{t('activityLog.appointments')}</TabsTrigger>
           <TabsTrigger value="client">{t('activityLog.clients')}</TabsTrigger>
           <TabsTrigger value="payment">{t('activityLog.payments')}</TabsTrigger>
+          <TabsTrigger value="document">{t('activityLog.documents')}</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -172,6 +182,9 @@ const ActivityLogPage = () => {
               {allEntries.map((entry, idx) => {
                 const Icon = getActionIcon(entry.entity_type);
                 const colorClass = getActionColor(entry.action_type);
+                const fields = (entry.metadata?.fields as DocumentFieldSummary[] | undefined) || [];
+                const isDocument = entry.entity_type === 'document' && fields.length > 0;
+                const isExpanded = expandedId === entry.id;
                 return (
                   <div
                     key={entry.id}
@@ -188,6 +201,27 @@ const ActivityLogPage = () => {
                         )}
                         {formatTime(entry.created_at)}
                       </p>
+                      {isDocument && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setExpandedId(isExpanded ? null : entry.id)}
+                            className="mt-1 text-xs font-medium text-primary hover:underline"
+                          >
+                            {isExpanded ? t('activityLog.hideDetails') : t('activityLog.viewDetails')}
+                          </button>
+                          {isExpanded && (
+                            <div className="mt-2 rounded-md border border-border bg-muted/30 p-3 space-y-1.5">
+                              {fields.map((field) => (
+                                <div key={field.id} className="text-xs">
+                                  <span className="font-medium text-foreground">{field.label}: </span>
+                                  <span className="text-muted-foreground whitespace-pre-wrap">{field.value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
                 );

@@ -306,10 +306,13 @@
     "appointments": "Appointments",
     "clients": "Patients",
     "payments": "Payments",
+    "documents": "Documents",
     "loadMore": "Load more",
     "noActivity": "No activity recorded yet",
     "by": "by",
-    "justNow": "Just now"
+    "justNow": "Just now",
+    "viewDetails": "View details",
+    "hideDetails": "Hide details"
   },
   "auth": {
     "login": "Login",
@@ -639,6 +642,7 @@
     "cash": "Cash",
     "card": "Card",
     "transfer": "Transfer",
+    "cheque": "Check",
     "insurance": "Insurance",
     "conflictingAppointments": "Conflicting Appointments",
     "syncedWithGoogleCalendar": "Synced with Google Calendar",
@@ -936,6 +940,7 @@
     "cash": "Cash",
     "card": "Card",
     "transfer": "Transfer",
+    "cheque": "Check",
     "insurance": "Insurance",
     "adjustment": "Balance Adjustment",
     "reportExcludedNote": "Rows in italics (Balance or Adjustment) are not new money and are excluded from the Total.",

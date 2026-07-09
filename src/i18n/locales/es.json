@@ -306,10 +306,13 @@
     "appointments": "Citas",
     "clients": "Pacientes",
     "payments": "Pagos",
+    "documents": "Documentos",
     "loadMore": "Cargar más",
     "noActivity": "No hay actividad registrada aún",
     "by": "por",
-    "justNow": "Ahora mismo"
+    "justNow": "Ahora mismo",
+    "viewDetails": "Ver detalles",
+    "hideDetails": "Ocultar detalles"
   },
   "auth": {
     "login": "Iniciar Sesión",
@@ -528,6 +531,7 @@
     "cash": "Efectivo",
     "card": "Tarjeta",
     "transfer": "Transferencia",
+    "cheque": "Cheque",
     "insurance": "Seguro",
     "balance": "Balance",
     "error": "Error",
@@ -935,6 +939,7 @@
     "cash": "Efectivo",
     "card": "Tarjeta",
     "transfer": "Transferencia",
+    "cheque": "Cheque",
     "balance": "Balance",
     "pending": "Pendiente",
     "paid": "Pagado",

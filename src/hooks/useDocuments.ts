@@ -10,6 +10,37 @@ type DocumentInstanceInsert = TablesInsert<'document_instances'>;
 export type DocumentContextType = 'client' | 'appointment';
 
 /**
+ * Flatten a template schema's sections/groups into a flat "label: value" list,
+ * skipping the readonly header block and signature fields. Used to build a
+ * readable activity-log record of what a document actually contains.
+ */
+const buildFieldSummary = (
+  schema: any,
+  values: Record<string, unknown>,
+): { id: string; label: string; value: string }[] => {
+  const sections: any[] = Array.isArray(schema?.sections) ? schema.sections : [];
+  const summary: { id: string; label: string; value: string }[] = [];
+
+  const pushField = (field: any) => {
+    if (!field || typeof field.id !== 'string' || field.type === 'signature') return;
+    const raw = values[field.id];
+    if (raw === undefined || raw === null || raw === '') return;
+    summary.push({ id: field.id, label: field.label || field.id, value: String(raw) });
+  };
+
+  sections.forEach((section) => {
+    if (section.id === 'header') return;
+    if (section.type === 'group' && Array.isArray(section.fields)) {
+      section.fields.forEach((field: any) => pushField(field));
+    } else {
+      pushField(section);
+    }
+  });
+
+  return summary;
+};
+
+/**
  * Fetch all active document templates for the current clinic.
  * Optionally filter by type ('client' | 'appointment').
  */
@@ -115,7 +146,7 @@ export interface CreateDocumentPayload {
 
 export const useCreateDocumentInstance = () => {
   const queryClient = useQueryClient();
-  const { clinicId } = useAuth();
+  const { clinicId, user } = useAuth();
 
   return useMutation({
     mutationFn: async (payload: CreateDocumentPayload) => {
@@ -333,6 +364,39 @@ export const useCreateDocumentInstance = () => {
         .single();
 
       if (error) throw error;
+
+      // Log to activity_log with the full field summary. Done here (rather than a DB
+      // trigger like other entities) because reading readable labels out of a template's
+      // schema requires walking its group/field structure — easy in TS, brittle in SQL.
+      // Best-effort: a logging failure shouldn't block the document from being created.
+      try {
+        const responsibleName = (mergedVariables.responsibleName as string) || '';
+        const descriptionParts = [`Documento creado: ${template.name}`, `Paciente: ${clientFullName}`];
+        if (responsibleName) descriptionParts.push(`Responsable: ${responsibleName}`);
+
+        await supabase.from('activity_log').insert({
+          clinic_id: clinicId,
+          user_id: user?.id ?? null,
+          user_email: user?.email ?? null,
+          action_type: 'document.created',
+          entity_type: 'document',
+          entity_id: data.id,
+          description: descriptionParts.join(' — '),
+          metadata: {
+            template_name: template.name,
+            template_slug: template.slug,
+            category: template.category,
+            client_name: clientFullName,
+            responsible_name: responsibleName || null,
+            appointment_id: appointmentId ?? null,
+            date: new Date().toISOString(),
+            fields: buildFieldSummary(template.schema, finalValues),
+          },
+        });
+      } catch (logError) {
+        console.error('Failed to log document creation activity:', logError);
+      }
+
       return data as DocumentInstance;
     },
     onSuccess: (instance) => {
