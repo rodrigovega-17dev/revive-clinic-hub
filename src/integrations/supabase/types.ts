@@ -7,18 +7,73 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   public: {
     Tables: {
+      activity_log: {
+        Row: {
+          action_type: string
+          clinic_id: string
+          created_at: string
+          description: string
+          entity_id: string | null
+          entity_type: string
+          id: string
+          metadata: Json | null
+          user_email: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action_type: string
+          clinic_id: string
+          created_at?: string
+          description: string
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          metadata?: Json | null
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action_type?: string
+          clinic_id?: string
+          created_at?: string
+          description?: string
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          metadata?: Json | null
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_log_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointments: {
         Row: {
           client_id: string
           clinic_id: string
-          created_at: string
-          created_by: string | null
+          created_at: string | null
           end_time: string
           google_calendar_event_id: string | null
+          google_calendar_version: string | null
           id: string
+          last_synced_at: string | null
+          local_version: number | null
           notes: string | null
+          pay_therapist_in_full: boolean
           payment_amount: number | null
           payment_date: string | null
           payment_method: string | null
@@ -34,25 +89,25 @@ export type Database = {
           payroll_retention_rate: number | null
           payroll_snapshot_at: string | null
           start_time: string
-          status: Database["public"]["Enums"]["appointment_status"]
+          status: Database["public"]["Enums"]["appointment_status"] | null
+          sync_error_message: string | null
+          sync_status: string | null
           therapist_id: string
           treatment_id: string | null
-          updated_at: string
-          sync_status: string | null
-          last_synced_at: string | null
-          sync_error_message: string | null
-          google_calendar_version: string | null
-          local_version: number | null
+          updated_at: string | null
         }
         Insert: {
           client_id: string
-          clinic_id?: string
-          created_at?: string
-          created_by?: string | null
+          clinic_id: string
+          created_at?: string | null
           end_time: string
           google_calendar_event_id?: string | null
+          google_calendar_version?: string | null
           id?: string
+          last_synced_at?: string | null
+          local_version?: number | null
           notes?: string | null
+          pay_therapist_in_full?: boolean
           payment_amount?: number | null
           payment_date?: string | null
           payment_method?: string | null
@@ -68,25 +123,25 @@ export type Database = {
           payroll_retention_rate?: number | null
           payroll_snapshot_at?: string | null
           start_time: string
-          status?: Database["public"]["Enums"]["appointment_status"]
+          status?: Database["public"]["Enums"]["appointment_status"] | null
+          sync_error_message?: string | null
+          sync_status?: string | null
           therapist_id: string
           treatment_id?: string | null
-          updated_at?: string
-          sync_status?: string | null
-          last_synced_at?: string | null
-          sync_error_message?: string | null
-          google_calendar_version?: string | null
-          local_version?: number | null
+          updated_at?: string | null
         }
         Update: {
           client_id?: string
           clinic_id?: string
-          created_at?: string
-          created_by?: string | null
+          created_at?: string | null
           end_time?: string
           google_calendar_event_id?: string | null
+          google_calendar_version?: string | null
           id?: string
+          last_synced_at?: string | null
+          local_version?: number | null
           notes?: string | null
+          pay_therapist_in_full?: boolean
           payment_amount?: number | null
           payment_date?: string | null
           payment_method?: string | null
@@ -102,15 +157,12 @@ export type Database = {
           payroll_retention_rate?: number | null
           payroll_snapshot_at?: string | null
           start_time?: string
-          status?: Database["public"]["Enums"]["appointment_status"]
+          status?: Database["public"]["Enums"]["appointment_status"] | null
+          sync_error_message?: string | null
+          sync_status?: string | null
           therapist_id?: string
           treatment_id?: string | null
-          updated_at?: string
-          sync_status?: string | null
-          last_synced_at?: string | null
-          sync_error_message?: string | null
-          google_calendar_version?: string | null
-          local_version?: number | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -125,13 +177,6 @@ export type Database = {
             columns: ["clinic_id"]
             isOneToOne: false
             referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "appointments_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -150,96 +195,133 @@ export type Database = {
           },
         ]
       }
-      clinics: {
+      cfdi_invoice_payments: {
         Row: {
+          amount: number
+          cfdi_invoice_id: string
+          created_at: string | null
           id: string
-          name: string
-          slug: string
-          address: string | null
-          phone: string | null
-          email: string | null
-          timezone: string
-          currency: string
-          logo_url: string | null
-          settings: Json
-          is_active: boolean
-          created_at: string
-          updated_at: string
-          google_calendar_auth: Json | null
-          google_calendar_selected_id: string | null
-          google_calendar_enabled: boolean
-          google_calendar_sync_settings: Json
-          subscription_status: string
-          trial_ends_at: string | null
-          subscription_plan_id: string | null
-          stripe_customer_id: string | null
-          facturapi_test_secret: string | null
-          facturapi_live_secret: string | null
-          facturapi_use_live: boolean
-          facturapi_webhook_secret: string | null
+          payment_id: string
         }
         Insert: {
+          amount: number
+          cfdi_invoice_id: string
+          created_at?: string | null
           id?: string
-          name: string
-          slug: string
-          address?: string | null
-          phone?: string | null
-          email?: string | null
-          timezone?: string
-          currency?: string
-          logo_url?: string | null
-          settings?: Json
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-          google_calendar_auth?: Json | null
-          google_calendar_selected_id?: string | null
-          google_calendar_enabled?: boolean
-          google_calendar_sync_settings?: Json
-          subscription_status?: string
-          trial_ends_at?: string | null
-          subscription_plan_id?: string | null
-          stripe_customer_id?: string | null
-          facturapi_test_secret?: string | null
-          facturapi_live_secret?: string | null
-          facturapi_use_live?: boolean
-          facturapi_webhook_secret?: string | null
+          payment_id: string
         }
         Update: {
+          amount?: number
+          cfdi_invoice_id?: string
+          created_at?: string | null
           id?: string
-          name?: string
-          slug?: string
-          address?: string | null
-          phone?: string | null
-          email?: string | null
-          timezone?: string
-          currency?: string
-          logo_url?: string | null
-          settings?: Json
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-          google_calendar_auth?: Json | null
-          google_calendar_selected_id?: string | null
-          google_calendar_enabled?: boolean
-          google_calendar_sync_settings?: Json
-          subscription_status?: string
-          trial_ends_at?: string | null
-          subscription_plan_id?: string | null
-          stripe_customer_id?: string | null
-          facturapi_test_secret?: string | null
-          facturapi_live_secret?: string | null
-          facturapi_use_live?: boolean
-          facturapi_webhook_secret?: string | null
+          payment_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "clinics_subscription_plan_id_fkey"
-            columns: ["subscription_plan_id"]
+            foreignKeyName: "cfdi_invoice_payments_cfdi_invoice_id_fkey"
+            columns: ["cfdi_invoice_id"]
             isOneToOne: false
-            referencedRelation: "subscription_plans"
+            referencedRelation: "cfdi_invoices"
             referencedColumns: ["id"]
-          }
+          },
+          {
+            foreignKeyName: "cfdi_invoice_payments_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cfdi_invoices: {
+        Row: {
+          canceled_at: string | null
+          clinic_id: string
+          created_at: string | null
+          currency: string | null
+          emitted_at: string | null
+          facturapi_id: string | null
+          folio: string | null
+          global_period_end: string | null
+          global_period_start: string | null
+          id: string
+          pdf_url: string | null
+          raw_response: Json | null
+          related_cfdi_id: string | null
+          source: string | null
+          status: Database["public"]["Enums"]["cfdi_status"]
+          subtotal: number
+          tax: number
+          total: number
+          type: Database["public"]["Enums"]["cfdi_type"]
+          updated_at: string | null
+          uuid: string | null
+          xml_url: string | null
+        }
+        Insert: {
+          canceled_at?: string | null
+          clinic_id: string
+          created_at?: string | null
+          currency?: string | null
+          emitted_at?: string | null
+          facturapi_id?: string | null
+          folio?: string | null
+          global_period_end?: string | null
+          global_period_start?: string | null
+          id?: string
+          pdf_url?: string | null
+          raw_response?: Json | null
+          related_cfdi_id?: string | null
+          source?: string | null
+          status?: Database["public"]["Enums"]["cfdi_status"]
+          subtotal?: number
+          tax?: number
+          total?: number
+          type: Database["public"]["Enums"]["cfdi_type"]
+          updated_at?: string | null
+          uuid?: string | null
+          xml_url?: string | null
+        }
+        Update: {
+          canceled_at?: string | null
+          clinic_id?: string
+          created_at?: string | null
+          currency?: string | null
+          emitted_at?: string | null
+          facturapi_id?: string | null
+          folio?: string | null
+          global_period_end?: string | null
+          global_period_start?: string | null
+          id?: string
+          pdf_url?: string | null
+          raw_response?: Json | null
+          related_cfdi_id?: string | null
+          source?: string | null
+          status?: Database["public"]["Enums"]["cfdi_status"]
+          subtotal?: number
+          tax?: number
+          total?: number
+          type?: Database["public"]["Enums"]["cfdi_type"]
+          updated_at?: string | null
+          uuid?: string | null
+          xml_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cfdi_invoices_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cfdi_invoices_related_cfdi_id_fkey"
+            columns: ["related_cfdi_id"]
+            isOneToOne: false
+            referencedRelation: "cfdi_invoices"
+            referencedColumns: ["id"]
+          },
         ]
       }
       clients: {
@@ -247,76 +329,76 @@ export type Database = {
           address: string | null
           archived: boolean
           birth_date: string | null
+          cfdi_email: string | null
+          cfdi_use: string | null
           charge_amount: number | null
           clinic_id: string
-          created_at: string
+          created_at: string | null
           email: string | null
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
+          facturapi_customer_id: string | null
           first_name: string
-          gender: Database["public"]["Enums"]["gender"] | null
+          gender: Database["public"]["Enums"]["gender_type"] | null
           id: string
-          is_active: boolean
+          is_active: boolean | null
           last_name: string
           medical_notes: string | null
+          pay_therapist_in_full: boolean
           phone: string | null
-          tags: string[] | null
-          updated_at: string
           rfc: string | null
           tax_regime: string | null
-          cfdi_use: string | null
-          cfdi_email: string | null
-          facturapi_customer_id: string | null
+          updated_at: string | null
         }
         Insert: {
           address?: string | null
           archived?: boolean
           birth_date?: string | null
+          cfdi_email?: string | null
+          cfdi_use?: string | null
           charge_amount?: number | null
-          clinic_id?: string
-          created_at?: string
+          clinic_id: string
+          created_at?: string | null
           email?: string | null
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
+          facturapi_customer_id?: string | null
           first_name: string
-          gender?: Database["public"]["Enums"]["gender"] | null
+          gender?: Database["public"]["Enums"]["gender_type"] | null
           id?: string
-          is_active?: boolean
+          is_active?: boolean | null
           last_name: string
           medical_notes?: string | null
+          pay_therapist_in_full?: boolean
           phone?: string | null
-          tags?: string[] | null
-          updated_at?: string
           rfc?: string | null
           tax_regime?: string | null
-          cfdi_use?: string | null
-          cfdi_email?: string | null
-          facturapi_customer_id?: string | null
+          updated_at?: string | null
         }
         Update: {
           address?: string | null
           archived?: boolean
           birth_date?: string | null
+          cfdi_email?: string | null
+          cfdi_use?: string | null
           charge_amount?: number | null
           clinic_id?: string
-          created_at?: string
+          created_at?: string | null
           email?: string | null
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
+          facturapi_customer_id?: string | null
           first_name?: string
-          gender?: Database["public"]["Enums"]["gender"] | null
+          gender?: Database["public"]["Enums"]["gender_type"] | null
           id?: string
-          is_active?: boolean
+          is_active?: boolean | null
           last_name?: string
           medical_notes?: string | null
+          pay_therapist_in_full?: boolean
           phone?: string | null
-          tags?: string[] | null
-          updated_at?: string
           rfc?: string | null
           tax_regime?: string | null
-          cfdi_use?: string | null
-          cfdi_email?: string | null
-          facturapi_customer_id?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -325,8 +407,161 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clinics"
             referencedColumns: ["id"]
-          }
+          },
         ]
+      }
+      clinic_subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean | null
+          canceled_at: string | null
+          clinic_id: string
+          created_at: string | null
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          plan_id: string
+          status: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          trial_end: string | null
+          trial_start: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          cancel_at_period_end?: boolean | null
+          canceled_at?: string | null
+          clinic_id: string
+          created_at?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_id: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          trial_end?: string | null
+          trial_start?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          cancel_at_period_end?: boolean | null
+          canceled_at?: string | null
+          clinic_id?: string
+          created_at?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_id?: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          trial_end?: string | null
+          trial_start?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinic_subscriptions_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: true
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clinic_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinics: {
+        Row: {
+          address: string | null
+          created_at: string
+          currency: string | null
+          email: string | null
+          facturapi_live_secret: string | null
+          facturapi_test_secret: string | null
+          facturapi_use_live: boolean | null
+          facturapi_webhook_secret: string | null
+          google_calendar_auth: Json | null
+          google_calendar_enabled: boolean | null
+          google_calendar_selected_id: string | null
+          google_calendar_sync_settings: Json | null
+          id: string
+          is_active: boolean
+          logo_url: string | null
+          name: string
+          phone: string | null
+          settings: Json | null
+          slug: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          subscription_plan_id: string | null
+          subscription_status: string | null
+          timezone: string | null
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          currency?: string | null
+          email?: string | null
+          facturapi_live_secret?: string | null
+          facturapi_test_secret?: string | null
+          facturapi_use_live?: boolean | null
+          facturapi_webhook_secret?: string | null
+          google_calendar_auth?: Json | null
+          google_calendar_enabled?: boolean | null
+          google_calendar_selected_id?: string | null
+          google_calendar_sync_settings?: Json | null
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name: string
+          phone?: string | null
+          settings?: Json | null
+          slug: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_plan_id?: string | null
+          subscription_status?: string | null
+          timezone?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          currency?: string | null
+          email?: string | null
+          facturapi_live_secret?: string | null
+          facturapi_test_secret?: string | null
+          facturapi_use_live?: boolean | null
+          facturapi_webhook_secret?: string | null
+          google_calendar_auth?: Json | null
+          google_calendar_enabled?: boolean | null
+          google_calendar_selected_id?: string | null
+          google_calendar_sync_settings?: Json | null
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name?: string
+          phone?: string | null
+          settings?: Json | null
+          slug?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_plan_id?: string | null
+          subscription_status?: string | null
+          timezone?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       daily_cash_summary: {
         Row: {
@@ -343,7 +578,7 @@ export type Database = {
         }
         Insert: {
           cash_payments?: number | null
-          clinic_id?: string
+          clinic_id: string
           closing_cash?: number | null
           created_at?: string
           date: string
@@ -372,7 +607,156 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clinics"
             referencedColumns: ["id"]
-          }
+          },
+        ]
+      }
+      document_instances: {
+        Row: {
+          appointment_id: string | null
+          client_id: string
+          clinic_id: string
+          created_at: string
+          created_by: string | null
+          data: Json
+          finalized_at: string | null
+          id: string
+          rendered_pdf_url: string | null
+          responsible_person_id: string | null
+          responsible_person_type: string | null
+          share_token: string | null
+          status: string
+          template_id: string
+          template_version: number
+          updated_at: string
+        }
+        Insert: {
+          appointment_id?: string | null
+          client_id: string
+          clinic_id: string
+          created_at?: string
+          created_by?: string | null
+          data: Json
+          finalized_at?: string | null
+          id?: string
+          rendered_pdf_url?: string | null
+          responsible_person_id?: string | null
+          responsible_person_type?: string | null
+          share_token?: string | null
+          status?: string
+          template_id: string
+          template_version: number
+          updated_at?: string
+        }
+        Update: {
+          appointment_id?: string | null
+          client_id?: string
+          clinic_id?: string
+          created_at?: string
+          created_by?: string | null
+          data?: Json
+          finalized_at?: string | null
+          id?: string
+          rendered_pdf_url?: string | null
+          responsible_person_id?: string | null
+          responsible_person_type?: string | null
+          share_token?: string | null
+          status?: string
+          template_id?: string
+          template_version?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_instances_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_instances_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_instances_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_instances_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_instances_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "document_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_templates: {
+        Row: {
+          category: string | null
+          clinic_id: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          language: string
+          name: string
+          schema: Json
+          slug: string
+          type: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          category?: string | null
+          clinic_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          language?: string
+          name: string
+          schema: Json
+          slug: string
+          type: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          category?: string | null
+          clinic_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          language?: string
+          name?: string
+          schema?: Json
+          slug?: string
+          type?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_templates_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
         ]
       }
       expenses: {
@@ -380,37 +764,40 @@ export type Database = {
           amount: number
           category: string | null
           clinic_id: string
-          created_at: string
+          created_at: string | null
           date: string
           description: string
           id: string
           recorded_by: string | null
+          supplier_id: string | null
           therapist_id: string | null
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
           amount: number
           category?: string | null
-          clinic_id?: string
-          created_at?: string
+          clinic_id: string
+          created_at?: string | null
           date: string
           description: string
           id?: string
           recorded_by?: string | null
+          supplier_id?: string | null
           therapist_id?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
           amount?: number
           category?: string | null
           clinic_id?: string
-          created_at?: string
+          created_at?: string | null
           date?: string
           description?: string
           id?: string
           recorded_by?: string | null
+          supplier_id?: string | null
           therapist_id?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -421,19 +808,26 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "expenses_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "expenses_therapist_id_fkey"
             columns: ["therapist_id"]
             isOneToOne: false
             referencedRelation: "therapists"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "expenses_recorded_by_fkey"
-            columns: ["recorded_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          }
         ]
       }
       payments: {
@@ -442,54 +836,63 @@ export type Database = {
           appointment_id: string | null
           client_id: string | null
           clinic_id: string
-          created_at: string
+          created_at: string | null
           description: string | null
-          id: string
-          method: Database["public"]["Enums"]["payment_method"]
-          payment_date: string
-          received_by: string | null
-          shift_id: string | null
           facturado: boolean | null
+          id: string
+          invoice_state:
+            | Database["public"]["Enums"]["invoice_state_type"]
+            | null
           iva_amount: number | null
-          invoice_state: Database["public"]["Enums"]["invoice_state_type"]
-          refunded_at: string | null
+          method: string
+          payment_date: string | null
+          received_by: string | null
           refund_amount: number | null
+          refunded_at: string | null
+          shift_id: string | null
+          updated_at: string | null
         }
         Insert: {
           amount: number
           appointment_id?: string | null
           client_id?: string | null
-          clinic_id?: string
-          created_at?: string
+          clinic_id: string
+          created_at?: string | null
           description?: string | null
-          id?: string
-          method: Database["public"]["Enums"]["payment_method"]
-          payment_date?: string
-          received_by?: string | null
-          shift_id?: string | null
           facturado?: boolean | null
+          id?: string
+          invoice_state?:
+            | Database["public"]["Enums"]["invoice_state_type"]
+            | null
           iva_amount?: number | null
-          invoice_state?: Database["public"]["Enums"]["invoice_state_type"]
-          refunded_at?: string | null
+          method: string
+          payment_date?: string | null
+          received_by?: string | null
           refund_amount?: number | null
+          refunded_at?: string | null
+          shift_id?: string | null
+          updated_at?: string | null
         }
         Update: {
           amount?: number
           appointment_id?: string | null
           client_id?: string | null
           clinic_id?: string
-          created_at?: string
+          created_at?: string | null
           description?: string | null
-          id?: string
-          method?: Database["public"]["Enums"]["payment_method"]
-          payment_date?: string
-          received_by?: string | null
-          shift_id?: string | null
           facturado?: boolean | null
+          id?: string
+          invoice_state?:
+            | Database["public"]["Enums"]["invoice_state_type"]
+            | null
           iva_amount?: number | null
-          invoice_state?: Database["public"]["Enums"]["invoice_state_type"]
-          refunded_at?: string | null
+          method?: string
+          payment_date?: string | null
+          received_by?: string | null
           refund_amount?: number | null
+          refunded_at?: string | null
+          shift_id?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -529,227 +932,138 @@ export type Database = {
           },
         ]
       }
-      cfdi_invoices: {
-        Row: {
-          id: string
-          clinic_id: string
-          facturapi_id: string | null
-          uuid: string | null
-          type: Database["public"]["Enums"]["cfdi_type"]
-          status: Database["public"]["Enums"]["cfdi_status"]
-          folio: string | null
-          total: number
-          subtotal: number
-          tax: number
-          currency: string
-          emitted_at: string | null
-          related_cfdi_id: string | null
-          global_period_start: string | null
-          global_period_end: string | null
-          created_at: string
-          updated_at: string
-          canceled_at: string | null
-          pdf_url: string | null
-          xml_url: string | null
-          raw_response: Json | null
-          source: string | null
-        }
-        Insert: {
-          id?: string
-          clinic_id: string
-          facturapi_id?: string | null
-          uuid?: string | null
-          type: Database["public"]["Enums"]["cfdi_type"]
-          status?: Database["public"]["Enums"]["cfdi_status"]
-          folio?: string | null
-          total?: number
-          subtotal?: number
-          tax?: number
-          currency?: string
-          emitted_at?: string | null
-          related_cfdi_id?: string | null
-          global_period_start?: string | null
-          global_period_end?: string | null
-          created_at?: string
-          updated_at?: string
-          canceled_at?: string | null
-          pdf_url?: string | null
-          xml_url?: string | null
-          raw_response?: Json | null
-          source?: string | null
-        }
-        Update: {
-          id?: string
-          clinic_id?: string
-          facturapi_id?: string | null
-          uuid?: string | null
-          type?: Database["public"]["Enums"]["cfdi_type"]
-          status?: Database["public"]["Enums"]["cfdi_status"]
-          folio?: string | null
-          total?: number
-          subtotal?: number
-          tax?: number
-          currency?: string
-          emitted_at?: string | null
-          related_cfdi_id?: string | null
-          global_period_start?: string | null
-          global_period_end?: string | null
-          created_at?: string
-          updated_at?: string
-          canceled_at?: string | null
-          pdf_url?: string | null
-          xml_url?: string | null
-          raw_response?: Json | null
-          source?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cfdi_invoices_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cfdi_invoices_related_cfdi_id_fkey"
-            columns: ["related_cfdi_id"]
-            isOneToOne: false
-            referencedRelation: "cfdi_invoices"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      cfdi_invoice_payments: {
-        Row: {
-          id: string
-          cfdi_invoice_id: string
-          payment_id: string
-          amount: number
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          cfdi_invoice_id: string
-          payment_id: string
-          amount: number
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          cfdi_invoice_id?: string
-          payment_id?: string
-          amount?: number
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cfdi_invoice_payments_cfdi_invoice_id_fkey"
-            columns: ["cfdi_invoice_id"]
-            isOneToOne: false
-            referencedRelation: "cfdi_invoices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cfdi_invoice_payments_payment_id_fkey"
-            columns: ["payment_id"]
-            isOneToOne: false
-            referencedRelation: "payments"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       profiles: {
         Row: {
           clinic_id: string | null
-          created_at: string
+          created_at: string | null
           email: string
-          first_name: string
+          first_name: string | null
           id: string
-          is_active: boolean
-          is_clinic_owner: boolean
-          last_name: string
-          phone: string | null
-          role: Database["public"]["Enums"]["user_role"]
+          is_clinic_owner: boolean | null
+          last_name: string | null
+          role: Database["public"]["Enums"]["user_role"] | null
           signature_image_url: string | null
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
           clinic_id?: string | null
-          created_at?: string
+          created_at?: string | null
           email: string
-          first_name: string
+          first_name?: string | null
           id: string
-          is_active?: boolean
-          is_clinic_owner?: boolean
-          last_name: string
-          phone?: string | null
-          role?: Database["public"]["Enums"]["user_role"]
+          is_clinic_owner?: boolean | null
+          last_name?: string | null
+          role?: Database["public"]["Enums"]["user_role"] | null
           signature_image_url?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
           clinic_id?: string | null
-          created_at?: string
+          created_at?: string | null
           email?: string
-          first_name?: string
+          first_name?: string | null
           id?: string
-          is_active?: boolean
-          is_clinic_owner?: boolean
-          last_name?: string
-          phone?: string | null
-          role?: Database["public"]["Enums"]["user_role"]
+          is_clinic_owner?: boolean | null
+          last_name?: string | null
+          role?: Database["public"]["Enums"]["user_role"] | null
           signature_image_url?: string | null
-          updated_at?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      security_settings: {
+        Row: {
+          backup_codes: string[] | null
+          clinic_id: string
+          created_at: string | null
+          finance_pin_hash: string | null
+          finance_pin_required: boolean | null
+          finance_pin_salt: string | null
+          id: string
+          login_notifications: boolean | null
+          max_login_attempts: number | null
+          password_expiry_days: number | null
+          session_timeout_minutes: number | null
+          two_factor_enabled: boolean | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          backup_codes?: string[] | null
+          clinic_id: string
+          created_at?: string | null
+          finance_pin_hash?: string | null
+          finance_pin_required?: boolean | null
+          finance_pin_salt?: string | null
+          id?: string
+          login_notifications?: boolean | null
+          max_login_attempts?: number | null
+          password_expiry_days?: number | null
+          session_timeout_minutes?: number | null
+          two_factor_enabled?: boolean | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          backup_codes?: string[] | null
+          clinic_id?: string
+          created_at?: string | null
+          finance_pin_hash?: string | null
+          finance_pin_required?: boolean | null
+          finance_pin_salt?: string | null
+          id?: string
+          login_notifications?: boolean | null
+          max_login_attempts?: number | null
+          password_expiry_days?: number | null
+          session_timeout_minutes?: number | null
+          two_factor_enabled?: boolean | null
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "profiles_clinic_id_fkey"
+            foreignKeyName: "security_settings_clinic_id_fkey"
             columns: ["clinic_id"]
             isOneToOne: false
             referencedRelation: "clinics"
             referencedColumns: ["id"]
-          }
+          },
+          {
+            foreignKeyName: "security_settings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       shifts: {
         Row: {
           clinic_id: string
-          closing_amount: number | null
-          created_at: string
-          end_time: string | null
+          created_at: string | null
+          end_time: string
           id: string
-          is_closed: boolean
-          notes: string | null
-          opening_amount: number
           start_time: string
-          updated_at: string
-          user_id: string
+          therapist_id: string
+          updated_at: string | null
         }
         Insert: {
-          clinic_id?: string
-          closing_amount?: number | null
-          created_at?: string
-          end_time?: string | null
+          clinic_id: string
+          created_at?: string | null
+          end_time: string
           id?: string
-          is_closed?: boolean
-          notes?: string | null
-          opening_amount?: number
           start_time: string
-          updated_at?: string
-          user_id: string
+          therapist_id: string
+          updated_at?: string | null
         }
         Update: {
           clinic_id?: string
-          closing_amount?: number | null
-          created_at?: string
-          end_time?: string | null
+          created_at?: string | null
+          end_time?: string
           id?: string
-          is_closed?: boolean
-          notes?: string | null
-          opening_amount?: number
           start_time?: string
-          updated_at?: string
-          user_id?: string
+          therapist_id?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -760,10 +1074,172 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "shifts_user_id_fkey"
-            columns: ["user_id"]
+            foreignKeyName: "shifts_therapist_id_fkey"
+            columns: ["therapist_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "therapists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscription_invoices: {
+        Row: {
+          amount: number
+          clinic_id: string
+          created_at: string | null
+          currency: string | null
+          due_date: string | null
+          id: string
+          invoice_date: string | null
+          paid_at: string | null
+          status: string
+          stripe_invoice_id: string | null
+          subscription_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          clinic_id: string
+          created_at?: string | null
+          currency?: string | null
+          due_date?: string | null
+          id?: string
+          invoice_date?: string | null
+          paid_at?: string | null
+          status: string
+          stripe_invoice_id?: string | null
+          subscription_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          clinic_id?: string
+          created_at?: string | null
+          currency?: string | null
+          due_date?: string | null
+          id?: string
+          invoice_date?: string | null
+          paid_at?: string | null
+          status?: string
+          stripe_invoice_id?: string | null
+          subscription_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_invoices_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_invoices_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscription_plans: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          features: Json
+          id: string
+          is_active: boolean | null
+          is_popular: boolean | null
+          max_therapists: number
+          name: string
+          price_monthly: number
+          price_yearly: number
+          slug: string
+          sort_order: number | null
+          stripe_monthly_price_id: string | null
+          stripe_yearly_price_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          features?: Json
+          id?: string
+          is_active?: boolean | null
+          is_popular?: boolean | null
+          max_therapists: number
+          name: string
+          price_monthly: number
+          price_yearly: number
+          slug: string
+          sort_order?: number | null
+          stripe_monthly_price_id?: string | null
+          stripe_yearly_price_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          features?: Json
+          id?: string
+          is_active?: boolean | null
+          is_popular?: boolean | null
+          max_therapists?: number
+          name?: string
+          price_monthly?: number
+          price_yearly?: number
+          slug?: string
+          sort_order?: number | null
+          stripe_monthly_price_id?: string | null
+          stripe_yearly_price_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      subscription_usage: {
+        Row: {
+          appointment_count: number
+          client_count: number
+          clinic_id: string
+          created_at: string | null
+          date: string
+          id: string
+          subscription_id: string
+          therapist_count: number
+        }
+        Insert: {
+          appointment_count?: number
+          client_count?: number
+          clinic_id: string
+          created_at?: string | null
+          date: string
+          id?: string
+          subscription_id: string
+          therapist_count?: number
+        }
+        Update: {
+          appointment_count?: number
+          client_count?: number
+          clinic_id?: string
+          created_at?: string | null
+          date?: string
+          id?: string
+          subscription_id?: string
+          therapist_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_usage_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_usage_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_subscriptions"
             referencedColumns: ["id"]
           },
         ]
@@ -773,43 +1249,37 @@ export type Database = {
           address: string | null
           clinic_id: string
           contact_person: string | null
-          created_at: string
+          created_at: string | null
           email: string | null
           id: string
-          is_active: boolean
+          is_active: boolean | null
           name: string
-          notes: string | null
           phone: string | null
-          products_provided: string[] | null
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
           address?: string | null
-          clinic_id?: string
+          clinic_id: string
           contact_person?: string | null
-          created_at?: string
+          created_at?: string | null
           email?: string | null
           id?: string
-          is_active?: boolean
+          is_active?: boolean | null
           name: string
-          notes?: string | null
           phone?: string | null
-          products_provided?: string[] | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
           address?: string | null
           clinic_id?: string
           contact_person?: string | null
-          created_at?: string
+          created_at?: string | null
           email?: string | null
           id?: string
-          is_active?: boolean
+          is_active?: boolean | null
           name?: string
-          notes?: string | null
           phone?: string | null
-          products_provided?: string[] | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -818,86 +1288,277 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clinics"
             referencedColumns: ["id"]
-          }
+          },
+        ]
+      }
+      sync_logs: {
+        Row: {
+          appointment_id: string | null
+          changed_at: string | null
+          clinic_id: string
+          created_at: string | null
+          error_message: string | null
+          id: string
+          status: string
+          sync_type: string
+        }
+        Insert: {
+          appointment_id?: string | null
+          changed_at?: string | null
+          clinic_id: string
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          status: string
+          sync_type: string
+        }
+        Update: {
+          appointment_id?: string | null
+          changed_at?: string | null
+          clinic_id?: string
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          status?: string
+          sync_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_logs_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sync_logs_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      therapist_payouts: {
+        Row: {
+          amount: number
+          cfdi_invoice_id: string | null
+          clinic_id: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          notes: string | null
+          payment_method: string
+          payout_date: string
+          period_end: string
+          period_start: string
+          status: string
+          therapist_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          cfdi_invoice_id?: string | null
+          clinic_id: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          payment_method?: string
+          payout_date?: string
+          period_end: string
+          period_start: string
+          status?: string
+          therapist_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          cfdi_invoice_id?: string | null
+          clinic_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          payment_method?: string
+          payout_date?: string
+          period_end?: string
+          period_start?: string
+          status?: string
+          therapist_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "therapist_payouts_cfdi_invoice_id_fkey"
+            columns: ["cfdi_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "cfdi_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "therapist_payouts_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "therapist_payouts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "therapist_payouts_therapist_id_fkey"
+            columns: ["therapist_id"]
+            isOneToOne: false
+            referencedRelation: "therapists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      therapist_schedule_rules: {
+        Row: {
+          buffer_minutes: number
+          clinic_id: string
+          created_at: string | null
+          end_time: string
+          id: string
+          is_active: boolean
+          slot_minutes: number
+          start_time: string
+          therapist_id: string | null
+          updated_at: string | null
+          weekday: number
+        }
+        Insert: {
+          buffer_minutes?: number
+          clinic_id: string
+          created_at?: string | null
+          end_time: string
+          id?: string
+          is_active?: boolean
+          slot_minutes?: number
+          start_time: string
+          therapist_id?: string | null
+          updated_at?: string | null
+          weekday: number
+        }
+        Update: {
+          buffer_minutes?: number
+          clinic_id?: string
+          created_at?: string | null
+          end_time?: string
+          id?: string
+          is_active?: boolean
+          slot_minutes?: number
+          start_time?: string
+          therapist_id?: string | null
+          updated_at?: string | null
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "therapist_schedule_rules_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "therapist_schedule_rules_therapist_id_fkey"
+            columns: ["therapist_id"]
+            isOneToOne: false
+            referencedRelation: "therapists"
+            referencedColumns: ["id"]
+          },
         ]
       }
       therapists: {
         Row: {
           archived: boolean
-          calendar_color_id: string | null
+          calendar_color: string | null
+          calendar_color_id: string
           clinic_id: string
-          compensation_type: string
           commission_percentage: number | null
-          created_at: string
+          compensation_type: string
+          created_at: string | null
           email: string | null
           first_name: string | null
           fixed_session_amount: number | null
-          google_calendar_id: string | null
           id: string
           incentive_enabled: boolean
           incentive_fixed_bonus: number | null
           incentive_percentage_bonus: number | null
           incentive_threshold_sessions: number | null
-          is_active: boolean
+          is_active: boolean | null
           last_name: string | null
           license_number: string | null
+          percentage: number | null
+          phone: string | null
           retention_enabled: boolean
           retention_rate: number
           signature_image_url: string | null
           specialties: string[] | null
-          updated_at: string
+          updated_at: string | null
           user_id: string | null
         }
         Insert: {
           archived?: boolean
-          calendar_color_id?: string | null
-          clinic_id?: string
-          compensation_type?: string
+          calendar_color?: string | null
+          calendar_color_id?: string
+          clinic_id: string
           commission_percentage?: number | null
-          created_at?: string
+          compensation_type?: string
+          created_at?: string | null
           email?: string | null
           first_name?: string | null
           fixed_session_amount?: number | null
-          google_calendar_id?: string | null
           id?: string
           incentive_enabled?: boolean
           incentive_fixed_bonus?: number | null
           incentive_percentage_bonus?: number | null
           incentive_threshold_sessions?: number | null
-          is_active?: boolean
+          is_active?: boolean | null
           last_name?: string | null
           license_number?: string | null
+          percentage?: number | null
+          phone?: string | null
           retention_enabled?: boolean
           retention_rate?: number
           signature_image_url?: string | null
           specialties?: string[] | null
-          updated_at?: string
+          updated_at?: string | null
           user_id?: string | null
         }
         Update: {
           archived?: boolean
-          calendar_color_id?: string | null
+          calendar_color?: string | null
+          calendar_color_id?: string
           clinic_id?: string
-          compensation_type?: string
           commission_percentage?: number | null
-          created_at?: string
+          compensation_type?: string
+          created_at?: string | null
           email?: string | null
           first_name?: string | null
           fixed_session_amount?: number | null
-          google_calendar_id?: string | null
           id?: string
           incentive_enabled?: boolean
           incentive_fixed_bonus?: number | null
           incentive_percentage_bonus?: number | null
           incentive_threshold_sessions?: number | null
-          is_active?: boolean
+          is_active?: boolean | null
           last_name?: string | null
           license_number?: string | null
+          percentage?: number | null
+          phone?: string | null
           retention_enabled?: boolean
           retention_rate?: number
           signature_image_url?: string | null
           specialties?: string[] | null
-          updated_at?: string
+          updated_at?: string | null
           user_id?: string | null
         }
         Relationships: [
@@ -920,45 +1581,45 @@ export type Database = {
       treatments: {
         Row: {
           clinic_id: string
-          created_at: string
+          created_at: string | null
           description: string | null
-          duration_minutes: number
+          duration_minutes: number | null
           id: string
-          is_active: boolean
+          is_active: boolean | null
           name: string
           price: number | null
-          updated_at: string
           sat_product_service_code: string | null
           sat_unit_code: string | null
-          vat_exempt: boolean
+          updated_at: string | null
+          vat_exempt: boolean | null
         }
         Insert: {
-          clinic_id?: string
-          created_at?: string
+          clinic_id: string
+          created_at?: string | null
           description?: string | null
-          duration_minutes?: number
+          duration_minutes?: number | null
           id?: string
-          is_active?: boolean
+          is_active?: boolean | null
           name: string
           price?: number | null
-          updated_at?: string
           sat_product_service_code?: string | null
           sat_unit_code?: string | null
-          vat_exempt?: boolean
+          updated_at?: string | null
+          vat_exempt?: boolean | null
         }
         Update: {
           clinic_id?: string
-          created_at?: string
+          created_at?: string | null
           description?: string | null
-          duration_minutes?: number
+          duration_minutes?: number | null
           id?: string
-          is_active?: boolean
+          is_active?: boolean | null
           name?: string
           price?: number | null
-          updated_at?: string
           sat_product_service_code?: string | null
           sat_unit_code?: string | null
-          vat_exempt?: boolean
+          updated_at?: string | null
+          vat_exempt?: boolean | null
         }
         Relationships: [
           {
@@ -967,193 +1628,72 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clinics"
             referencedColumns: ["id"]
-          }
-        ]
-      }
-      therapist_payouts: {
-        Row: {
-          id: string
-          clinic_id: string
-          therapist_id: string
-          period_start: string
-          period_end: string
-          payout_date: string
-          amount: number
-          payment_method: string
-          notes: string | null
-          status: string
-          created_by: string | null
-          created_at: string
-          updated_at: string
-          cfdi_invoice_id: string | null
-        }
-        Insert: {
-          id?: string
-          clinic_id: string
-          therapist_id: string
-          period_start: string
-          period_end: string
-          payout_date?: string
-          amount: number
-          payment_method?: string
-          notes?: string | null
-          status?: string
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-          cfdi_invoice_id?: string | null
-        }
-        Update: {
-          id?: string
-          clinic_id?: string
-          therapist_id?: string
-          period_start?: string
-          period_end?: string
-          payout_date?: string
-          amount?: number
-          payment_method?: string
-          notes?: string | null
-          status?: string
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-          cfdi_invoice_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "therapist_payouts_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "therapist_payouts_therapist_id_fkey"
-            columns: ["therapist_id"]
-            isOneToOne: false
-            referencedRelation: "therapists"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "therapist_payouts_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "therapist_payouts_cfdi_invoice_id_fkey"
-            columns: ["cfdi_invoice_id"]
-            isOneToOne: false
-            referencedRelation: "cfdi_invoices"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      sync_logs: {
-        Row: {
-          appointment_id: string | null
-          changed_at: string | null
-          clinic_id: string
-          created_at: string | null
-          error_message: string | null
-          id: string
-          new_status: string | null
-          old_status: string | null
-        }
-        Insert: {
-          appointment_id?: string | null
-          changed_at?: string | null
-          clinic_id?: string
-          created_at?: string | null
-          error_message?: string | null
-          id?: string
-          new_status?: string | null
-          old_status?: string | null
-        }
-        Update: {
-          appointment_id?: string | null
-          changed_at?: string | null
-          clinic_id?: string
-          created_at?: string | null
-          error_message?: string | null
-          id?: string
-          new_status?: string | null
-          old_status?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sync_logs_appointment_id_fkey"
-            columns: ["appointment_id"]
-            isOneToOne: false
-            referencedRelation: "appointments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sync_logs_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          }
         ]
       }
       user_preferences: {
         Row: {
-          id: string
-          user_id: string
+          appointment_reminders: boolean | null
+          calendar_view: string | null
           clinic_id: string
-          email_notifications: boolean
-          push_notifications: boolean
-          appointment_reminders: boolean
-          payment_reminders: boolean
-          theme: string
-          language: string
-          default_dashboard_view: string
-          show_quick_stats: boolean
-          show_recent_activity: boolean
-          calendar_view: string
-          show_past_appointments: boolean
-          created_at: string
-          updated_at: string
+          created_at: string | null
+          default_dashboard_view: string | null
+          email_notifications: boolean | null
+          id: string
+          language: string | null
+          payment_reminders: boolean | null
+          push_notifications: boolean | null
+          show_past_appointments: boolean | null
+          show_quick_stats: boolean | null
+          show_recent_activity: boolean | null
+          theme: string | null
+          updated_at: string | null
+          user_id: string
         }
         Insert: {
-          id?: string
-          user_id: string
+          appointment_reminders?: boolean | null
+          calendar_view?: string | null
           clinic_id: string
-          email_notifications?: boolean
-          push_notifications?: boolean
-          appointment_reminders?: boolean
-          payment_reminders?: boolean
-          theme?: string
-          language?: string
-          default_dashboard_view?: string
-          show_quick_stats?: boolean
-          show_recent_activity?: boolean
-          calendar_view?: string
-          show_past_appointments?: boolean
-          created_at?: string
-          updated_at?: string
+          created_at?: string | null
+          default_dashboard_view?: string | null
+          email_notifications?: boolean | null
+          id?: string
+          language?: string | null
+          payment_reminders?: boolean | null
+          push_notifications?: boolean | null
+          show_past_appointments?: boolean | null
+          show_quick_stats?: boolean | null
+          show_recent_activity?: boolean | null
+          theme?: string | null
+          updated_at?: string | null
+          user_id: string
         }
         Update: {
-          id?: string
-          user_id?: string
+          appointment_reminders?: boolean | null
+          calendar_view?: string | null
           clinic_id?: string
-          email_notifications?: boolean
-          push_notifications?: boolean
-          appointment_reminders?: boolean
-          payment_reminders?: boolean
-          theme?: string
-          language?: string
-          default_dashboard_view?: string
-          show_quick_stats?: boolean
-          show_recent_activity?: boolean
-          calendar_view?: string
-          show_past_appointments?: boolean
-          created_at?: string
-          updated_at?: string
+          created_at?: string | null
+          default_dashboard_view?: string | null
+          email_notifications?: boolean | null
+          id?: string
+          language?: string | null
+          payment_reminders?: boolean | null
+          push_notifications?: boolean | null
+          show_past_appointments?: boolean | null
+          show_quick_stats?: boolean | null
+          show_recent_activity?: boolean | null
+          theme?: string | null
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "user_preferences_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_preferences_user_id_fkey"
             columns: ["user_id"]
@@ -1161,616 +1701,62 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "user_preferences_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      user_sessions: {
-        Row: {
-          id: string
-          user_id: string
-          clinic_id: string
-          session_token: string
-          device_info: Json | null
-          ip_address: string | null
-          user_agent: string | null
-          is_active: boolean
-          expires_at: string
-          created_at: string
-          last_activity_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          clinic_id: string
-          session_token: string
-          device_info?: Json | null
-          ip_address?: string | null
-          user_agent?: string | null
-          is_active?: boolean
-          expires_at: string
-          created_at?: string
-          last_activity_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          clinic_id?: string
-          session_token?: string
-          device_info?: Json | null
-          ip_address?: string | null
-          user_agent?: string | null
-          is_active?: boolean
-          expires_at?: string
-          created_at?: string
-          last_activity_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_sessions_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_sessions_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      login_history: {
-        Row: {
-          id: string
-          user_id: string | null
-          clinic_id: string
-          email: string
-          ip_address: string | null
-          user_agent: string | null
-          success: boolean
-          failure_reason: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id?: string | null
-          clinic_id: string
-          email: string
-          ip_address?: string | null
-          user_agent?: string | null
-          success: boolean
-          failure_reason?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string | null
-          clinic_id?: string
-          email?: string
-          ip_address?: string | null
-          user_agent?: string | null
-          success?: boolean
-          failure_reason?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "login_history_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "login_history_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      security_settings: {
-        Row: {
-          id: string
-          user_id: string
-          clinic_id: string
-          two_factor_enabled: boolean
-          two_factor_method: string
-          backup_codes: string[] | null
-          password_changed_at: string
-          require_password_change: boolean
-          max_concurrent_sessions: number
-          session_timeout_minutes: number
-          login_notifications: boolean
-          suspicious_activity_alerts: boolean
-          finance_pin_required: boolean
-          finance_pin_salt: string | null
-          finance_pin_hash: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          clinic_id: string
-          two_factor_enabled?: boolean
-          two_factor_method?: string
-          backup_codes?: string[] | null
-          password_changed_at?: string
-          require_password_change?: boolean
-          max_concurrent_sessions?: number
-          session_timeout_minutes?: number
-          login_notifications?: boolean
-          suspicious_activity_alerts?: boolean
-          finance_pin_required?: boolean
-          finance_pin_salt?: string | null
-          finance_pin_hash?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          clinic_id?: string
-          two_factor_enabled?: boolean
-          two_factor_method?: string
-          backup_codes?: string[] | null
-          password_changed_at?: string
-          require_password_change?: boolean
-          max_concurrent_sessions?: number
-          session_timeout_minutes?: number
-          login_notifications?: boolean
-          suspicious_activity_alerts?: boolean
-          finance_pin_required?: boolean
-          finance_pin_salt?: string | null
-          finance_pin_hash?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "security_settings_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "security_settings_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      subscription_plans: {
-        Row: {
-          id: string
-          name: string
-          slug: string
-          description: string | null
-          price_monthly: number
-          price_yearly: number
-          max_therapists: number
-          features: Json
-          stripe_monthly_price_id: string | null
-          stripe_yearly_price_id: string | null
-          is_active: boolean
-          is_popular: boolean
-          sort_order: number
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          name: string
-          slug: string
-          description?: string | null
-          price_monthly: number
-          price_yearly: number
-          max_therapists: number
-          features?: Json
-          stripe_monthly_price_id?: string | null
-          stripe_yearly_price_id?: string | null
-          is_active?: boolean
-          is_popular?: boolean
-          sort_order?: number
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          name?: string
-          slug?: string
-          description?: string | null
-          price_monthly?: number
-          price_yearly?: number
-          max_therapists?: number
-          features?: Json
-          stripe_monthly_price_id?: string | null
-          stripe_yearly_price_id?: string | null
-          is_active?: boolean
-          is_popular?: boolean
-          sort_order?: number
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      clinic_subscriptions: {
-        Row: {
-          id: string
-          clinic_id: string
-          plan_id: string
-          stripe_customer_id: string | null
-          stripe_subscription_id: string | null
-          status: string
-          current_period_start: string | null
-          current_period_end: string | null
-          cancel_at_period_end: boolean
-          canceled_at: string | null
-          trial_start: string | null
-          trial_end: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          clinic_id: string
-          plan_id: string
-          stripe_customer_id?: string | null
-          stripe_subscription_id?: string | null
-          status?: string
-          current_period_start?: string | null
-          current_period_end?: string | null
-          cancel_at_period_end?: boolean
-          canceled_at?: string | null
-          trial_start?: string | null
-          trial_end?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          clinic_id?: string
-          plan_id?: string
-          stripe_customer_id?: string | null
-          stripe_subscription_id?: string | null
-          status?: string
-          current_period_start?: string | null
-          current_period_end?: string | null
-          cancel_at_period_end?: boolean
-          canceled_at?: string | null
-          trial_start?: string | null
-          trial_end?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "clinic_subscriptions_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "clinic_subscriptions_plan_id_fkey"
-            columns: ["plan_id"]
-            isOneToOne: false
-            referencedRelation: "subscription_plans"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      subscription_usage: {
-        Row: {
-          id: string
-          clinic_id: string
-          subscription_id: string
-          date: string
-          therapist_count: number
-          appointment_count: number
-          client_count: number
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          clinic_id: string
-          subscription_id: string
-          date: string
-          therapist_count?: number
-          appointment_count?: number
-          client_count?: number
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          clinic_id?: string
-          subscription_id?: string
-          date?: string
-          therapist_count?: number
-          appointment_count?: number
-          client_count?: number
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "subscription_usage_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "subscription_usage_subscription_id_fkey"
-            columns: ["subscription_id"]
-            isOneToOne: false
-            referencedRelation: "clinic_subscriptions"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      subscription_invoices: {
-        Row: {
-          id: string
-          clinic_id: string
-          subscription_id: string
-          stripe_invoice_id: string | null
-          amount: number
-          currency: string
-          status: string
-          invoice_date: string | null
-          due_date: string | null
-          paid_at: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          clinic_id: string
-          subscription_id: string
-          stripe_invoice_id?: string | null
-          amount: number
-          currency?: string
-          status: string
-          invoice_date?: string | null
-          due_date?: string | null
-          paid_at?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          clinic_id?: string
-          subscription_id?: string
-          stripe_invoice_id?: string | null
-          amount?: number
-          currency?: string
-          status?: string
-          invoice_date?: string | null
-          due_date?: string | null
-          paid_at?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "subscription_invoices_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "subscription_invoices_subscription_id_fkey"
-            columns: ["subscription_id"]
-            isOneToOne: false
-            referencedRelation: "clinic_subscriptions"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      document_templates: {
-        Row: {
-          id: string
-          clinic_id: string
-          slug: string
-          name: string
-          description: string | null
-          type: string
-          category: string | null
-          language: string
-          version: number
-          is_active: boolean
-          schema: Json
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          clinic_id?: string
-          slug: string
-          name: string
-          description?: string | null
-          type: string
-          category?: string | null
-          language?: string
-          version?: number
-          is_active?: boolean
-          schema: Json
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          clinic_id?: string
-          slug?: string
-          name?: string
-          description?: string | null
-          type?: string
-          category?: string | null
-          language?: string
-          version?: number
-          is_active?: boolean
-          schema?: Json
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "document_templates_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      document_instances: {
-        Row: {
-          id: string
-          clinic_id: string
-          template_id: string
-          template_version: number
-          client_id: string
-          appointment_id: string | null
-          status: string
-          data: Json
-          rendered_pdf_url: string | null
-          share_token: string | null
-          responsible_person_type: 'therapist' | 'user' | 'clinic' | null
-          responsible_person_id: string | null
-          created_by: string | null
-          created_at: string
-          updated_at: string
-          finalized_at: string | null
-        }
-        Insert: {
-          id?: string
-          clinic_id: string
-          template_id: string
-          template_version: number
-          client_id: string
-          appointment_id?: string | null
-          status?: string
-          data: Json
-          rendered_pdf_url?: string | null
-          share_token?: string | null
-          responsible_person_type?: 'therapist' | 'user' | 'clinic' | null
-          responsible_person_id?: string | null
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-          finalized_at?: string | null
-        }
-        Update: {
-          id?: string
-          clinic_id?: string
-          template_id?: string
-          template_version?: number
-          client_id?: string
-          appointment_id?: string | null
-          status?: string
-          data?: Json
-          rendered_pdf_url?: string | null
-          share_token?: string | null
-          responsible_person_type?: 'therapist' | 'user' | 'clinic' | null
-          responsible_person_id?: string | null
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-          finalized_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "document_instances_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "document_instances_template_id_fkey"
-            columns: ["template_id"]
-            isOneToOne: false
-            referencedRelation: "document_templates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "document_instances_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "document_instances_appointment_id_fkey"
-            columns: ["appointment_id"]
-            isOneToOne: false
-            referencedRelation: "appointments"
-            referencedColumns: ["id"]
-          }
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      subscription_performance_stats: {
+        Row: {
+          active_ratio: number | null
+          query_type: string | null
+          record_count: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      get_user_clinic_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      generate_backup_codes: { Args: never; Returns: string[] }
+      get_user_clinic_id: { Args: never; Returns: string }
       get_user_role: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: Database["public"]["Enums"]["user_role"]
       }
-      get_user_therapist_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      is_clinic_owner: {
-        Args: Record<PropertyKey, never>
+      get_user_therapist_id: { Args: never; Returns: string }
+      has_appointment_conflict: {
+        Args: {
+          end_time: string
+          exclude_appointment_id?: string
+          start_time: string
+          therapist_id: string
+        }
         Returns: boolean
       }
-      generate_backup_codes: {
-        Args: Record<PropertyKey, never>
-        Returns: string[]
-      }
-      log_login_attempt: {
+      is_clinic_owner: { Args: never; Returns: boolean }
+      log_slow_subscription_query: {
         Args: {
-          p_user_id: string
-          p_email: string
-          p_success: boolean
-          p_failure_reason?: string
+          clinic_id?: string
+          execution_time_ms: number
+          query_name: string
         }
         Returns: undefined
       }
-      get_clinic_subscription_status: {
-        Args: {
-          clinic_uuid: string
-        }
-        Returns: Json
-      }
     }
     Enums: {
-      appointment_status: "scheduled" | "confirmed" | "in_progress" | "waiting_checkout" | "completed" | "cancelled" | "no_show"
+      appointment_status:
+        | "scheduled"
+        | "confirmed"
+        | "in_progress"
+        | "waiting_checkout"
+        | "completed"
+        | "cancelled"
+        | "no_show"
       cfdi_status: "draft" | "issued" | "canceled"
       cfdi_type: "ingreso" | "egreso" | "pago"
-      gender: "male" | "female" | "other" | "prefer_not_to_say"
-      invoice_state_type: "non_invoiced" | "individually_invoiced" | "globally_invoiced"
-      payment_method: "cash" | "card" | "transfer" | "insurance"
+      gender_type: "male" | "female" | "other"
+      invoice_state_type:
+        | "non_invoiced"
+        | "individually_invoiced"
+        | "globally_invoiced"
       user_role: "admin" | "therapist" | "reception"
     }
     CompositeTypes: {
@@ -1779,21 +1765,25 @@ export type Database = {
   }
 }
 
-type DefaultSchema = Database[Extract<keyof Database, "public">]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
@@ -1811,14 +1801,16 @@ export type Tables<
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
@@ -1834,14 +1826,16 @@ export type TablesInsert<
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
@@ -1857,14 +1851,16 @@ export type TablesUpdate<
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
@@ -1872,14 +1868,16 @@ export type Enums<
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
@@ -1887,12 +1885,23 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      appointment_status: ["scheduled", "confirmed", "in_progress", "waiting_checkout", "completed", "cancelled", "no_show"],
+      appointment_status: [
+        "scheduled",
+        "confirmed",
+        "in_progress",
+        "waiting_checkout",
+        "completed",
+        "cancelled",
+        "no_show",
+      ],
       cfdi_status: ["draft", "issued", "canceled"],
       cfdi_type: ["ingreso", "egreso", "pago"],
-      gender: ["male", "female", "other", "prefer_not_to_say"],
-      invoice_state_type: ["non_invoiced", "individually_invoiced", "globally_invoiced"],
-      payment_method: ["cash", "card", "transfer", "insurance"],
+      gender_type: ["male", "female", "other"],
+      invoice_state_type: [
+        "non_invoiced",
+        "individually_invoiced",
+        "globally_invoiced",
+      ],
       user_role: ["admin", "therapist", "reception"],
     },
   },

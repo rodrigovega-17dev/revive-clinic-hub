@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { useCreateClient } from '@/hooks/useClients';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
@@ -37,8 +38,9 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
     tax_regime: '',
     cfdi_use: '',
     cfdi_email: '',
+    pay_therapist_in_full: false,
   });
-  
+
   const createClient = useCreateClient();
   const { toast } = useToast();
 
@@ -90,6 +92,7 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
         tax_regime: formData.tax_regime.trim() || undefined,
         cfdi_use: formData.cfdi_use.trim() || undefined,
         cfdi_email: cfdiEmail || undefined,
+        pay_therapist_in_full: formData.pay_therapist_in_full,
       });
 
       toast({
@@ -114,6 +117,7 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
         tax_regime: '',
         cfdi_use: '',
         cfdi_email: '',
+        pay_therapist_in_full: false,
       });
     } catch (error) {
       toast({
@@ -279,6 +283,19 @@ const ClientForm = ({ open, onClose }: ClientFormProps) => {
               onChange={(e) => setFormData(prev => ({ ...prev, medical_notes: e.target.value }))}
               className="bg-input border-border text-foreground min-h-[100px]"
             />
+          </div>
+
+          <div className="border-t pt-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium text-foreground">{t('clients.payTherapistInFull')}</Label>
+                <p className="text-sm text-muted-foreground">{t('clients.payTherapistInFullDesc')}</p>
+              </div>
+              <Switch
+                checked={formData.pay_therapist_in_full}
+                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, pay_therapist_in_full: checked }))}
+              />
+            </div>
           </div>
 
           {/* Optional CFDI / tax fields */}

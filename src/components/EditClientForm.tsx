@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { useUpdateClient } from '@/hooks/useClients';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
@@ -40,8 +41,9 @@ const EditClientForm = ({ open, onClose, client }: EditClientFormProps) => {
     tax_regime: '',
     cfdi_use: '',
     cfdi_email: '',
+    pay_therapist_in_full: false,
   });
-  
+
   const updateClient = useUpdateClient();
   const { toast } = useToast();
 
@@ -64,6 +66,7 @@ const EditClientForm = ({ open, onClose, client }: EditClientFormProps) => {
         tax_regime: client.tax_regime || '',
         cfdi_use: client.cfdi_use || '',
         cfdi_email: client.cfdi_email || '',
+        pay_therapist_in_full: client.pay_therapist_in_full || false,
       });
     }
   }, [client, open]);
@@ -116,6 +119,7 @@ const EditClientForm = ({ open, onClose, client }: EditClientFormProps) => {
         tax_regime: formData.tax_regime.trim() || null,
         cfdi_use: formData.cfdi_use.trim() || null,
         cfdi_email: cfdiEmail || null,
+        pay_therapist_in_full: formData.pay_therapist_in_full,
       });
 
       toast({
@@ -288,6 +292,19 @@ const EditClientForm = ({ open, onClose, client }: EditClientFormProps) => {
               onChange={(e) => setFormData(prev => ({ ...prev, medical_notes: e.target.value }))}
               className="bg-input border-border text-foreground min-h-[100px]"
             />
+          </div>
+
+          <div className="border-t pt-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium text-foreground">{t('clients.payTherapistInFull')}</Label>
+                <p className="text-sm text-muted-foreground">{t('clients.payTherapistInFullDesc')}</p>
+              </div>
+              <Switch
+                checked={formData.pay_therapist_in_full}
+                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, pay_therapist_in_full: checked }))}
+              />
+            </div>
           </div>
 
           <div className="border-t pt-4 space-y-4">

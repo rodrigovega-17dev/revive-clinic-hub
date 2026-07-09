@@ -494,12 +494,12 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
 
   const title =
     context === 'client'
-      ? t('documents.clientDocumentsTitle', 'Documentos del cliente')
+      ? t('documents.clientDocumentsTitle', 'Documentos del paciente')
       : t('documents.appointmentDocumentsTitle', 'Documentos de la cita');
 
   const emptyText =
     context === 'client'
-      ? t('documents.noClientDocuments', 'No hay documentos registrados para este cliente.')
+      ? t('documents.noClientDocuments', 'No hay documentos registrados para este paciente.')
       : t('documents.noAppointmentDocuments', 'No hay documentos registrados para esta cita.');
 
   return (

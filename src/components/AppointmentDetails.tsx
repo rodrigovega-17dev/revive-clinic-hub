@@ -63,6 +63,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const [useBalanceCredit, setUseBalanceCredit] = useState(false);
   const [balanceApplied, setBalanceApplied] = useState(0);
   const [requiereFactura, setRequiereFactura] = useState(false);
+  const [payTherapistInFull, setPayTherapistInFull] = useState(false);
   const [rescheduleData, setRescheduleData] = useState({
     start_time: appointment ? format(new Date(appointment.start_time), "yyyy-MM-dd'T'HH:mm") : '',
     duration: appointment ?
@@ -114,7 +115,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
         .from('appointments')
         .select(`
           *,
-          clients (first_name, last_name, email, phone),
+          clients (first_name, last_name, email, phone, pay_therapist_in_full),
           therapists (first_name, last_name, calendar_color_id, email),
           treatments (name, price, duration_minutes)
         `)
@@ -249,6 +250,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
         payment_status: 'paid',
         payment_method: amountDue > 0 ? paymentData.method : 'balance',
         payment_date: new Date().toISOString(),
+        pay_therapist_in_full: payTherapistInFull,
       });
       setDisplayAppointment(data);
 
@@ -490,6 +492,9 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
     });
     setUseBalanceCredit(false);
     setBalanceApplied(0);
+    // Always starts unchecked — it's an optional per-appointment choice, never auto-applied
+    // just because the client is flagged as pay-in-full-eligible.
+    setPayTherapistInFull(false);
     if (appointment.status === 'completed' && appointment.payment_status !== 'paid') {
       setActiveTab('payment');
     } else {
@@ -966,6 +971,19 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                       {t('appointments.requiereFactura')}
                     </Label>
                   </div>
+
+                  {apt?.clients?.pay_therapist_in_full && (
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="payTherapistInFull"
+                        checked={payTherapistInFull}
+                        onCheckedChange={(checked) => setPayTherapistInFull(checked === true)}
+                      />
+                      <Label htmlFor="payTherapistInFull" className="text-foreground">
+                        {t('appointments.payTherapistInFull')}
+                      </Label>
+                    </div>
+                  )}
 
                   <div className="p-3 bg-muted/50 rounded-lg space-y-2">
                     <div className="flex justify-between">

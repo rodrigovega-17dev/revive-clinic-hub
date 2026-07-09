@@ -1300,7 +1300,7 @@ const Settings = (): JSX.Element => {
                   ) : (
                     <Download className="h-4 w-4 mr-2" />
                   )}
-                  {t('settings.exportClients', 'Clientes (CSV)')}
+                  {t('settings.exportClients', 'Pacientes (CSV)')}
                 </Button>
                 <Button
                   variant="outline"

@@ -28,6 +28,9 @@ export type PayrollComputationInput = {
   periodPreIvaRevenue: number;
   quarterSessions: number;
   config: TherapistCompensationConfig;
+  /** When true, bypass commission/fixed compensation and pay the therapist 100% of
+   * periodPreIvaRevenue instead (retention, if enabled, still applies). */
+  payInFull?: boolean;
 };
 
 export type PayrollComputationResult = {
@@ -45,6 +48,18 @@ export type PayrollComputationResult = {
 const clampPercent = (value: number) => {
   if (Number.isNaN(value)) return 0;
   if (value < 0) return 0;
+  if (value > 100) return 100;
+  return value;
+};
+
+/**
+ * Retention rate can go negative: some clinics use it to gross up a
+ * therapist's pay (e.g. -16%) as a way to fiscally support them, rather than
+ * withhold from it. Same 100-point range, just mirrored below zero.
+ */
+const clampRetentionPercent = (value: number) => {
+  if (Number.isNaN(value)) return 0;
+  if (value < -100) return -100;
   if (value > 100) return 100;
   return value;
 };
@@ -161,13 +176,14 @@ export const computeTherapistPayroll = ({
   periodPreIvaRevenue,
   quarterSessions,
   config,
+  payInFull = false,
 }: PayrollComputationInput): PayrollComputationResult => {
   const compensationType = normalizeCompensationType(config.compensationType);
 
   const baseCommission = clampPercent(Number(config.commissionPercentage || 0));
   const baseFixedSessionAmount = Math.max(Number(config.fixedSessionAmount || 0), 0);
   const retentionEnabled = !!config.retentionEnabled;
-  const retentionRate = clampPercent(Number(config.retentionRate || 0));
+  const retentionRate = clampRetentionPercent(Number(config.retentionRate || 0));
   const incentiveEnabled = !!config.incentiveEnabled;
   const incentiveThresholdSessions = Math.max(Number(config.incentiveThresholdSessions || 0), 0);
   const incentivePercentageBonus = clampPercent(Number(config.incentivePercentageBonus || 0));
@@ -186,12 +202,15 @@ export const computeTherapistPayroll = ({
       ? baseFixedSessionAmount + (incentiveApplied ? incentiveFixedBonus : 0)
       : 0;
 
-  const grossEarnings =
-    compensationType === 'percentage'
+  const grossEarnings = payInFull
+    ? periodPreIvaRevenue
+    : compensationType === 'percentage'
       ? periodPreIvaRevenue * (effectiveCommissionPercentage / 100)
       : periodSessions * effectiveFixedSessionAmount;
 
-  const retentionAmount = retentionEnabled ? grossEarnings * (retentionRate / 100) : 0;
+  // Full-pay sessions are added on top, untouched by retention (whether it's a normal
+  // withholding or, with a negative rate, a bonus) — it's a straight 100% pass-through.
+  const retentionAmount = retentionEnabled && !payInFull ? grossEarnings * (retentionRate / 100) : 0;
   const netEarnings = grossEarnings - retentionAmount;
   const clinicEarnings = periodPreIvaRevenue - grossEarnings;
 

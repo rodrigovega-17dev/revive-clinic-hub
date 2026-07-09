@@ -101,7 +101,7 @@ export const DataImportDialog: React.FC<DataImportDialogProps> = ({
         <DialogHeader>
           <DialogTitle>{t('settings.importData')}</DialogTitle>
           <DialogDescription>
-            {t('settings.importDataDesc', 'Importa clientes y citas desde un archivo CSV.')}
+            {t('settings.importDataDesc', 'Importa pacientes y citas desde un archivo CSV.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -136,10 +136,10 @@ export const DataImportDialog: React.FC<DataImportDialogProps> = ({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="clients_only">
-                      {t('settings.importClientsOnly', 'Solo clientes')}
+                      {t('settings.importClientsOnly', 'Solo pacientes')}
                     </SelectItem>
                     <SelectItem value="clients_and_appointments">
-                      {t('settings.importClientsAndAppointments', 'Clientes y citas')}
+                      {t('settings.importClientsAndAppointments', 'Pacientes y citas')}
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -176,7 +176,7 @@ export const DataImportDialog: React.FC<DataImportDialogProps> = ({
           )}
 
           <p className="text-xs text-muted-foreground">
-            {t('settings.importCsvFormat', 'Clientes: first_name, last_name, email, phone. Citas: client_email, therapist_first_name, therapist_last_name, treatment_name, start_time, end_time, status.')}
+            {t('settings.importCsvFormat', 'Pacientes: first_name, last_name, email, phone. Citas: client_email, therapist_first_name, therapist_last_name, treatment_name, start_time, end_time, status.')}
           </p>
 
           <div className="flex justify-end gap-2 pt-2">

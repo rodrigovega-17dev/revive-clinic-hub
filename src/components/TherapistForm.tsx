@@ -100,7 +100,7 @@ const TherapistForm = ({ open, onClose }: TherapistFormProps) => {
         return;
       }
 
-      if (retentionEnabled && (Number.isNaN(parsedRetentionRate) || parsedRetentionRate < 0 || parsedRetentionRate > 100)) {
+      if (retentionEnabled && (Number.isNaN(parsedRetentionRate) || parsedRetentionRate < -100 || parsedRetentionRate > 100)) {
         toast({
           title: t('common.validationError'),
           description: t('therapists.invalidRetentionRate'),
@@ -357,7 +357,7 @@ const TherapistForm = ({ open, onClose }: TherapistFormProps) => {
                     <Input
                       id="retentionRate"
                       type="number"
-                      min="0"
+                      min="-100"
                       max="100"
                       step="0.01"
                       value={retentionRate}
@@ -365,6 +365,7 @@ const TherapistForm = ({ open, onClose }: TherapistFormProps) => {
                       placeholder="16"
                       className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
                     />
+                    <p className="text-xs text-muted-foreground">{t('therapists.retentionRateHint')}</p>
                   </div>
                 )}
               </div>

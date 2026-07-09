@@ -244,11 +244,13 @@ const Payroll = () => {
           payment_amount: appointment.payment_amount,
           payments: appointment.payments || [],
         });
+        const payInFull = !!appointment.pay_therapist_in_full;
         const computed = computeTherapistPayroll({
           periodSessions: 1,
           periodPreIvaRevenue: paymentSummary.preIvaRevenue,
           quarterSessions,
           config: appointmentConfig,
+          payInFull,
         });
 
         if (!acc[therapistId]) {
@@ -265,6 +267,9 @@ const Payroll = () => {
             therapistRetentionAmount: 0,
             therapistEarningsNet: 0,
             clinicEarnings: 0,
+            fullPayAppointments: 0,
+            fullPayAmount: 0,
+            fullPayDetails: [],
             appointments: []
           };
         }
@@ -277,6 +282,14 @@ const Payroll = () => {
         acc[therapistId].therapistRetentionAmount += computed.retentionAmount;
         acc[therapistId].therapistEarningsNet += computed.netEarnings;
         acc[therapistId].clinicEarnings += computed.clinicEarnings;
+        if (payInFull) {
+          acc[therapistId].fullPayAppointments += 1;
+          acc[therapistId].fullPayAmount += computed.grossEarnings;
+          acc[therapistId].fullPayDetails.push({
+            clientName: `${appointment.clients?.first_name || ''} ${appointment.clients?.last_name || ''}`.trim(),
+            amount: computed.grossEarnings,
+          });
+        }
         acc[therapistId].appointments.push(appointment);
 
         return acc;
@@ -850,6 +863,20 @@ const Payroll = () => {
                           : `${formatCurrencyWithClinic(Number(therapist.effectiveFixedSessionAmount || 0))}/${t('common.sessions')}`}
                         {therapist.incentiveApplied && ` · ${t('payroll.incentiveApplied')}`}
                       </div>
+                      {therapist.fullPayAppointments > 0 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge className="mt-1 cursor-help bg-purple-600 text-white hover:bg-purple-600">
+                              {t('payroll.fullPayBadge', { count: therapist.fullPayAppointments })}
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {therapist.fullPayDetails.map((detail: { clientName: string; amount: number }, i: number) => (
+                              <p key={i}>{detail.clientName}: {formatCurrencyWithClinic(detail.amount)}</p>
+                            ))}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
                     </TableCell>
                     <TableCell className="text-foreground">
                       {therapist.totalAppointments}
@@ -878,7 +905,7 @@ const Payroll = () => {
                         </TooltipTrigger>
                         <TooltipContent>
                           <p>{t('payroll.grossLabel')}: {formatCurrencyWithClinic(gross)}</p>
-                          <p>{t('payroll.retentionLabel')} ({retentionRate.toFixed(0)}%): −{formatCurrencyWithClinic(retentionAmount)}</p>
+                          <p>{t('payroll.retentionLabel')} ({retentionRate.toFixed(0)}%): {retentionAmount >= 0 ? '−' : '+'}{formatCurrencyWithClinic(Math.abs(retentionAmount))}</p>
                           {attributedExpenses > 0 && (
                             <p>{t('payroll.expensesShort')}: −{formatCurrencyWithClinic(attributedExpenses)}</p>
                           )}
