@@ -33,3 +33,6 @@ dist-ssr
 
 # Vite cache / generated
 vite.config.ts.timestamp-*.mjs
+
+# Local Supabase CLI cache/state
+supabase/.temp/
