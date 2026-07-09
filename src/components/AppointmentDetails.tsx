@@ -71,6 +71,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const [paymentData, setPaymentData] = useState({
     amount: appointment?.payment_amount || 0,
     method: appointment?.payment_method || '',
+    date: appointment?.start_time ? format(new Date(appointment.start_time), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
   });
   const [useBalanceCredit, setUseBalanceCredit] = useState(false);
   const [balanceApplied, setBalanceApplied] = useState(0);
@@ -261,17 +262,23 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
     }
 
     try {
+      // Selected payment date + current time-of-day, so same-day entries still sort
+      // chronologically while still letting the date itself be backdated/changed.
+      const now = new Date();
+      const paymentDateObj = new Date(paymentData.date + 'T00:00:00');
+      paymentDateObj.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+      const paymentDate = paymentDateObj.toISOString();
+
       const { data } = await updateAppointment.mutateAsync({
         id: appointment.id,
         payment_status: 'paid',
         payment_method: amountDue > 0 ? paymentData.method : 'balance',
-        payment_date: new Date().toISOString(),
+        payment_date: paymentDate,
         pay_therapist_in_full: payTherapistInFull,
       });
       setDisplayAppointment(data);
 
       let paymentError = null;
-      const paymentDate = new Date().toISOString();
       const paymentInserts: any[] = [];
 
       // Store credit applied as positive amount; method='balance' marks it as non-cash so it's excluded from revenue
@@ -505,6 +512,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
     setPaymentData({
       amount: appointment.payment_amount || 0,
       method: appointment.payment_method || '',
+      date: appointment.start_time ? format(new Date(appointment.start_time), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
     });
     setUseBalanceCredit(false);
     setBalanceApplied(0);
@@ -986,7 +994,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
 
                     <div className="space-y-2">
                       <Label htmlFor="method" className="text-foreground">{t('appointments.paymentMethod')}</Label>
-                      <Select value={paymentData.method} onValueChange={(value) => 
+                      <Select value={paymentData.method} onValueChange={(value) =>
                         setPaymentData(prev => ({ ...prev, method: value }))
                       }>
                         <SelectTrigger className="bg-input border-border text-foreground">
@@ -1000,6 +1008,17 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                           <SelectItem value="insurance" className="text-foreground">{t('appointments.insurance')}</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+
+                    <div className="space-y-2 col-span-2">
+                      <Label htmlFor="paymentDate" className="text-foreground">{t('appointments.paymentDate')}</Label>
+                      <Input
+                        id="paymentDate"
+                        type="date"
+                        value={paymentData.date}
+                        onChange={(e) => setPaymentData(prev => ({ ...prev, date: e.target.value }))}
+                        className="bg-input border-border text-foreground"
+                      />
                     </div>
                   </div>
 

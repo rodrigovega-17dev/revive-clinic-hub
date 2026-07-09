@@ -649,6 +649,7 @@
     "notSyncedWithGoogleCalendar": "Not synced with Google Calendar",
     "syncToGoogleCalendar": "Sync to Google Calendar",
     "paymentMethod": "Payment Method",
+    "paymentDate": "Payment Date",
     "view": "View",
     "searchByClient": "Search by patient",
     "revertPayment": "Revert Payment",

@@ -509,6 +509,7 @@
     "paymentAmount": "Monto de Pago",
     "paymentStatus": "Estado de Pago",
     "paymentMethod": "Método de Pago",
+    "paymentDate": "Fecha de Pago",
     "actions": "Acciones",
     "notes": "Notas",
     "scheduled": "Programada",
