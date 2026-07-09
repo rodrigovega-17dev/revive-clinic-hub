@@ -646,7 +646,16 @@
     "notSyncedWithGoogleCalendar": "No sincronizado con Google Calendar",
     "syncToGoogleCalendar": "Sincronizar con Google Calendar",
     "view": "Ver",
-    "searchByClient": "Buscar por paciente"
+    "searchByClient": "Buscar por paciente",
+    "revertPayment": "Revertir Pago",
+    "revertPaymentTitle": "¿Revertir este pago?",
+    "revertPaymentDescription": "Selecciona el pago a revertir. Se eliminará el registro de pago y, si era el último, la cita volverá a estar pendiente de pago. El balance del paciente se ajustará automáticamente.",
+    "revertPaymentConfirm": "Revertir Pago",
+    "paymentReverted": "Pago revertido correctamente.",
+    "revertPaymentFailed": "No se pudo revertir el pago. Intenta de nuevo.",
+    "revertBlockedInvoiced": "Este pago ya tiene una factura (CFDI) emitida y no puede revertirse desde aquí.",
+    "revertBlockedInvoicedShort": "Facturado",
+    "revertBlockedPayroll": "Este pago ya fue incluido en una nómina pagada al terapeuta y no puede revertirse desde aquí."
   },
   "clients": {
     "title": "Pacientes",

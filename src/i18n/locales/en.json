@@ -646,7 +646,16 @@
     "syncToGoogleCalendar": "Sync to Google Calendar",
     "paymentMethod": "Payment Method",
     "view": "View",
-    "searchByClient": "Search by patient"
+    "searchByClient": "Search by patient",
+    "revertPayment": "Revert Payment",
+    "revertPaymentTitle": "Revert this payment?",
+    "revertPaymentDescription": "Select the payment to revert. The payment record will be deleted and, if it was the last one, the appointment will go back to unpaid. The patient's balance will adjust automatically.",
+    "revertPaymentConfirm": "Revert Payment",
+    "paymentReverted": "Payment reverted successfully.",
+    "revertPaymentFailed": "Could not revert the payment. Please try again.",
+    "revertBlockedInvoiced": "This payment already has an issued invoice (CFDI) and can't be reverted here.",
+    "revertBlockedInvoicedShort": "Invoiced",
+    "revertBlockedPayroll": "This payment was already included in a paid-out payroll period and can't be reverted here."
   },
   "clients": {
     "title": "Patients",

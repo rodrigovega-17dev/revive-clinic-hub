@@ -26,6 +26,7 @@ const getActionIcon = (entityType: string) => {
 };
 
 const getActionColor = (actionType: string): string => {
+  if (actionType.includes('reverted')) return 'text-orange-600';
   if (actionType.includes('deleted') || actionType.includes('cancelled')) return 'text-red-500';
   if (actionType.includes('payment')) return 'text-green-600';
   if (actionType.includes('created')) return 'text-blue-600';

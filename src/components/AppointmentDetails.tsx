@@ -9,13 +9,25 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useUpdateAppointment, useTherapistAvailability } from '@/hooks/useAppointments';
+import { useRevertPayment } from '@/hooks/usePayments';
 import { useClientBalance } from '@/hooks/useClientBalance';
 import { useTherapists } from '@/hooks/useTherapists';
 import { useTreatments } from '@/hooks/useTreatments';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Calendar, User, Clock, DollarSign, CreditCard, CalendarDays, ExternalLink, AlertTriangle, CheckCircle, FileText, Upload, MessageCircle, ChevronDown } from 'lucide-react';
+import { Loader2, Calendar, User, Clock, DollarSign, CreditCard, CalendarDays, ExternalLink, AlertTriangle, CheckCircle, FileText, Upload, MessageCircle, ChevronDown, Undo2 } from 'lucide-react';
 import { getStatusDotColor } from '@/lib/appointment-status';
 import { format } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
@@ -105,6 +117,9 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const [inlineFiscalData, setInlineFiscalData] = useState({ rfc: '', tax_regime: '', cfdi_use: '', cfdi_email: '' });
   const updateClient = useUpdateClient();
   const { configured: facturapiConfigured } = useClinicFacturapiConfig();
+  const revertPayment = useRevertPayment();
+  const [showRevertDialog, setShowRevertDialog] = useState(false);
+  const [selectedRevertPaymentId, setSelectedRevertPaymentId] = useState<string | null>(null);
 
   const { data: liveAppointment } = useQuery({
     queryKey: ['appointments', 'detail', appointment?.id, clinicId],
@@ -511,6 +526,31 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
     if (!useBalanceCredit) return;
     setBalanceApplied(maxApplicableCredit);
   }, [useBalanceCredit, maxApplicableCredit]);
+
+  const handleRevertPayment = async () => {
+    if (!selectedRevertPaymentId || !appointment?.id) return;
+    try {
+      await revertPayment.mutateAsync({ paymentId: selectedRevertPaymentId, appointmentId: appointment.id });
+      toast({
+        title: t('appointments.success'),
+        description: t('appointments.paymentReverted'),
+      });
+      setShowRevertDialog(false);
+      setSelectedRevertPaymentId(null);
+    } catch (error: any) {
+      const description =
+        error?.message === 'already_invoiced'
+          ? t('appointments.revertBlockedInvoiced')
+          : error?.message === 'payroll_frozen'
+            ? t('appointments.revertBlockedPayroll')
+            : t('appointments.revertPaymentFailed');
+      toast({
+        title: t('appointments.error'),
+        description,
+        variant: 'destructive',
+      });
+    }
+  };
 
   const handleRequestCfdi = async () => {
     if (!clinicId || !appointment?.client_id || !cfdiEligiblePayments.length) return;
@@ -1070,6 +1110,24 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                       )}
                     </>
                   )}
+                  {apt.payment_status === 'paid' && (
+                    apt.payroll_snapshot_at ? (
+                      <p className="text-xs text-muted-foreground mt-3">{t('appointments.revertBlockedPayroll')}</p>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          const revertible = appointmentPayments || [];
+                          setSelectedRevertPaymentId(revertible.length === 1 ? revertible[0].id : null);
+                          setShowRevertDialog(true);
+                        }}
+                        className="w-full mt-3"
+                      >
+                        <Undo2 className="mr-2 h-4 w-4" />
+                        {t('appointments.revertPayment')}
+                      </Button>
+                    )
+                  )}
                   {showInlineFiscalForm && (
                     <div className="mt-4 p-4 border border-border rounded-lg space-y-4 text-left">
                       <h4 className="text-sm font-medium text-foreground">{t('cfdi.addFiscalDataForCfdi')}</h4>
@@ -1377,6 +1435,55 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
         paymentIds={cfdiEligiblePayments.map((p) => p.id)}
       />
     )}
+    <AlertDialog open={showRevertDialog} onOpenChange={setShowRevertDialog}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t('appointments.revertPaymentTitle')}</AlertDialogTitle>
+          <AlertDialogDescription>{t('appointments.revertPaymentDescription')}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <RadioGroup
+          value={selectedRevertPaymentId ?? undefined}
+          onValueChange={setSelectedRevertPaymentId}
+          className="space-y-2"
+        >
+          {(appointmentPayments || []).map((p) => {
+            const invoiced = p.invoice_state !== 'non_invoiced';
+            return (
+              <div
+                key={p.id}
+                className={`flex items-center justify-between rounded-md border border-border p-3 ${invoiced ? 'opacity-50' : ''}`}
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value={p.id} id={`revert-${p.id}`} disabled={invoiced} />
+                  <Label htmlFor={`revert-${p.id}`} className="cursor-pointer text-foreground">
+                    {getPaymentMethodText(p.method)} · {formatCurrencyWithClinic(p.amount)}
+                  </Label>
+                </div>
+                {invoiced && (
+                  <span className="text-xs text-muted-foreground">{t('appointments.revertBlockedInvoicedShort')}</span>
+                )}
+              </div>
+            );
+          })}
+        </RadioGroup>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => setSelectedRevertPaymentId(null)}>
+            {t('common.cancel')}
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              handleRevertPayment();
+            }}
+            disabled={!selectedRevertPaymentId || revertPayment.isPending}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {revertPayment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {t('appointments.revertPaymentConfirm')}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 };
