@@ -234,6 +234,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       case 'cash': return t('appointments.cash');
       case 'card': return t('appointments.card');
       case 'transfer': return t('appointments.transfer');
+      case 'cheque': return t('appointments.cheque');
       case 'insurance': return t('appointments.insurance');
       case 'balance': return t('appointments.balance');
       default: return method;
@@ -995,6 +996,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                           <SelectItem value="cash" className="text-foreground">{t('appointments.cash')}</SelectItem>
                           <SelectItem value="card" className="text-foreground">{t('appointments.card')}</SelectItem>
                           <SelectItem value="transfer" className="text-foreground">{t('appointments.transfer')}</SelectItem>
+                          <SelectItem value="cheque" className="text-foreground">{t('appointments.cheque')}</SelectItem>
                           <SelectItem value="insurance" className="text-foreground">{t('appointments.insurance')}</SelectItem>
                         </SelectContent>
                       </Select>

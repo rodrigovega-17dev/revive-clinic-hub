@@ -29,7 +29,7 @@ export default function PaymentForm({ open, onClose }: PaymentFormProps) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [clientId, setClientId] = useState<string>('none');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'insurance'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'cheque' | 'insurance'>('cash');
   const [paymentDate, setPaymentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -195,6 +195,7 @@ export default function PaymentForm({ open, onClose }: PaymentFormProps) {
                 <SelectItem value="cash">{t('finance.cash')}</SelectItem>
                 <SelectItem value="card">{t('finance.card')}</SelectItem>
                 <SelectItem value="transfer">{t('finance.transfer')}</SelectItem>
+                <SelectItem value="cheque">{t('finance.cheque')}</SelectItem>
                 <SelectItem value="insurance">{t('finance.insurance')}</SelectItem>
               </SelectContent>
             </Select>

@@ -157,14 +157,15 @@ const MonthlyFinanceSection = () => {
   // entries (prior-debt bookkeeping, not cash actually collected this month).
   const totalPayments = payments?.reduce((sum, p) => (p.method === 'balance' || p.method === 'adjustment' ? sum : sum + Number(p.amount)), 0) || 0;
   const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
-  const cashPayments = payments?.filter(p => p.method === 'cash').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
-  const intangiblePayments = payments?.filter(p => p.method !== 'cash' && p.method !== 'balance' && p.method !== 'adjustment').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
+  const cashPayments = payments?.filter(p => p.method === 'cash' || p.method === 'cheque').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
+  const intangiblePayments = payments?.filter(p => p.method !== 'cash' && p.method !== 'cheque' && p.method !== 'balance' && p.method !== 'adjustment').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
 
   const getPaymentMethodColor = (method: string) => {
     switch (method) {
       case 'cash': return 'bg-green-100 text-green-800';
       case 'card': return 'bg-blue-100 text-blue-800';
       case 'transfer': return 'bg-purple-100 text-purple-800';
+      case 'cheque': return 'bg-teal-100 text-teal-800';
       case 'insurance': return 'bg-orange-100 text-orange-800';
       case 'adjustment': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
@@ -176,6 +177,7 @@ const MonthlyFinanceSection = () => {
       case 'cash': return t('finance.cash');
       case 'card': return t('finance.card');
       case 'transfer': return t('finance.transfer');
+      case 'cheque': return t('finance.cheque');
       case 'insurance': return t('finance.insurance');
       case 'adjustment': return t('finance.adjustment');
       default: return method;

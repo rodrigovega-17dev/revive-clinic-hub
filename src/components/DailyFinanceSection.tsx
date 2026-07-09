@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Eye, ArrowLeftRight, Shield, Printer } from 'lucide-react';
+import { Calendar, DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Eye, ArrowLeftRight, Shield, Printer, Landmark } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format, startOfDay, endOfDay, subDays } from 'date-fns';
@@ -126,8 +126,8 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
   const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
   const netProfit = totalRevenue - totalExpenses;
 
-  const totalCash = payments?.filter(p => p.method === 'cash').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
-  const totalIntangible = payments?.filter(p => p.method !== 'cash' && p.method !== 'balance' && p.method !== 'adjustment').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+  const totalCash = payments?.filter(p => p.method === 'cash' || p.method === 'cheque').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+  const totalIntangible = payments?.filter(p => p.method !== 'cash' && p.method !== 'cheque' && p.method !== 'balance' && p.method !== 'adjustment').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
   const amountInCashier = totalCash - totalExpenses;
 
   // Appointment counts for the day (for the printable report)
@@ -165,10 +165,10 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
       0,
     );
     const reportTotalCash = reportPayments
-      .filter((payment) => payment.method === 'cash')
+      .filter((payment) => payment.method === 'cash' || payment.method === 'cheque')
       .reduce((sum, payment) => sum + Number(payment.amount), 0);
     const reportTotalIntangible = reportPayments
-      .filter((payment) => payment.method !== 'cash' && payment.method !== 'balance' && payment.method !== 'adjustment')
+      .filter((payment) => payment.method !== 'cash' && payment.method !== 'cheque' && payment.method !== 'balance' && payment.method !== 'adjustment')
       .reduce((sum, payment) => sum + Number(payment.amount), 0);
     const reportAmountInCashier = reportTotalCash - totalExpenses;
     const reportNetProfit = reportTotalRevenue - totalExpenses;
@@ -241,6 +241,8 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
         return <CreditCard className="h-4 w-4 text-blue-600" />;
       case 'transfer':
         return <ArrowLeftRight className="h-4 w-4 text-purple-600" />;
+      case 'cheque':
+        return <Landmark className="h-4 w-4 text-teal-600" />;
       case 'insurance':
         return <Shield className="h-4 w-4 text-orange-600" />;
       case 'adjustment':
@@ -255,6 +257,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
       case 'cash': return t('finance.cash');
       case 'card': return t('finance.card');
       case 'transfer': return t('finance.transfer');
+      case 'cheque': return t('finance.cheque');
       case 'insurance': return t('finance.insurance');
       case 'adjustment': return t('finance.adjustment');
       default: return method;

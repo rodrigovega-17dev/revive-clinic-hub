@@ -251,6 +251,7 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
       case 'cash': return t('finance.cash');
       case 'card': return t('finance.card');
       case 'transfer': return t('finance.transfer');
+      case 'cheque': return t('finance.cheque');
       case 'insurance': return t('finance.insurance');
       case 'balance': return t('finance.balance');
       case 'adjustment': return t('finance.adjustment');
