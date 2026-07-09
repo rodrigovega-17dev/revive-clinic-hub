@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import TherapistOption from '@/components/TherapistOption';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { FileText, Plus, Printer, Eye, Pencil, Trash2, Mail, MessageCircle } from 'lucide-react';
@@ -50,7 +51,8 @@ type FieldType =
   | 'date'
   | 'number'
   | 'checkbox'
-  | 'signature';
+  | 'signature'
+  | 'scale';
 
 interface FieldDef {
   id: string;
@@ -59,6 +61,9 @@ interface FieldDef {
   placeholder?: string;
   prefillFrom?: string;
   readonly?: boolean;
+  /** Bounds for a 'scale' field, e.g. min:0, max:10 for a pain scale. */
+  min?: number;
+  max?: number;
 }
 
 interface SectionDef {
@@ -67,6 +72,8 @@ interface SectionDef {
   type?: 'group' | FieldType;
   fields?: FieldDef[];
   placeholder?: string;
+  min?: number;
+  max?: number;
 }
 
 interface ParsedTemplateSchema {
@@ -342,6 +349,32 @@ const openDocumentWindow = (instance: DocumentInstance, options?: { autoPrint?: 
       win.print();
     }, 300);
   }
+};
+
+/** A 'scale' field: a row of selectable numbers between min and max (e.g. a 0-10 pain scale). */
+const ScaleInput: React.FC<{
+  value: string;
+  min: number;
+  max: number;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}> = ({ value, min, max, onChange, disabled }) => {
+  const options = Array.from({ length: max - min + 1 }, (_, i) => String(min + i));
+  return (
+    <ToggleGroup
+      type="single"
+      value={value}
+      onValueChange={(v) => v && onChange(v)}
+      disabled={disabled}
+      className="flex-wrap justify-start"
+    >
+      {options.map((n) => (
+        <ToggleGroupItem key={n} value={n} className="h-9 w-9">
+          {n}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  );
 };
 
 export const DocumentSection: React.FC<DocumentSectionProps> = ({
@@ -784,7 +817,7 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                           <div className="space-y-4">
                             {section.fields
                               .filter((field) => !field.readonly && !field.prefillFrom && field.type !== 'signature')
-                              .map((field) => {
+                              .map((field: FieldDef) => {
                                 const value = fieldValues[field.id] ?? '';
                                 const commonProps = {
                                   id: field.id,
@@ -813,6 +846,14 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                                         type={fieldType === 'text' ? 'text' : fieldType}
                                         disabled={isReadonly}
                                         className="h-10"
+                                      />
+                                    ) : fieldType === 'scale' ? (
+                                      <ScaleInput
+                                        value={value}
+                                        min={field.min ?? 0}
+                                        max={field.max ?? 10}
+                                        onChange={(v) => handleFieldChange(field.id, v)}
+                                        disabled={isReadonly}
                                       />
                                     ) : (
                                       <Textarea
@@ -858,6 +899,13 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                             {...commonProps}
                             type={fieldType === 'text' ? 'text' : fieldType}
                             className="h-10"
+                          />
+                        ) : fieldType === 'scale' ? (
+                          <ScaleInput
+                            value={value}
+                            min={section.min ?? 0}
+                            max={section.max ?? 10}
+                            onChange={(v) => handleFieldChange(section.id, v)}
                           />
                         ) : (
                           <Textarea {...commonProps} rows={3} className="resize-y min-h-[4.5rem]" />
@@ -915,7 +963,7 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                             <div className="space-y-4">
                               {section.fields
                                 .filter((field) => field.type !== 'signature')
-                                .map((field) => {
+                                .map((field: FieldDef) => {
                                 const value = editFieldValues[field.id] ?? '';
                                 const commonProps = {
                                   id: field.id,
@@ -944,6 +992,14 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                                         type={fieldType === 'text' ? 'text' : fieldType}
                                         disabled={isReadonly}
                                         className="h-10"
+                                      />
+                                    ) : fieldType === 'scale' ? (
+                                      <ScaleInput
+                                        value={value}
+                                        min={field.min ?? 0}
+                                        max={field.max ?? 10}
+                                        onChange={(v) => handleEditFieldChange(field.id, v)}
+                                        disabled={isReadonly}
                                       />
                                     ) : (
                                       <Textarea
@@ -988,6 +1044,13 @@ export const DocumentSection: React.FC<DocumentSectionProps> = ({
                               {...commonProps}
                               type={fieldType === 'text' ? 'text' : fieldType}
                               className="h-10"
+                            />
+                          ) : fieldType === 'scale' ? (
+                            <ScaleInput
+                              value={value}
+                              min={section.min ?? 0}
+                              max={section.max ?? 10}
+                              onChange={(v) => handleEditFieldChange(section.id, v)}
                             />
                           ) : (
                             <Textarea {...commonProps} rows={3} className="resize-y min-h-[4.5rem]" />
