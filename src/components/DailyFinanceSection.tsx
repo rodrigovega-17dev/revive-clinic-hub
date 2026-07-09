@@ -126,8 +126,8 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
   const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
   const netProfit = totalRevenue - totalExpenses;
 
-  const totalCash = payments?.filter(p => p.method === 'cash' || p.method === 'cheque').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
-  const totalIntangible = payments?.filter(p => p.method !== 'cash' && p.method !== 'cheque' && p.method !== 'balance' && p.method !== 'adjustment').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+  const totalCash = payments?.filter(p => p.method === 'cash').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+  const totalIntangible = payments?.filter(p => p.method !== 'cash' && p.method !== 'balance' && p.method !== 'adjustment').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
   const amountInCashier = totalCash - totalExpenses;
 
   // Appointment counts for the day (for the printable report)
@@ -165,10 +165,10 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
       0,
     );
     const reportTotalCash = reportPayments
-      .filter((payment) => payment.method === 'cash' || payment.method === 'cheque')
+      .filter((payment) => payment.method === 'cash')
       .reduce((sum, payment) => sum + Number(payment.amount), 0);
     const reportTotalIntangible = reportPayments
-      .filter((payment) => payment.method !== 'cash' && payment.method !== 'cheque' && payment.method !== 'balance' && payment.method !== 'adjustment')
+      .filter((payment) => payment.method !== 'cash' && payment.method !== 'balance' && payment.method !== 'adjustment')
       .reduce((sum, payment) => sum + Number(payment.amount), 0);
     const reportAmountInCashier = reportTotalCash - totalExpenses;
     const reportNetProfit = reportTotalRevenue - totalExpenses;

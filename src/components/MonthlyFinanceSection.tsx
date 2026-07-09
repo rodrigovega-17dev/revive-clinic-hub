@@ -157,8 +157,8 @@ const MonthlyFinanceSection = () => {
   // entries (prior-debt bookkeeping, not cash actually collected this month).
   const totalPayments = payments?.reduce((sum, p) => (p.method === 'balance' || p.method === 'adjustment' ? sum : sum + Number(p.amount)), 0) || 0;
   const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
-  const cashPayments = payments?.filter(p => p.method === 'cash' || p.method === 'cheque').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
-  const intangiblePayments = payments?.filter(p => p.method !== 'cash' && p.method !== 'cheque' && p.method !== 'balance' && p.method !== 'adjustment').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
+  const cashPayments = payments?.filter(p => p.method === 'cash').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
+  const intangiblePayments = payments?.filter(p => p.method !== 'cash' && p.method !== 'balance' && p.method !== 'adjustment').reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
 
   const getPaymentMethodColor = (method: string) => {
     switch (method) {
