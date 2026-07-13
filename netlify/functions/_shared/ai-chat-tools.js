@@ -119,6 +119,52 @@ const PAYROLL_RULES_NOTE = {
   retention_negative: 'Negative retention_rate/retention_amount is an additive adjustment (bonus) that increases therapist payout.',
 };
 
+const normalizeSearchText = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .trim();
+
+const tokenizeSearchText = (value) => normalizeSearchText(value)
+  .split(/[\s,.;:_-]+/)
+  .map((token) => token.trim())
+  .filter(Boolean);
+
+const digitsOnly = (value) => String(value || '').replace(/\D/g, '');
+
+const sanitizeLikeTerm = (value) => String(value || '')
+  .replace(/[%_(),]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const scoreClientMatch = (client, normalizedQuery, queryTokens, queryDigits) => {
+  const firstName = normalizeSearchText(client.first_name);
+  const lastName = normalizeSearchText(client.last_name);
+  const fullNameNormalized = `${firstName} ${lastName}`.trim();
+  const email = normalizeSearchText(client.email);
+  const phoneDigits = digitsOnly(client.phone);
+  const haystack = `${fullNameNormalized} ${email} ${phoneDigits}`.trim();
+
+  if (!haystack || !normalizedQuery) return 0;
+
+  let score = 0;
+  if (fullNameNormalized === normalizedQuery) score += 220;
+  if (firstName === normalizedQuery || lastName === normalizedQuery) score += 180;
+  if (fullNameNormalized.startsWith(normalizedQuery)) score += 150;
+  if (firstName.startsWith(normalizedQuery) || lastName.startsWith(normalizedQuery)) score += 120;
+  if (fullNameNormalized.includes(normalizedQuery)) score += 100;
+  if (email.includes(normalizedQuery)) score += 75;
+  if (queryDigits && phoneDigits.includes(queryDigits)) score += 120;
+
+  if (queryTokens.length > 0) {
+    const tokenHits = queryTokens.filter((token) => haystack.includes(token)).length;
+    score += tokenHits * 25;
+    if (queryTokens.length > 1 && tokenHits === queryTokens.length) score += 110;
+  }
+
+  return score;
+};
+
 const compactActivityMetadata = (metadata) => {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
   const preferredKeys = [
@@ -127,8 +173,19 @@ const compactActivityMetadata = (metadata) => {
     'clientFullName',
     'responsibleName',
     'clientName',
+    'client_name',
     'appointmentId',
+    'appointment_id',
+    'old_status',
+    'new_status',
+    'status',
+    'start_time',
+    'end_time',
+    'therapist_name',
+    'old_therapist_name',
+    'new_therapist_name',
     'paymentId',
+    'payment_id',
     'amount',
   ];
 
@@ -382,7 +439,7 @@ const toolDefinitions = [
   },
   {
     name: 'search_clients',
-    description: 'Search the clinic\'s patients by name, email, or phone (active and archived). Returns up to 10 matches.',
+    description: 'Search the clinic\'s patients by name, email, or phone (active and archived). Uses case-insensitive + accent-insensitive token matching (helps with full-name keywords). Returns up to 10 ranked matches.',
     input_schema: {
       type: 'object',
       properties: { query: { type: 'string', description: 'Name, email, or phone fragment to search for.' } },
@@ -513,7 +570,7 @@ const toolDefinitions = [
   },
   {
     name: 'search_activity_log',
-    description: 'Recent clinic activity (appointments/clients/payments/documents changed), optionally filtered by category and date range. Returns paginated recent rows with entity IDs/metadata when available (useful for opening document details directly).',
+    description: 'Recent clinic activity (appointments/clients/payments/documents changed), optionally filtered by category and date range. Returns paginated rows with entity IDs/metadata; appointment rows also include an appointment_lookup snapshot from the current appointments table so historical events are interpreted correctly.',
     input_schema: {
       type: 'object',
       properties: {
@@ -580,15 +637,53 @@ const toolHandlers = {
   search_clients: async (supabase, clinicId, input) => {
     const query = String(input?.query || '').trim();
     if (!query) return { error: 'query is required' };
-    const { data, error } = await supabase
+    const normalizedQuery = normalizeSearchText(query);
+    const queryTokens = tokenizeSearchText(query);
+    const queryDigits = digitsOnly(query);
+
+    // Gather a broad candidate set server-side, then rank locally with normalized
+    // full-name/token matching so "caps/lowercaps/keywords" and mixed-name input
+    // behave more predictably.
+    const likeTerms = [query, ...queryTokens]
+      .map((term) => sanitizeLikeTerm(term))
+      .filter(Boolean);
+    const orClauses = [];
+    likeTerms.forEach((term) => {
+      orClauses.push(`first_name.ilike.%${term}%`);
+      orClauses.push(`last_name.ilike.%${term}%`);
+      orClauses.push(`email.ilike.%${term}%`);
+    });
+    if (queryDigits) {
+      orClauses.push(`phone.ilike.%${queryDigits}%`);
+    }
+
+    let candidatesQuery = supabase
       .from('clients')
       .select('id, first_name, last_name, email, phone, is_active, archived')
       .eq('clinic_id', clinicId)
-      .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%,phone.ilike.%${query}%`)
-      .limit(DEFAULT_LIST_LIMIT);
+      .limit(120);
+    if (orClauses.length > 0) {
+      candidatesQuery = candidatesQuery.or([...new Set(orClauses)].join(','));
+    }
+
+    const { data, error } = await candidatesQuery;
     if (error) return { error: error.message };
+
+    const ranked = (data || [])
+      .map((client) => ({
+        client,
+        score: scoreClientMatch(client, normalizedQuery, queryTokens, queryDigits),
+      }))
+      .filter((row) => row.score > 0)
+      .sort((a, b) => b.score - a.score || (fullName(a.client) || '').localeCompare(fullName(b.client) || ''))
+      .slice(0, DEFAULT_LIST_LIMIT)
+      .map((row) => row.client);
+    const fallback = (data || [])
+      .slice(0, DEFAULT_LIST_LIMIT);
+    const finalClients = ranked.length > 0 ? ranked : fallback;
+
     return {
-      clients: (data || []).map((c) => ({
+      clients: finalClients.map((c) => ({
         id: c.id,
         name: fullName(c),
         email: c.email,
@@ -1226,9 +1321,51 @@ const toolHandlers = {
     const totalMatching = null;
     const pagination = buildPaginationMeta({ offset, limit, totalMatching, returnedCount: entries.length });
     const truncated = pagination.has_more;
+    const appointmentIds = [...new Set(
+      entries
+        .filter((entry) => entry.entity_type === 'appointment' && entry.entity_id)
+        .map((entry) => entry.entity_id),
+    )];
+    const appointmentStateById = {};
+    const appointmentRecentActionsById = {};
+    entries.forEach((entry) => {
+      if (entry.entity_type !== 'appointment' || !entry.entity_id) return;
+      if (!appointmentRecentActionsById[entry.entity_id]) appointmentRecentActionsById[entry.entity_id] = [];
+      if (appointmentRecentActionsById[entry.entity_id].length < 5) {
+        appointmentRecentActionsById[entry.entity_id].push(entry.action_type);
+      }
+    });
+
+    if (appointmentIds.length > 0) {
+      const { data: appointmentRows, error: appointmentRowsError } = await supabase
+        .from('appointments')
+        .select('id, status, payment_status, start_time, end_time, payment_amount, clients(first_name, last_name)')
+        .eq('clinic_id', clinicId)
+        .in('id', appointmentIds);
+      if (appointmentRowsError) return { error: appointmentRowsError.message };
+      (appointmentRows || []).forEach((appointment) => {
+        appointmentStateById[appointment.id] = {
+          exists: true,
+          current_status: appointment.status,
+          current_payment_status: appointment.payment_status,
+          current_start_time: appointment.start_time,
+          current_end_time: appointment.end_time,
+          current_payment_amount: appointment.payment_amount,
+          current_client: fullName(appointment.clients),
+        };
+      });
+    }
+
     const mappedEntries = entries.map((entry) => {
       const isDocument = entry.entity_type === 'document';
+      const isAppointment = entry.entity_type === 'appointment';
       const metadata = compactActivityMetadata(entry.metadata);
+      const appointmentState = isAppointment && entry.entity_id
+        ? (appointmentStateById[entry.entity_id] || { exists: false })
+        : undefined;
+      const appointmentRecentActions = isAppointment && entry.entity_id
+        ? (appointmentRecentActionsById[entry.entity_id] || [])
+        : undefined;
       return {
         id: entry.id,
         description: entry.description,
@@ -1242,6 +1379,14 @@ const toolHandlers = {
           ? {
             can_open_directly: !!entry.entity_id,
             document_id: entry.entity_id || null,
+          }
+          : undefined,
+        appointment_lookup: isAppointment
+          ? {
+            appointment_id: entry.entity_id || null,
+            exists_in_current_table: !!appointmentState?.exists,
+            current_state: appointmentState,
+            recent_actions_for_same_appointment: appointmentRecentActions,
           }
           : undefined,
       };
