@@ -6,36 +6,102 @@
  */
 
 const DEFAULT_LIST_LIMIT = 10;
-const MAX_APPOINTMENTS_LIMIT = 50;
-const MAX_LEDGER_LIMIT = 30;
+const BASE_APPOINTMENTS_LIMIT = 50;
+const BASE_LEDGER_LIMIT = 30;
+const BASE_PAYOUT_LIMIT = 20;
 const MAX_DATE_RANGE_DAYS = 366;
-const MAX_OVERVIEW_ROWS = 1000;
+const HARD_MAX_APPOINTMENTS_LIMIT = 300;
+const HARD_MAX_LEDGER_LIMIT = 200;
+const HARD_MAX_PAYOUT_LIMIT = 120;
+const OVERVIEW_PAGE_SIZE = 500;
+const OVERVIEW_HARD_SCAN_MAX = 20000;
 
-const clampLimit = (requested, max) => {
+const RANGE_LIMIT_MULTIPLIERS = {
+  day: { default: 2.5, max: 4, shouldFullyAggregate: true },
+  week: { default: 2, max: 3, shouldFullyAggregate: true },
+  month: { default: 1.5, max: 2, shouldFullyAggregate: true },
+  long: { default: 1, max: 1, shouldFullyAggregate: false },
+};
+
+const clampLimit = (requested, max, fallbackDefault = DEFAULT_LIST_LIMIT) => {
   const n = Number(requested);
-  if (!Number.isFinite(n) || n <= 0) return Math.min(DEFAULT_LIST_LIMIT, max);
+  if (!Number.isFinite(n) || n <= 0) return Math.min(fallbackDefault, max);
   return Math.min(Math.floor(n), max);
 };
 
-const daysAgo = (n) => {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString();
+const clampOffset = (requested) => {
+  const n = Number(requested);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.floor(n);
+};
+
+const parseDateOrNull = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const classifyRangeSpan = (startDate, endDate) => {
+  const msInDay = 24 * 60 * 60 * 1000;
+  const daySpan = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / msInDay));
+  if (daySpan <= 1) return { kind: 'day', day_span: daySpan };
+  if (daySpan <= 7) return { kind: 'week', day_span: daySpan };
+  if (daySpan <= 31) return { kind: 'month', day_span: daySpan };
+  return { kind: 'long', day_span: daySpan };
+};
+
+const resolveRangePolicy = (spanKind, baseDefaultLimit, baseMaxLimit, hardMaxLimit) => {
+  const policy = RANGE_LIMIT_MULTIPLIERS[spanKind] || RANGE_LIMIT_MULTIPLIERS.long;
+  const computedDefault = Math.max(1, Math.round(baseDefaultLimit * policy.default));
+  const computedMax = Math.max(computedDefault, Math.round(baseMaxLimit * policy.max));
+  const maxLimit = Math.min(computedMax, hardMaxLimit);
+  return {
+    default_limit: Math.min(computedDefault, maxLimit),
+    max_limit: maxLimit,
+    should_fully_aggregate: policy.shouldFullyAggregate,
+  };
+};
+
+const resolvePagination = ({ requestedLimit, requestedOffset, spanKind, baseDefaultLimit, baseMaxLimit, hardMaxLimit }) => {
+  const policy = resolveRangePolicy(spanKind, baseDefaultLimit, baseMaxLimit, hardMaxLimit);
+  return {
+    offset: clampOffset(requestedOffset),
+    limit: clampLimit(requestedLimit, policy.max_limit, policy.default_limit),
+    policy,
+  };
+};
+
+const buildPaginationMeta = ({ offset, limit, totalMatching, returnedCount }) => {
+  const nextOffset = offset + returnedCount;
+  const hasMore = Number.isFinite(totalMatching) ? nextOffset < totalMatching : returnedCount === limit;
+  return {
+    offset,
+    limit,
+    returned: returnedCount,
+    has_more: hasMore,
+    next_offset: hasMore ? nextOffset : null,
+  };
 };
 
 /** Clamp a [start,end] range to MAX_DATE_RANGE_DAYS, defaulting to the last 90 days. */
 const resolveDateRange = (startDate, endDate) => {
-  const end = endDate ? new Date(endDate) : new Date();
+  let end = parseDateOrNull(endDate) || new Date();
   const defaultStart = new Date(end);
   defaultStart.setDate(defaultStart.getDate() - 90);
-  const start = startDate ? new Date(startDate) : defaultStart;
+  let start = parseDateOrNull(startDate) || defaultStart;
+  if (start.getTime() > end.getTime()) {
+    const tmp = start;
+    start = end;
+    end = tmp;
+  }
 
   const maxSpanMs = MAX_DATE_RANGE_DAYS * 24 * 60 * 60 * 1000;
   const clampedStart = end.getTime() - start.getTime() > maxSpanMs
     ? new Date(end.getTime() - maxSpanMs)
     : start;
+  const span = classifyRangeSpan(clampedStart, end);
 
-  return { start: clampedStart.toISOString(), end: end.toISOString() };
+  return { start: clampedStart.toISOString(), end: end.toISOString(), span };
 };
 
 const fullName = (row) => `${row?.first_name || ''} ${row?.last_name || ''}`.trim() || null;
@@ -254,8 +320,16 @@ const computeTherapistPayroll = ({ periodSessions, periodPreIvaRevenue, quarterS
 
 const toolDefinitions = [
   {
+    name: 'get_current_clinic_datetime',
+    description: 'Current date and weekday in the clinic timezone. Use this for any "what day is today" or weekday question.',
+    input_schema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
     name: 'search_clients',
-    description: 'Search the clinic\'s patients by name, email, or phone. Returns up to 10 matches.',
+    description: 'Search the clinic\'s patients by name, email, or phone (active and archived). Returns up to 10 matches.',
     input_schema: {
       type: 'object',
       properties: { query: { type: 'string', description: 'Name, email, or phone fragment to search for.' } },
@@ -273,14 +347,15 @@ const toolDefinitions = [
   },
   {
     name: 'get_client_appointments',
-    description: 'A patient\'s appointment history (defaults to the last 90 days if no dates given).',
+    description: 'A patient\'s appointment history (defaults to the last 90 days if no dates given), with range-aware pagination.',
     input_schema: {
       type: 'object',
       properties: {
         client_id: { type: 'string' },
         start_date: { type: 'string', description: 'ISO date, e.g. 2026-01-01.' },
         end_date: { type: 'string', description: 'ISO date, e.g. 2026-12-31.' },
-        limit: { type: 'number', description: 'Max rows to return, up to 50.' },
+        limit: { type: 'number', description: 'Rows per page; range-aware max (higher for day/week/month ranges).' },
+        offset: { type: 'number', description: 'Zero-based row offset for pagination.' },
       },
       required: ['client_id'],
     },
@@ -299,7 +374,7 @@ const toolDefinitions = [
     description: 'The filled-in field/answer pairs for one specific document instance (e.g. a Historia Clínica).',
     input_schema: {
       type: 'object',
-      properties: { document_id: { type: 'string', description: 'From get_client_documents.' } },
+      properties: { document_id: { type: 'string', description: 'From get_client_documents or search_activity_log.entity_id when entity_type=document.' } },
       required: ['document_id'],
     },
   },
@@ -317,7 +392,7 @@ const toolDefinitions = [
   },
   {
     name: 'list_payments',
-    description: 'Individual payment records for a date range (defaults to the last 90 days), optionally filtered by patient, payment method, or standalone-only (not tied to an appointment). Returns up to 30 rows.',
+    description: 'Individual payment records for a date range (defaults to the last 90 days), optionally filtered by patient, payment method, or standalone-only (not tied to an appointment). Returns paginated rows with range-aware limits.',
     input_schema: {
       type: 'object',
       properties: {
@@ -326,13 +401,14 @@ const toolDefinitions = [
         client_id: { type: 'string', description: 'From search_clients, to filter to one patient.' },
         method: { type: 'string', description: 'One of: cash, card, transfer, cheque, insurance, balance, adjustment.' },
         standalone_only: { type: 'boolean', description: 'If true, only payments not tied to an appointment (manual finance movements).' },
-        limit: { type: 'number', description: 'Max rows, up to 30.' },
+        limit: { type: 'number', description: 'Rows per page; range-aware max (higher for day/week/month ranges).' },
+        offset: { type: 'number', description: 'Zero-based row offset for pagination.' },
       },
     },
   },
   {
     name: 'list_expenses',
-    description: 'Individual expense records for a date range (defaults to the last 90 days), optionally filtered by category or attributed therapist. Returns up to 30 rows.',
+    description: 'Individual expense records for a date range (defaults to the last 90 days), optionally filtered by category or attributed therapist. Returns paginated rows with range-aware limits.',
     input_schema: {
       type: 'object',
       properties: {
@@ -340,13 +416,14 @@ const toolDefinitions = [
         end_date: { type: 'string', description: 'ISO date.' },
         category: { type: 'string', description: 'e.g. supplies, office, maintenance, utilities, equipment, marketing, travel, food, general, Payroll.' },
         therapist_id: { type: 'string', description: 'From search_therapists, to filter to expenses attributed to one therapist.' },
-        limit: { type: 'number', description: 'Max rows, up to 30.' },
+        limit: { type: 'number', description: 'Rows per page; range-aware max (higher for day/week/month ranges).' },
+        offset: { type: 'number', description: 'Zero-based row offset for pagination.' },
       },
     },
   },
   {
     name: 'get_payroll_summary',
-    description: 'Computed payroll for one or all therapists over a pay period (defaults to the current semi-monthly period): gross earnings, retention withheld, net earnings, therapist-attributed expenses, and final net payable. This mirrors exactly what the Payroll page shows, including commission/fixed-fee compensation and incentive bonuses.',
+    description: 'Computed payroll for one or all therapists over a pay period (defaults to the current semi-monthly period): gross earnings, retention withheld, net earnings, therapist-attributed expenses, final net payable, and paid-in-full appointment metrics.',
     input_schema: {
       type: 'object',
       properties: {
@@ -358,14 +435,15 @@ const toolDefinitions = [
   },
   {
     name: 'list_therapist_payouts',
-    description: 'Already-paid-out payroll records (actual payouts registered on the Payroll page), optionally filtered by therapist. Defaults to the last 90 days.',
+    description: 'Already-paid-out payroll records (actual payouts registered on the Payroll page), optionally filtered by therapist. Defaults to the last 90 days and supports pagination.',
     input_schema: {
       type: 'object',
       properties: {
         therapist_id: { type: 'string', description: 'From search_therapists.' },
         start_date: { type: 'string', description: 'ISO date.' },
         end_date: { type: 'string', description: 'ISO date.' },
-        limit: { type: 'number', description: 'Max rows, up to 20.' },
+        limit: { type: 'number', description: 'Rows per page; range-aware max.' },
+        offset: { type: 'number', description: 'Zero-based row offset for pagination.' },
       },
     },
   },
@@ -383,14 +461,15 @@ const toolDefinitions = [
   },
   {
     name: 'search_activity_log',
-    description: 'Recent clinic activity (appointments/clients/payments/documents changed), optionally filtered by category and date range. Returns the most recent rows only — check the response\'s truncated/total_matching fields before drawing any conclusion about patterns over the full date range (e.g. never claim activity was "concentrated on one day" from this tool alone; use get_financial_summary or get_payroll_summary for period-wide totals instead).',
+    description: 'Recent clinic activity (appointments/clients/payments/documents changed), optionally filtered by category and date range. Returns paginated recent rows with entity IDs/metadata when available (useful for opening document details directly).',
     input_schema: {
       type: 'object',
       properties: {
         entity_type: { type: 'string', description: 'One of: appointment, client, payment, document.' },
         start_date: { type: 'string' },
         end_date: { type: 'string' },
-        limit: { type: 'number', description: 'Max rows, up to 30. For a broad date range, prefer a narrower entity_type/date filter over relying on this being complete.' },
+        limit: { type: 'number', description: 'Rows per page; range-aware max. For broad ranges, paginate or narrow filters.' },
+        offset: { type: 'number', description: 'Zero-based row offset for pagination.' },
       },
     },
   },
@@ -428,18 +507,44 @@ const toolDefinitions = [
 ];
 
 const toolHandlers = {
+  get_current_clinic_datetime: async (_supabase, _clinicId, _input, clinicTimezone) => {
+    const timezone = clinicTimezone || 'UTC';
+    const now = new Date();
+    return {
+      timezone,
+      date: new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now),
+      weekday: new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'long' }).format(now),
+      time: new Intl.DateTimeFormat('en-GB', {
+        timeZone: timezone,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }).format(now),
+      iso_utc: now.toISOString(),
+    };
+  },
+
   search_clients: async (supabase, clinicId, input) => {
     const query = String(input?.query || '').trim();
     if (!query) return { error: 'query is required' };
     const { data, error } = await supabase
       .from('clients')
-      .select('id, first_name, last_name, email, phone, is_active')
+      .select('id, first_name, last_name, email, phone, is_active, archived')
       .eq('clinic_id', clinicId)
-      .eq('archived', false)
       .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%,phone.ilike.%${query}%`)
       .limit(DEFAULT_LIST_LIMIT);
     if (error) return { error: error.message };
-    return { clients: (data || []).map((c) => ({ id: c.id, name: fullName(c), email: c.email, phone: c.phone, is_active: c.is_active })) };
+    return {
+      clients: (data || []).map((c) => ({
+        id: c.id,
+        name: fullName(c),
+        email: c.email,
+        phone: c.phone,
+        is_active: c.is_active,
+        archived: !!c.archived,
+      })),
+    };
   },
 
   get_client_details: async (supabase, clinicId, input) => {
@@ -474,8 +579,15 @@ const toolHandlers = {
   get_client_appointments: async (supabase, clinicId, input) => {
     const clientId = input?.client_id;
     if (!clientId) return { error: 'client_id is required' };
-    const { start, end } = resolveDateRange(input?.start_date, input?.end_date);
-    const limit = clampLimit(input?.limit, MAX_APPOINTMENTS_LIMIT);
+    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date);
+    const { limit, offset, policy } = resolvePagination({
+      requestedLimit: input?.limit,
+      requestedOffset: input?.offset,
+      spanKind: span.kind,
+      baseDefaultLimit: DEFAULT_LIST_LIMIT,
+      baseMaxLimit: BASE_APPOINTMENTS_LIMIT,
+      hardMaxLimit: HARD_MAX_APPOINTMENTS_LIMIT,
+    });
 
     const { data, error, count } = await supabase
       .from('appointments')
@@ -485,14 +597,19 @@ const toolHandlers = {
       .gte('start_time', start)
       .lte('start_time', end)
       .order('start_time', { ascending: false })
-      .limit(limit);
+      .range(offset, offset + limit - 1);
     if (error) return { error: error.message };
+    const rows = data || [];
+    const totalMatching = count ?? rows.length;
+    const pagination = buildPaginationMeta({ offset, limit, totalMatching, returnedCount: rows.length });
 
     return {
-      range: { start, end },
-      total_matching: count ?? (data || []).length,
-      truncated: (count ?? 0) > (data || []).length,
-      appointments: (data || []).map((a) => ({
+      range: { start, end, span_kind: span.kind, span_days: span.day_span },
+      total_matching: totalMatching,
+      truncated: pagination.has_more,
+      pagination,
+      limit_policy: policy,
+      appointments: rows.map((a) => ({
         id: a.id,
         start_time: a.start_time,
         end_time: a.end_time,
@@ -626,8 +743,15 @@ const toolHandlers = {
   },
 
   list_payments: async (supabase, clinicId, input) => {
-    const { start, end } = resolveDateRange(input?.start_date, input?.end_date);
-    const limit = clampLimit(input?.limit, MAX_LEDGER_LIMIT);
+    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date);
+    const { limit, offset, policy } = resolvePagination({
+      requestedLimit: input?.limit,
+      requestedOffset: input?.offset,
+      spanKind: span.kind,
+      baseDefaultLimit: DEFAULT_LIST_LIMIT,
+      baseMaxLimit: BASE_LEDGER_LIMIT,
+      hardMaxLimit: HARD_MAX_LEDGER_LIMIT,
+    });
 
     let query = supabase
       .from('payments')
@@ -636,18 +760,23 @@ const toolHandlers = {
       .gte('payment_date', start)
       .lte('payment_date', end)
       .order('payment_date', { ascending: false })
-      .limit(limit);
+      .range(offset, offset + limit - 1);
     if (input?.client_id) query = query.eq('client_id', input.client_id);
     if (input?.method) query = query.eq('method', input.method);
     if (input?.standalone_only) query = query.is('appointment_id', null);
 
     const { data, error, count } = await query;
     if (error) return { error: error.message };
+    const rows = data || [];
+    const totalMatching = count ?? rows.length;
+    const pagination = buildPaginationMeta({ offset, limit, totalMatching, returnedCount: rows.length });
     return {
-      range: { start, end },
-      total_matching: count ?? (data || []).length,
-      truncated: (count ?? 0) > (data || []).length,
-      payments: (data || []).map((p) => ({
+      range: { start, end, span_kind: span.kind, span_days: span.day_span },
+      total_matching: totalMatching,
+      truncated: pagination.has_more,
+      pagination,
+      limit_policy: policy,
+      payments: rows.map((p) => ({
         id: p.id,
         amount: p.amount,
         method: p.method,
@@ -662,8 +791,15 @@ const toolHandlers = {
   },
 
   list_expenses: async (supabase, clinicId, input) => {
-    const { start, end } = resolveDateRange(input?.start_date, input?.end_date);
-    const limit = clampLimit(input?.limit, MAX_LEDGER_LIMIT);
+    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date);
+    const { limit, offset, policy } = resolvePagination({
+      requestedLimit: input?.limit,
+      requestedOffset: input?.offset,
+      spanKind: span.kind,
+      baseDefaultLimit: DEFAULT_LIST_LIMIT,
+      baseMaxLimit: BASE_LEDGER_LIMIT,
+      hardMaxLimit: HARD_MAX_LEDGER_LIMIT,
+    });
 
     let query = supabase
       .from('expenses')
@@ -672,17 +808,22 @@ const toolHandlers = {
       .gte('date', start.slice(0, 10))
       .lte('date', end.slice(0, 10))
       .order('date', { ascending: false })
-      .limit(limit);
+      .range(offset, offset + limit - 1);
     if (input?.category) query = query.eq('category', input.category);
     if (input?.therapist_id) query = query.eq('therapist_id', input.therapist_id);
 
     const { data, error, count } = await query;
     if (error) return { error: error.message };
+    const rows = data || [];
+    const totalMatching = count ?? rows.length;
+    const pagination = buildPaginationMeta({ offset, limit, totalMatching, returnedCount: rows.length });
     return {
-      range: { start, end },
-      total_matching: count ?? (data || []).length,
-      truncated: (count ?? 0) > (data || []).length,
-      expenses: (data || []).map((e) => ({
+      range: { start, end, span_kind: span.kind, span_days: span.day_span },
+      total_matching: totalMatching,
+      truncated: pagination.has_more,
+      pagination,
+      limit_policy: policy,
+      expenses: rows.map((e) => ({
         id: e.id,
         amount: e.amount,
         description: e.description,
@@ -698,12 +839,20 @@ const toolHandlers = {
     let startDate;
     let endDate;
     if (input?.start_date && input?.end_date) {
-      startDate = new Date(input.start_date);
-      endDate = new Date(input.end_date);
+      const parsedStart = parseDateOrNull(input.start_date);
+      const parsedEnd = parseDateOrNull(input.end_date);
+      if (!parsedStart || !parsedEnd) return { error: 'Invalid start_date or end_date' };
+      startDate = parsedStart;
+      endDate = parsedEnd;
     } else {
       const current = resolveCurrentPayPeriod();
       startDate = current.startDate;
       endDate = current.endDate;
+    }
+    if (startDate.getTime() > endDate.getTime()) {
+      const tmp = startDate;
+      startDate = endDate;
+      endDate = tmp;
     }
     const maxSpanMs = MAX_DATE_RANGE_DAYS * 24 * 60 * 60 * 1000;
     if (endDate.getTime() - startDate.getTime() > maxSpanMs) {
@@ -779,6 +928,7 @@ const toolHandlers = {
           name: fullName(therapist),
           compensation_type: normalizeCompensationType(liveConfig.compensationType),
           total_appointments: 0,
+          pay_in_full_appointments: 0,
           total_revenue_pre_iva: 0,
           gross_earnings: 0,
           retention_amount: 0,
@@ -788,6 +938,7 @@ const toolHandlers = {
       }
       const s = statsByTherapist[therapistId];
       s.total_appointments += 1;
+      if (payInFull) s.pay_in_full_appointments += 1;
       s.total_revenue_pre_iva += paymentSummary.preIvaRevenue;
       s.gross_earnings += computed.grossEarnings;
       s.retention_amount += computed.retentionAmount;
@@ -811,35 +962,71 @@ const toolHandlers = {
     const therapists = Object.values(statsByTherapist)
       .map((s) => {
         const attributedExpenses = Number(expensesByTherapist[s.id] || 0);
-        return { ...s, attributed_expenses: attributedExpenses, net_payable: s.net_earnings - attributedExpenses };
+        const payInFullPercentage = s.total_appointments
+          ? Number(((s.pay_in_full_appointments / s.total_appointments) * 100).toFixed(1))
+          : 0;
+        return {
+          ...s,
+          pay_in_full_percentage: payInFullPercentage,
+          attributed_expenses: attributedExpenses,
+          net_payable: s.net_earnings - attributedExpenses,
+        };
       })
       .slice(0, 20);
 
+    const completedAppointments = (appointments || []).length;
+    const paidInFullAppointments = (appointments || []).reduce(
+      (sum, appointment) => sum + (appointment.pay_therapist_in_full ? 1 : 0),
+      0,
+    );
+    const paidInFullPercentage = completedAppointments
+      ? Number(((paidInFullAppointments / completedAppointments) * 100).toFixed(1))
+      : 0;
+
     return {
       period: { start: toDateOnly(startDate), end: toDateOnly(endDate) },
+      paid_in_full_overview: {
+        completed_appointments: completedAppointments,
+        paid_in_full_appointments: paidInFullAppointments,
+        paid_in_full_percentage: paidInFullPercentage,
+      },
       therapists,
     };
   },
 
   list_therapist_payouts: async (supabase, clinicId, input) => {
-    const { start, end } = resolveDateRange(input?.start_date, input?.end_date);
-    const limit = clampLimit(input?.limit, 20);
+    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date);
+    const { limit, offset, policy } = resolvePagination({
+      requestedLimit: input?.limit,
+      requestedOffset: input?.offset,
+      spanKind: span.kind,
+      baseDefaultLimit: DEFAULT_LIST_LIMIT,
+      baseMaxLimit: BASE_PAYOUT_LIMIT,
+      hardMaxLimit: HARD_MAX_PAYOUT_LIMIT,
+    });
 
     let query = supabase
       .from('therapist_payouts')
-      .select('id, therapist_id, period_start, period_end, payout_date, amount, payment_method, status, notes, therapists(first_name, last_name)')
+      .select('id, therapist_id, period_start, period_end, payout_date, amount, payment_method, status, notes, therapists(first_name, last_name)', { count: 'exact' })
       .eq('clinic_id', clinicId)
       .gte('payout_date', start.slice(0, 10))
       .lte('payout_date', end.slice(0, 10))
       .order('payout_date', { ascending: false })
-      .limit(limit);
+      .range(offset, offset + limit - 1);
     if (input?.therapist_id) query = query.eq('therapist_id', input.therapist_id);
 
-    const { data, error } = await query;
+    const { data, error, count } = await query;
     if (error) return { error: error.message };
+    const rows = data || [];
+    const totalMatching = count ?? rows.length;
+    const pagination = buildPaginationMeta({ offset, limit, totalMatching, returnedCount: rows.length });
     return {
-      range: { start, end },
-      payouts: (data || []).map((p) => ({
+      range: { start, end, span_kind: span.kind, span_days: span.day_span },
+      total_matching: totalMatching,
+      truncated: pagination.has_more,
+      pagination,
+      limit_policy: policy,
+      payouts: rows.map((p) => ({
         id: p.id,
         therapist: fullName(p.therapists),
         period_start: p.period_start,
@@ -855,20 +1042,39 @@ const toolHandlers = {
 
   get_appointments_overview: async (supabase, clinicId, input, clinicTimezone) => {
     if (!input?.start_date || !input?.end_date) return { error: 'start_date and end_date are required' };
-    const { start, end } = resolveDateRange(input.start_date, input.end_date);
+    const { start, end, span } = resolveDateRange(input.start_date, input.end_date);
     const timezone = clinicTimezone || 'UTC';
+    const rows = [];
+    let totalMatching = null;
+    let offset = 0;
+    let queryError = null;
 
-    const { data, error, count } = await supabase
-      .from('appointments')
-      .select('start_time, status', { count: 'exact' })
-      .eq('clinic_id', clinicId)
-      .gte('start_time', start)
-      .lte('start_time', end)
-      .order('start_time', { ascending: true })
-      .limit(MAX_OVERVIEW_ROWS);
-    if (error) return { error: error.message };
+    while (offset < OVERVIEW_HARD_SCAN_MAX) {
+      const { data, error, count } = await supabase
+        .from('appointments')
+        .select('start_time, status', { count: 'exact' })
+        .eq('clinic_id', clinicId)
+        .gte('start_time', start)
+        .lte('start_time', end)
+        .order('start_time', { ascending: true })
+        .range(offset, offset + OVERVIEW_PAGE_SIZE - 1);
 
-    const rows = data || [];
+      if (error) {
+        queryError = error;
+        break;
+      }
+      if (totalMatching === null) totalMatching = count ?? null;
+
+      const pageRows = data || [];
+      if (pageRows.length === 0) break;
+
+      const remainingSlots = OVERVIEW_HARD_SCAN_MAX - rows.length;
+      rows.push(...pageRows.slice(0, remainingSlots));
+      if (pageRows.length < OVERVIEW_PAGE_SIZE || rows.length >= OVERVIEW_HARD_SCAN_MAX) break;
+      offset += pageRows.length;
+    }
+
+    if (queryError) return { error: queryError.message };
     const byStatus = {};
     const byDay = {};
     rows.forEach((a) => {
@@ -885,12 +1091,21 @@ const toolHandlers = {
 
     const dailyBreakdown = Object.values(byDay).sort((a, b) => a.date.localeCompare(b.date));
     const busiestCompletedDay = dailyBreakdown.reduce((best, d) => (!best || d.completed > best.completed ? d : best), null);
+    const finalTotalMatching = totalMatching ?? rows.length;
+    const truncated = finalTotalMatching > rows.length;
+    const spanPolicy = RANGE_LIMIT_MULTIPLIERS[span.kind] || RANGE_LIMIT_MULTIPLIERS.long;
 
     return {
-      range: { start, end },
+      range: { start, end, span_kind: span.kind, span_days: span.day_span },
       timezone,
-      total_matching: count ?? rows.length,
-      truncated: (count ?? 0) > rows.length,
+      total_matching: finalTotalMatching,
+      truncated,
+      warning: truncated
+        ? `Overview reached the safety ceiling of ${OVERVIEW_HARD_SCAN_MAX} rows. Narrow the date range if you need fully exhaustive row-level coverage.`
+        : undefined,
+      range_policy: {
+        should_fully_aggregate: spanPolicy.shouldFullyAggregate,
+      },
       counts_by_status: byStatus,
       // "weekday" and "date" here are already computed correctly in the clinic's local
       // timezone — always use these values verbatim rather than computing/guessing the
@@ -901,31 +1116,62 @@ const toolHandlers = {
   },
 
   search_activity_log: async (supabase, clinicId, input) => {
-    const { start, end } = resolveDateRange(input?.start_date, input?.end_date);
-    const limit = clampLimit(input?.limit, MAX_LEDGER_LIMIT);
+    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date);
+    const { limit, offset, policy } = resolvePagination({
+      requestedLimit: input?.limit,
+      requestedOffset: input?.offset,
+      spanKind: span.kind,
+      baseDefaultLimit: DEFAULT_LIST_LIMIT,
+      baseMaxLimit: BASE_LEDGER_LIMIT,
+      hardMaxLimit: HARD_MAX_LEDGER_LIMIT,
+    });
 
     let query = supabase
       .from('activity_log')
-      .select('description, action_type, entity_type, user_email, created_at', { count: 'exact' })
+      .select('id, description, action_type, entity_type, entity_id, metadata, user_email, created_at', { count: 'exact' })
       .eq('clinic_id', clinicId)
       .gte('created_at', start)
       .lte('created_at', end)
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .range(offset, offset + limit - 1);
     if (input?.entity_type) query = query.eq('entity_type', input.entity_type);
 
     const { data, error, count } = await query;
     if (error) return { error: error.message };
     const entries = data || [];
-    const truncated = (count ?? 0) > entries.length;
+    const totalMatching = count ?? entries.length;
+    const pagination = buildPaginationMeta({ offset, limit, totalMatching, returnedCount: entries.length });
+    const truncated = pagination.has_more;
+    const mappedEntries = entries.map((entry) => {
+      const isDocument = entry.entity_type === 'document';
+      return {
+        id: entry.id,
+        description: entry.description,
+        action_type: entry.action_type,
+        entity_type: entry.entity_type,
+        entity_id: entry.entity_id,
+        metadata: entry.metadata,
+        user_email: entry.user_email,
+        created_at: entry.created_at,
+        document_lookup: isDocument
+          ? {
+            can_open_directly: !!entry.entity_id,
+            document_id: entry.entity_id || null,
+          }
+          : undefined,
+      };
+    });
+
     return {
-      range: { start, end },
-      total_matching: count ?? entries.length,
+      range: { start, end, span_kind: span.kind, span_days: span.day_span },
+      total_matching: totalMatching,
       truncated,
+      pagination,
+      limit_policy: policy,
       warning: truncated
-        ? `Only the ${entries.length} most recent of ${count} matching entries are shown, all from the tail end of the range. Do not infer when things happened across the full range from this alone — the earlier part of the range is not represented here.`
+        ? `Only ${entries.length} entries are shown from offset ${offset} (of ${totalMatching} matching). Paginate for more rows before inferring full-range patterns.`
         : undefined,
-      entries,
+      entries: mappedEntries,
     };
   },
 
