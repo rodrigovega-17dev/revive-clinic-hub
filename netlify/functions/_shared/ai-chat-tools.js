@@ -1110,14 +1110,14 @@ const toolHandlers = {
 
     while (offset < targetRows && pagesFetched < OVERVIEW_MAX_PAGES) {
       const to = Math.min(offset + pageSize - 1, targetRows - 1);
-      const baseQuery = supabase
+      const { data, error } = await supabase
         .from('appointments')
+        .select('start_time, status')
         .eq('clinic_id', clinicId)
         .gte('start_time', start)
         .lte('start_time', end)
-        .order('start_time', { ascending: true });
-
-      const { data, error } = await baseQuery.select('start_time, status').range(offset, to);
+        .order('start_time', { ascending: true })
+        .range(offset, to);
 
       if (error) {
         queryError = error;
