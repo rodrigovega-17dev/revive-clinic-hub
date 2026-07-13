@@ -290,7 +290,9 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
           amount: Math.abs(appliedCredit),
           method: 'balance',
           payment_date: paymentDate,
-          description: `Balance applied to ${appointment.treatments?.name || 'appointment'} session`,
+          description: t('appointments.balanceAppliedDescription', {
+            treatment: appointment.treatments?.name || t('appointments.sessionFallback'),
+          }),
           facturado: false,
           iva_amount: 0,
         });
@@ -304,7 +306,9 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
           amount: totalWithIva,
           method: paymentData.method,
           payment_date: paymentDate,
-          description: `Payment for ${appointment.treatments?.name || 'appointment'} session${requiereFactura ? ' (IVA 16%)' : ''}`,
+          description: t('appointments.paymentForSessionDescription', {
+            treatment: appointment.treatments?.name || t('appointments.sessionFallback'),
+          }) + (requiereFactura ? ' (IVA 16%)' : ''),
           facturado: requiereFactura,
           iva_amount: ivaAmount,
         });

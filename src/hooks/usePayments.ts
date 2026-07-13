@@ -1,6 +1,77 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
+const invalidateFinanceQueries = (queryClient: ReturnType<typeof useQueryClient>) => {
+  queryClient.invalidateQueries({ queryKey: ['daily-payments'] });
+  queryClient.invalidateQueries({ queryKey: ['monthly-payments'] });
+  queryClient.invalidateQueries({ queryKey: ['stats'] });
+  queryClient.invalidateQueries({ queryKey: ['client-balance'] });
+  queryClient.invalidateQueries({ queryKey: ['all-client-balances'] });
+  queryClient.invalidateQueries({ queryKey: ['client-pending-appointments'] });
+  queryClient.invalidateQueries({ queryKey: ['client-payments'] });
+  queryClient.invalidateQueries({ queryKey: ['client-appointments-history'] });
+  queryClient.invalidateQueries({ queryKey: ['payroll'] });
+};
+
+export interface StandalonePaymentUpdate {
+  id: string;
+  amount: number;
+  description: string;
+  client_id: string | null;
+  method: string;
+  payment_date: string;
+}
+
+/**
+ * Update a standalone payment (one recorded directly from Finance, not tied to an
+ * appointment). Appointment-tied payments have their own guarded revert flow
+ * (useRevertPayment) — this refuses to touch a payment that has an appointment_id.
+ */
+export const useUpdateStandalonePayment = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: StandalonePaymentUpdate) => {
+      const { data: existing, error: fetchError } = await supabase
+        .from('payments')
+        .select('appointment_id')
+        .eq('id', id)
+        .single();
+      if (fetchError) throw fetchError;
+      if (existing.appointment_id) {
+        throw new Error('linked_to_appointment');
+      }
+
+      const { error } = await supabase.from('payments').update(updates).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateFinanceQueries(queryClient),
+  });
+};
+
+/** Delete a standalone payment (no appointment_id). See useUpdateStandalonePayment. */
+export const useDeleteStandalonePayment = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data: existing, error: fetchError } = await supabase
+        .from('payments')
+        .select('appointment_id')
+        .eq('id', id)
+        .single();
+      if (fetchError) throw fetchError;
+      if (existing.appointment_id) {
+        throw new Error('linked_to_appointment');
+      }
+
+      const { error } = await supabase.from('payments').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateFinanceQueries(queryClient),
+  });
+};
+
 /**
  * Reverts a single payment: deletes the payment row, and if it was the appointment's
  * last remaining payment, resets the appointment back to unpaid/pending.

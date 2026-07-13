@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables, TablesInsert } from '@/integrations/supabase/types';
 import { useAuth } from './useAuth';
+import { useLanguage } from './useLanguage';
 
 type DocumentTemplate = Tables<'document_templates'>;
 type DocumentInstance = Tables<'document_instances'>;
@@ -147,6 +148,8 @@ export interface CreateDocumentPayload {
 export const useCreateDocumentInstance = () => {
   const queryClient = useQueryClient();
   const { clinicId, user } = useAuth();
+  const { currentLanguage } = useLanguage();
+  const localeCode = currentLanguage === 'es' ? 'es-MX' : 'en-US';
 
   return useMutation({
     mutationFn: async (payload: CreateDocumentPayload) => {
@@ -221,10 +224,10 @@ export const useCreateDocumentInstance = () => {
         appointmentId: appointmentId ?? null,
         appointmentDateISO: appointmentDate ? appointmentDate.toISOString() : null,
         appointmentDateFormatted: appointmentDate
-          ? appointmentDate.toLocaleDateString()
+          ? appointmentDate.toLocaleDateString(localeCode)
           : null,
         appointmentTimeFormatted: appointmentDate
-          ? appointmentDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          ? appointmentDate.toLocaleTimeString(localeCode, { hour: '2-digit', minute: '2-digit' })
           : null,
         treatmentName: treatment?.name ?? null,
         clinicName: clinic.name,
@@ -306,7 +309,7 @@ export const useCreateDocumentInstance = () => {
                 : null;
             break;
           case 'appointment.date':
-            v = appointmentDate ? appointmentDate.toLocaleDateString() : null;
+            v = appointmentDate ? appointmentDate.toLocaleDateString(localeCode) : null;
             break;
           case 'treatment.name':
             v = treatment?.name ?? null;

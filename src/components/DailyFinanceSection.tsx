@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Eye, ArrowLeftRight, Shield, Printer, Landmark } from 'lucide-react';
+import { Calendar, DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Eye, ArrowLeftRight, Shield, Printer, Landmark, Pencil, Trash2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format, startOfDay, endOfDay, subDays } from 'date-fns';
@@ -15,8 +15,11 @@ import { useClinic, useClinicSettings } from '@/hooks/useClinic';
 import { useLanguage } from '@/hooks/useLanguage';
 import { openFinanceReport, FinanceReportTable } from '@/lib/finance-report';
 import DateFilter from '@/components/DateFilter';
-import PaymentForm from './PaymentForm';
-import ExpenseForm from './ExpenseForm';
+import PaymentForm, { type EditablePayment } from './PaymentForm';
+import ExpenseForm, { type EditableExpense } from './ExpenseForm';
+import { useDeleteStandalonePayment } from '@/hooks/usePayments';
+import { useDeleteExpense } from '@/hooks/useExpenses';
+import { useToast } from '@/hooks/use-toast';
 
 interface DailyFinanceSectionProps {
   selectedDate: Date;
@@ -31,6 +34,41 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
   const { currentLanguage } = useLanguage();
   const locale = currentLanguage === 'es' ? es : enUS;
   const [showAllPayments, setShowAllPayments] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<EditablePayment | null>(null);
+  const [editingExpense, setEditingExpense] = useState<EditableExpense | null>(null);
+  const { toast } = useToast();
+  const deleteStandalonePayment = useDeleteStandalonePayment();
+  const deleteExpense = useDeleteExpense();
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!window.confirm(t('finance.confirmDeletePayment'))) return;
+    try {
+      await deleteStandalonePayment.mutateAsync(paymentId);
+      toast({ title: t('common.success'), description: t('finance.paymentDeleted') });
+    } catch (error) {
+      console.error('Error deleting payment:', error);
+      toast({
+        title: t('common.error'),
+        description: t('finance.failedToDeletePayment'),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!window.confirm(t('finance.confirmDeleteExpense'))) return;
+    try {
+      await deleteExpense.mutateAsync(expenseId);
+      toast({ title: t('common.success'), description: t('finance.expenseDeleted') });
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      toast({
+        title: t('common.error'),
+        description: t('finance.failedToDeleteExpense'),
+        variant: 'destructive',
+      });
+    }
+  };
 
   // Fetch daily payments
   const { data: payments, isLoading: paymentsLoading } = useQuery({
@@ -394,10 +432,13 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                   <TableHead className="text-foreground">{t('finance.amount')}</TableHead>
                   <TableHead className="text-foreground">{t('finance.method')}</TableHead>
                   <TableHead className="text-foreground">{t('finance.description')}</TableHead>
+                  <TableHead className="text-foreground text-right">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {payments.map((payment) => (
+                {payments.map((payment) => {
+                  const isStandalone = !payment.appointment_id;
+                  return (
                   <TableRow key={payment.id} className="hover:bg-muted/50 border-border">
                     <TableCell className="text-foreground">
                       {new Intl.DateTimeFormat('en-US', {
@@ -408,14 +449,14 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                       }).format(new Date(payment.payment_date))}
                     </TableCell>
                     <TableCell className="text-foreground">
-                      {payment.clients ? 
-                        `${payment.clients.first_name} ${payment.clients.last_name}` : 
+                      {payment.clients ?
+                        `${payment.clients.first_name} ${payment.clients.last_name}` :
                         'N/A'
                       }
                     </TableCell>
                     <TableCell className="text-foreground">
-                      {payment.appointments?.therapists ? 
-                        `${payment.appointments.therapists.first_name} ${payment.appointments.therapists.last_name}` : 
+                      {payment.appointments?.therapists ?
+                        `${payment.appointments.therapists.first_name} ${payment.appointments.therapists.last_name}` :
                         'N/A'
                       }
                     </TableCell>
@@ -435,8 +476,33 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                     <TableCell className="text-muted-foreground">
                       {payment.description || t('finance.paymentReceived')}
                     </TableCell>
+                    <TableCell className="text-right">
+                      {isStandalone && (
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setEditingPayment(payment as unknown as EditablePayment)}
+                            title={t('common.edit')}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleDeletePayment(payment.id)}
+                            title={t('common.delete')}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           ) : (
@@ -473,6 +539,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                   <TableHead className="text-foreground">{t('finance.category')}</TableHead>
                   <TableHead className="text-foreground">{t('finance.amount')}</TableHead>
                   <TableHead className="text-foreground">{t('finance.time')}</TableHead>
+                  <TableHead className="text-foreground text-right">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -497,6 +564,28 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                         timeZone: timezone,
                       }).format(new Date(expense.created_at))}
                     </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => setEditingExpense(expense as unknown as EditableExpense)}
+                          title={t('common.edit')}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleDeleteExpense(expense.id)}
+                          title={t('common.delete')}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -512,6 +601,17 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
           )}
         </CardContent>
       </Card>
+
+      <PaymentForm
+        open={!!editingPayment}
+        onClose={() => setEditingPayment(null)}
+        editingPayment={editingPayment}
+      />
+      <ExpenseForm
+        open={!!editingExpense}
+        onClose={() => setEditingExpense(null)}
+        editingExpense={editingExpense}
+      />
     </div>
   );
 };

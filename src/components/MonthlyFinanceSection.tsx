@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/lib/utils';
 import { useClinic, useClinicSettings } from '@/hooks/useClinic';
-import { DollarSign, TrendingUp, Minus, Receipt, Printer } from 'lucide-react';
+import { DollarSign, TrendingUp, Minus, Receipt, Printer, Pencil, Trash2 } from 'lucide-react';
 import { openFinanceReport, FinanceReportTable } from '@/lib/finance-report';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
@@ -25,6 +25,10 @@ import { facturapiService } from '@/integrations/facturapi/service';
 import { FileText, Loader2, Upload } from 'lucide-react';
 import { useClinicFacturapiConfig } from '@/hooks/useClinicFacturapiConfig';
 import { CfdiUploadModal } from '@/components/CfdiUploadModal';
+import PaymentForm, { type EditablePayment } from './PaymentForm';
+import ExpenseForm, { type EditableExpense } from './ExpenseForm';
+import { useDeleteStandalonePayment } from '@/hooks/usePayments';
+import { useDeleteExpense } from '@/hooks/useExpenses';
 
 const MonthlyFinanceSection = () => {
   const { t } = useTranslation();
@@ -39,6 +43,40 @@ const MonthlyFinanceSection = () => {
   const [issuingGlobalCfdi, setIssuingGlobalCfdi] = useState(false);
   const [showCfdiUploadModal, setShowCfdiUploadModal] = useState(false);
   const { configured: facturapiConfigured } = useClinicFacturapiConfig();
+  const [editingPayment, setEditingPayment] = useState<EditablePayment | null>(null);
+  const [editingExpense, setEditingExpense] = useState<EditableExpense | null>(null);
+  const deleteStandalonePayment = useDeleteStandalonePayment();
+  const deleteExpense = useDeleteExpense();
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!window.confirm(t('finance.confirmDeletePayment'))) return;
+    try {
+      await deleteStandalonePayment.mutateAsync(paymentId);
+      toast({ title: t('common.success'), description: t('finance.paymentDeleted') });
+    } catch (error) {
+      console.error('Error deleting payment:', error);
+      toast({
+        title: t('common.error'),
+        description: t('finance.failedToDeletePayment'),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!window.confirm(t('finance.confirmDeleteExpense'))) return;
+    try {
+      await deleteExpense.mutateAsync(expenseId);
+      toast({ title: t('common.success'), description: t('finance.expenseDeleted') });
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      toast({
+        title: t('common.error'),
+        description: t('finance.failedToDeleteExpense'),
+        variant: 'destructive',
+      });
+    }
+  };
 
   // Get current month range
   const currentMonth = new Date();
@@ -190,7 +228,7 @@ const MonthlyFinanceSection = () => {
   };
 
   const formatReportDateTime = (value: string) =>
-    new Intl.DateTimeFormat('en-US', {
+    new Intl.DateTimeFormat(currentLanguage === 'es' ? 'es-MX' : 'en-US', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -444,17 +482,20 @@ const MonthlyFinanceSection = () => {
                   <TableHead className="text-foreground">{t('finance.amount')}</TableHead>
                   <TableHead className="text-foreground">{t('finance.method')}</TableHead>
                   <TableHead className="text-foreground">{t('finance.description')}</TableHead>
+                  <TableHead className="text-foreground text-right">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPayments.map((payment) => (
+                {filteredPayments.map((payment) => {
+                  const isStandalone = !payment.appointment_id;
+                  return (
                   <TableRow key={payment.id} className="hover:bg-muted/50 border-border">
                     <TableCell className="text-foreground">
                       {format(new Date(payment.payment_date), 'MMM d, yyyy', { locale })}
                     </TableCell>
                     <TableCell className="text-foreground">
-                      {payment.clients ? 
-                        `${payment.clients.first_name} ${payment.clients.last_name}` : 
+                      {payment.clients ?
+                        `${payment.clients.first_name} ${payment.clients.last_name}` :
                         'N/A'
                       }
                     </TableCell>
@@ -469,8 +510,33 @@ const MonthlyFinanceSection = () => {
                     <TableCell className="text-muted-foreground">
                       {payment.description || '-'}
                     </TableCell>
+                    <TableCell className="text-right">
+                      {isStandalone && (
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setEditingPayment(payment as unknown as EditablePayment)}
+                            title={t('common.edit')}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleDeletePayment(payment.id)}
+                            title={t('common.delete')}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           ) : (
@@ -507,6 +573,7 @@ const MonthlyFinanceSection = () => {
                   <TableHead className="text-foreground">{t('finance.description')}</TableHead>
                   <TableHead className="text-foreground">{t('finance.category')}</TableHead>
                   <TableHead className="text-foreground">{t('finance.amount')}</TableHead>
+                  <TableHead className="text-foreground text-right">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -525,6 +592,28 @@ const MonthlyFinanceSection = () => {
                     </TableCell>
                     <TableCell className="font-medium text-red-600">
                       {formatCurrencyWithClinic(expense.amount)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => setEditingExpense(expense as unknown as EditableExpense)}
+                          title={t('common.edit')}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleDeleteExpense(expense.id)}
+                          title={t('common.delete')}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -614,6 +703,17 @@ const MonthlyFinanceSection = () => {
           periodEnd={format(currentRange.end, 'yyyy-MM-dd')}
         />
       )}
+
+      <PaymentForm
+        open={!!editingPayment}
+        onClose={() => setEditingPayment(null)}
+        editingPayment={editingPayment}
+      />
+      <ExpenseForm
+        open={!!editingExpense}
+        onClose={() => setEditingExpense(null)}
+        editingExpense={editingExpense}
+      />
     </div>
   );
 };

@@ -15,6 +15,7 @@ import { formatCurrency, getBalanceColorClass, getBalanceSign } from '@/lib/util
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
 import { useClinicSettings } from '@/hooks/useClinic';
+import { useLanguage } from '@/hooks/useLanguage';
 import { hasCfdiData } from '@/lib/cfdi-catalogs';
 import { getCfdiFileUrl } from '@/hooks/useCfdiFileUrl';
 import { CfdiUploadModal } from '@/components/CfdiUploadModal';
@@ -36,6 +37,8 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
   const { clinicId } = useAuth();
   const { data: balance, isLoading: balanceLoading } = useClientBalance(client.id);
   const { currency, timezone } = useClinicSettings();
+  const { currentLanguage } = useLanguage();
+  const localeCode = currentLanguage === 'es' ? 'es-MX' : 'en-US';
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [isAppointmentFormOpen, setIsAppointmentFormOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
@@ -266,7 +269,7 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
 
   const formatClinicDate = (value: string | Date, options: Intl.DateTimeFormatOptions) => {
     const date = typeof value === 'string' ? new Date(value) : value;
-    return new Intl.DateTimeFormat('en-US', {
+    return new Intl.DateTimeFormat(localeCode, {
       timeZone: timezone,
       ...options,
     }).format(date);

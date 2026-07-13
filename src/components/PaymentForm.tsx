@@ -17,26 +17,57 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useClinicSettings } from '@/hooks/useClinic';
 import { Loader2, DollarSign, CreditCard, Banknote } from 'lucide-react';
 import ClientSearchSelect from '@/components/ClientSearchSelect';
+import { useUpdateStandalonePayment } from '@/hooks/usePayments';
+
+/** A standalone payment (no appointment_id) being edited, as loaded from the finance tables. */
+export interface EditablePayment {
+  id: string;
+  amount: number;
+  description: string | null;
+  client_id: string | null;
+  method: string;
+  payment_date: string;
+}
 
 interface PaymentFormProps {
   open: boolean;
   onClose: () => void;
+  editingPayment?: EditablePayment | null;
 }
 
-export default function PaymentForm({ open, onClose }: PaymentFormProps) {
+export default function PaymentForm({ open, onClose, editingPayment }: PaymentFormProps) {
   const { t } = useTranslation();
   const { clinicId, user } = useAuth();
+  const isEditing = !!editingPayment;
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [clientId, setClientId] = useState<string>('none');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'cheque' | 'insurance'>('cash');
   const [paymentDate, setPaymentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const { data: clients } = useClients();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currency } = useClinicSettings();
+  const updateStandalonePayment = useUpdateStandalonePayment();
+
+  useEffect(() => {
+    if (!open) return;
+    if (editingPayment) {
+      setAmount(String(editingPayment.amount));
+      setDescription(editingPayment.description || '');
+      setClientId(editingPayment.client_id || 'none');
+      setPaymentMethod(editingPayment.method as any);
+      setPaymentDate(format(new Date(editingPayment.payment_date), 'yyyy-MM-dd'));
+    } else {
+      setAmount('');
+      setDescription('');
+      setClientId('none');
+      setPaymentMethod('cash');
+      setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
+    }
+  }, [open, editingPayment]);
 
   // Clinic-aware currency formatting
   const formatCurrencyWithClinic = (value: number) => {
@@ -77,39 +108,50 @@ export default function PaymentForm({ open, onClose }: PaymentFormProps) {
     setIsSubmitting(true);
 
     try {
-      // Use selected date with current time (not 00:00) so Finance reflects actual recording time
+      // Combine the selected date with a time-of-day: the original payment's time when
+      // editing (so just fixing the amount doesn't silently shift its timestamp), or now
+      // when recording a new one.
       const d = new Date(paymentDate + 'T00:00:00');
-      const now = new Date();
-      d.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+      const timeSource = isEditing && editingPayment ? new Date(editingPayment.payment_date) : new Date();
+      d.setHours(timeSource.getHours(), timeSource.getMinutes(), timeSource.getSeconds(), timeSource.getMilliseconds());
 
-      const paymentData = {
-        amount: numAmount,
-        description,
-        client_id: clientId === 'none' ? null : clientId,
-        clinic_id: clinicId,
-        method: paymentMethod,
-        payment_date: d.toISOString(),
-        received_by: user?.id || null,
-      };
+      if (isEditing && editingPayment) {
+        await updateStandalonePayment.mutateAsync({
+          id: editingPayment.id,
+          amount: numAmount,
+          description,
+          client_id: clientId === 'none' ? null : clientId,
+          method: paymentMethod,
+          payment_date: d.toISOString(),
+        });
 
-      const { error } = await supabase
-        .from('payments')
-        .insert(paymentData);
+        toast({
+          title: t('finance.paymentUpdated'),
+          description: t('finance.paymentUpdatedSuccess', { amount: formatCurrencyWithClinic(numAmount) }),
+        });
+      } else {
+        const paymentData = {
+          amount: numAmount,
+          description,
+          client_id: clientId === 'none' ? null : clientId,
+          clinic_id: clinicId,
+          method: paymentMethod,
+          payment_date: d.toISOString(),
+          received_by: user?.id || null,
+        };
 
-      if (error) throw error;
+        const { error } = await supabase
+          .from('payments')
+          .insert(paymentData);
 
-      toast({
-        title: t('finance.paymentRecorded'),
-        description: t('finance.paymentRecordedSuccess', { amount: formatCurrencyWithClinic(numAmount) }),
-      });
+        if (error) throw error;
 
-      // Reset form
-      setAmount('');
-      setDescription('');
-      setClientId('none');
-      setPaymentMethod('cash');
-      setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
-      
+        toast({
+          title: t('finance.paymentRecorded'),
+          description: t('finance.paymentRecordedSuccess', { amount: formatCurrencyWithClinic(numAmount) }),
+        });
+      }
+
       onClose();
 
       // Invalidate client-scoped, finance, and payroll queries so ClientDetails / Finance / Payroll refresh
@@ -137,7 +179,7 @@ export default function PaymentForm({ open, onClose }: PaymentFormProps) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{t('finance.recordPaymentTitle')}</DialogTitle>
+          <DialogTitle>{isEditing ? t('finance.editPaymentTitle') : t('finance.recordPaymentTitle')}</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -219,7 +261,9 @@ export default function PaymentForm({ open, onClose }: PaymentFormProps) {
               {t('finance.cancel')}
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? t('finance.recording') : t('finance.recordPayment')}
+              {isSubmitting
+                ? (isEditing ? t('finance.saving') : t('finance.recording'))
+                : (isEditing ? t('common.save') : t('finance.recordPayment'))}
             </Button>
           </div>
         </form>

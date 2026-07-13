@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,15 +14,27 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
 import { useTherapists } from '@/hooks/useTherapists';
 import TherapistOption from '@/components/TherapistOption';
+import { useUpdateExpense, type ExpenseUpdate } from '@/hooks/useExpenses';
+
+export interface EditableExpense {
+  id: string;
+  amount: number;
+  description: string;
+  category: string;
+  date: string;
+  therapist_id: string | null;
+}
 
 interface ExpenseFormProps {
   open: boolean;
   onClose: () => void;
+  editingExpense?: EditableExpense | null;
 }
 
-const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
+const ExpenseForm = ({ open, onClose, editingExpense }: ExpenseFormProps) => {
   const { t } = useTranslation();
   const { clinicId, user } = useAuth();
+  const isEditing = !!editingExpense;
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
@@ -31,6 +43,24 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
   const { data: therapists = [] } = useTherapists();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const updateExpense = useUpdateExpense();
+
+  useEffect(() => {
+    if (!open) return;
+    if (editingExpense) {
+      setAmount(String(editingExpense.amount));
+      setDescription(editingExpense.description);
+      setCategory(editingExpense.category);
+      setDate(editingExpense.date);
+      setTherapistId(editingExpense.therapist_id || '');
+    } else {
+      setAmount('');
+      setDescription('');
+      setCategory('');
+      setDate(format(new Date(), 'yyyy-MM-dd'));
+      setTherapistId('');
+    }
+  }, [open, editingExpense]);
 
   const expenseCategories = [
     { value: 'supplies', label: t('finance.supplies') },
@@ -105,6 +135,32 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
       return;
     }
 
+    if (isEditing && editingExpense) {
+      const update: ExpenseUpdate = {
+        id: editingExpense.id,
+        amount: parseFloat(amount),
+        description,
+        category,
+        date,
+        therapist_id: therapistId || null,
+      };
+      updateExpense.mutate(update, {
+        onSuccess: () => {
+          toast({ title: t('common.success'), description: t('finance.expenseUpdated') });
+          handleClose();
+        },
+        onError: (error) => {
+          console.error('Error updating expense:', error);
+          toast({
+            title: t('common.error'),
+            description: t('finance.failedToUpdateExpense'),
+            variant: 'destructive',
+          });
+        },
+      });
+      return;
+    }
+
     createExpenseMutation.mutate({
       amount: parseFloat(amount),
       description,
@@ -115,11 +171,6 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
   };
 
   const handleClose = () => {
-    setAmount('');
-    setDescription('');
-    setCategory('');
-    setDate(format(new Date(), 'yyyy-MM-dd'));
-    setTherapistId('');
     onClose();
   };
 
@@ -127,7 +178,7 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{t('finance.addExpenseTitle')}</DialogTitle>
+          <DialogTitle>{isEditing ? t('finance.editExpenseTitle') : t('finance.addExpenseTitle')}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -204,11 +255,13 @@ const ExpenseForm = ({ open, onClose }: ExpenseFormProps) => {
             <Button type="button" variant="outline" onClick={handleClose}>
               {t('finance.cancel')}
             </Button>
-            <Button 
-              type="submit" 
-              disabled={createExpenseMutation.isPending}
+            <Button
+              type="submit"
+              disabled={createExpenseMutation.isPending || updateExpense.isPending}
             >
-              {createExpenseMutation.isPending ? t('finance.adding') : t('finance.addExpense')}
+              {isEditing
+                ? (updateExpense.isPending ? t('finance.saving') : t('common.save'))
+                : (createExpenseMutation.isPending ? t('finance.adding') : t('finance.addExpense'))}
             </Button>
           </div>
         </form>
