@@ -1,9 +1,20 @@
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, Sparkles, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AiChatMessage } from '@/integrations/aiChat/service';
+
+const MARKDOWN_CLASSNAMES = cn(
+  'prose prose-sm dark:prose-invert max-w-none',
+  'prose-p:my-1 prose-headings:mt-3 prose-headings:mb-1 prose-headings:first:mt-0',
+  'prose-ul:my-1 prose-ol:my-1 prose-li:my-0',
+  'prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground',
+  'prose-a:text-primary prose-code:text-foreground prose-blockquote:text-foreground',
+  'prose-table:my-2'
+);
 
 interface ChatMessageListProps {
   messages: AiChatMessage[];
@@ -45,11 +56,17 @@ const ChatMessageList = ({ messages, isThinking }: ChatMessageListProps) => {
             </div>
             <div
               className={cn(
-                'max-w-[80%] rounded-lg px-4 py-2 text-sm whitespace-pre-wrap',
-                message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
+                'max-w-[80%] rounded-lg px-4 py-2 text-sm',
+                message.role === 'user' ? 'bg-primary text-primary-foreground whitespace-pre-wrap' : 'bg-muted text-foreground'
               )}
             >
-              {message.content}
+              {message.role === 'assistant' ? (
+                <div className={MARKDOWN_CLASSNAMES}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                </div>
+              ) : (
+                message.content
+              )}
             </div>
           </div>
         ))}
