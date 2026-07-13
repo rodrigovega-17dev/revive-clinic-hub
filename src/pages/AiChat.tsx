@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useAiConversation, useAiChatMessages, useSendAiChatMessage } from '@/hooks/useAiChat';
@@ -35,11 +35,7 @@ const AiChat = () => {
       </div>
 
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">{t('aiChat.title')}</CardTitle>
-          <CardDescription>{t('aiChat.readOnlyNotice')}</CardDescription>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           {isLoadingHistory ? (
             <div className="space-y-4 py-2">
               {Array.from({ length: 3 }).map((_, i) => (

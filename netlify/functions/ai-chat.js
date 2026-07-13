@@ -21,7 +21,7 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const anthropic = anthropicApiKey ? new Anthropic({ apiKey: anthropicApiKey }) : null;
 
-const MODEL = 'claude-3-5-haiku-20241022';
+const MODEL = 'claude-haiku-4-5-20251001';
 const MAX_ITERATIONS = 5;
 const HISTORY_REPLAY_LIMIT = 10;
 const MAX_MESSAGE_LENGTH = 4000;
