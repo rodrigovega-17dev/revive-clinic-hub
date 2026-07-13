@@ -15,6 +15,13 @@ const HARD_MAX_LEDGER_LIMIT = 200;
 const HARD_MAX_PAYOUT_LIMIT = 120;
 const OVERVIEW_PAGE_SIZE = 500;
 const OVERVIEW_HARD_SCAN_MAX = 20000;
+const OVERVIEW_MAX_PAGES = 8;
+const OVERVIEW_TARGET_ROWS_BY_SPAN = {
+  day: 4000,
+  week: 8000,
+  month: 12000,
+  long: 6000,
+};
 
 const RANGE_LIMIT_MULTIPLIERS = {
   day: { default: 2.5, max: 4, shouldFullyAggregate: true },
@@ -1045,19 +1052,25 @@ const toolHandlers = {
     const { start, end, span } = resolveDateRange(input.start_date, input.end_date);
     const timezone = clinicTimezone || 'UTC';
     const rows = [];
+    const targetRows = Math.min(OVERVIEW_HARD_SCAN_MAX, OVERVIEW_TARGET_ROWS_BY_SPAN[span.kind] || OVERVIEW_TARGET_ROWS_BY_SPAN.long);
+    const pageSize = Math.min(OVERVIEW_PAGE_SIZE, targetRows);
     let totalMatching = null;
     let offset = 0;
+    let pagesFetched = 0;
     let queryError = null;
 
-    while (offset < OVERVIEW_HARD_SCAN_MAX) {
-      const { data, error, count } = await supabase
+    while (offset < targetRows && pagesFetched < OVERVIEW_MAX_PAGES) {
+      const to = Math.min(offset + pageSize - 1, targetRows - 1);
+      const baseQuery = supabase
         .from('appointments')
-        .select('start_time, status', { count: 'exact' })
         .eq('clinic_id', clinicId)
         .gte('start_time', start)
         .lte('start_time', end)
-        .order('start_time', { ascending: true })
-        .range(offset, offset + OVERVIEW_PAGE_SIZE - 1);
+        .order('start_time', { ascending: true });
+
+      const { data, error, count } = pagesFetched === 0
+        ? await baseQuery.select('start_time, status', { count: 'exact' }).range(offset, to)
+        : await baseQuery.select('start_time, status').range(offset, to);
 
       if (error) {
         queryError = error;
@@ -1068,9 +1081,10 @@ const toolHandlers = {
       const pageRows = data || [];
       if (pageRows.length === 0) break;
 
-      const remainingSlots = OVERVIEW_HARD_SCAN_MAX - rows.length;
+      const remainingSlots = targetRows - rows.length;
       rows.push(...pageRows.slice(0, remainingSlots));
-      if (pageRows.length < OVERVIEW_PAGE_SIZE || rows.length >= OVERVIEW_HARD_SCAN_MAX) break;
+      pagesFetched += 1;
+      if (pageRows.length < pageSize || rows.length >= targetRows) break;
       offset += pageRows.length;
     }
 
@@ -1092,8 +1106,13 @@ const toolHandlers = {
     const dailyBreakdown = Object.values(byDay).sort((a, b) => a.date.localeCompare(b.date));
     const busiestCompletedDay = dailyBreakdown.reduce((best, d) => (!best || d.completed > best.completed ? d : best), null);
     const finalTotalMatching = totalMatching ?? rows.length;
-    const truncated = finalTotalMatching > rows.length;
+    const hitPageBudget = pagesFetched >= OVERVIEW_MAX_PAGES && rows.length < finalTotalMatching;
+    const hitRowBudget = rows.length >= targetRows && rows.length < finalTotalMatching;
+    const truncated = finalTotalMatching > rows.length || hitPageBudget || hitRowBudget;
     const spanPolicy = RANGE_LIMIT_MULTIPLIERS[span.kind] || RANGE_LIMIT_MULTIPLIERS.long;
+    const warningReasons = [];
+    if (hitRowBudget) warningReasons.push(`row safety target (${targetRows}) reached`);
+    if (hitPageBudget) warningReasons.push(`page safety cap (${OVERVIEW_MAX_PAGES}) reached`);
 
     return {
       range: { start, end, span_kind: span.kind, span_days: span.day_span },
@@ -1101,7 +1120,7 @@ const toolHandlers = {
       total_matching: finalTotalMatching,
       truncated,
       warning: truncated
-        ? `Overview reached the safety ceiling of ${OVERVIEW_HARD_SCAN_MAX} rows. Narrow the date range if you need fully exhaustive row-level coverage.`
+        ? `Overview is partial: ${warningReasons.join(' and ') || 'not all matching rows were scanned'}. Narrow the date range for exhaustive coverage.`
         : undefined,
       range_policy: {
         should_fully_aggregate: spanPolicy.shouldFullyAggregate,

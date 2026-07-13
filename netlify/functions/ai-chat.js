@@ -22,9 +22,10 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const anthropic = anthropicApiKey ? new Anthropic({ apiKey: anthropicApiKey }) : null;
 
 const MODEL = 'claude-haiku-4-5-20251001';
-const MAX_ITERATIONS = 5;
+const MAX_ITERATIONS = 4;
 const HISTORY_REPLAY_LIMIT = 10;
 const MAX_MESSAGE_LENGTH = 4000;
+const MAX_AGENT_RUNTIME_MS = 24000;
 
 const jsonResponse = (statusCode, body) => ({
   statusCode,
@@ -124,11 +125,20 @@ const runAgentLoop = async (clinicId, clinicName, clinicTimezone, historyMessage
   let messages = historyMessages;
   const toolCallLog = [];
   const todayLocal = new Intl.DateTimeFormat('en-CA', { timeZone: clinicTimezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const startedAt = Date.now();
+  const isOutOfBudget = () => Date.now() - startedAt > MAX_AGENT_RUNTIME_MS;
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
+    if (isOutOfBudget()) {
+      return {
+        text: 'I started gathering the data but hit the response time limit. Please narrow the date range or ask for one part at a time.',
+        toolCallLog,
+      };
+    }
+
     const response = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 4096,
+      max_tokens: 3072,
       system: buildSystemPrompt(clinicName, clinicTimezone, todayLocal),
       messages,
       tools: toolDefinitions,
@@ -143,6 +153,12 @@ const runAgentLoop = async (clinicId, clinicName, clinicTimezone, historyMessage
     const toolUseBlocks = response.content.filter((block) => block.type === 'tool_use');
     const toolResults = [];
     for (const block of toolUseBlocks) {
+      if (isOutOfBudget()) {
+        return {
+          text: 'I started gathering the data but hit the response time limit. Please narrow the date range or ask for one part at a time.',
+          toolCallLog,
+        };
+      }
       toolCallLog.push({ name: block.name, input: block.input });
       const handler = toolHandlers[block.name];
       let result;
