@@ -357,14 +357,14 @@ const toolDefinitions = [
   },
   {
     name: 'search_activity_log',
-    description: 'Recent clinic activity (appointments/clients/payments/documents changed), optionally filtered by category and date range.',
+    description: 'Recent clinic activity (appointments/clients/payments/documents changed), optionally filtered by category and date range. Returns the most recent rows only — check the response\'s truncated/total_matching fields before drawing any conclusion about patterns over the full date range (e.g. never claim activity was "concentrated on one day" from this tool alone; use get_financial_summary or get_payroll_summary for period-wide totals instead).',
     input_schema: {
       type: 'object',
       properties: {
         entity_type: { type: 'string', description: 'One of: appointment, client, payment, document.' },
         start_date: { type: 'string' },
         end_date: { type: 'string' },
-        limit: { type: 'number', description: 'Max rows, up to 20.' },
+        limit: { type: 'number', description: 'Max rows, up to 30. For a broad date range, prefer a narrower entity_type/date filter over relying on this being complete.' },
       },
     },
   },
@@ -451,9 +451,9 @@ const toolHandlers = {
     const { start, end } = resolveDateRange(input?.start_date, input?.end_date);
     const limit = clampLimit(input?.limit, MAX_APPOINTMENTS_LIMIT);
 
-    const { data, error } = await supabase
+    const { data, error, count } = await supabase
       .from('appointments')
-      .select('id, start_time, end_time, status, payment_amount, payment_status, treatments(name), therapists(first_name, last_name)')
+      .select('id, start_time, end_time, status, payment_amount, payment_status, treatments(name), therapists(first_name, last_name)', { count: 'exact' })
       .eq('client_id', clientId)
       .eq('clinic_id', clinicId)
       .gte('start_time', start)
@@ -464,6 +464,8 @@ const toolHandlers = {
 
     return {
       range: { start, end },
+      total_matching: count ?? (data || []).length,
+      truncated: (count ?? 0) > (data || []).length,
       appointments: (data || []).map((a) => ({
         id: a.id,
         start_time: a.start_time,
@@ -579,7 +581,7 @@ const toolHandlers = {
 
     let query = supabase
       .from('payments')
-      .select('id, amount, method, description, payment_date, facturado, invoice_state, appointment_id, clients(first_name, last_name)')
+      .select('id, amount, method, description, payment_date, facturado, invoice_state, appointment_id, clients(first_name, last_name)', { count: 'exact' })
       .eq('clinic_id', clinicId)
       .gte('payment_date', start)
       .lte('payment_date', end)
@@ -589,10 +591,12 @@ const toolHandlers = {
     if (input?.method) query = query.eq('method', input.method);
     if (input?.standalone_only) query = query.is('appointment_id', null);
 
-    const { data, error } = await query;
+    const { data, error, count } = await query;
     if (error) return { error: error.message };
     return {
       range: { start, end },
+      total_matching: count ?? (data || []).length,
+      truncated: (count ?? 0) > (data || []).length,
       payments: (data || []).map((p) => ({
         id: p.id,
         amount: p.amount,
@@ -613,7 +617,7 @@ const toolHandlers = {
 
     let query = supabase
       .from('expenses')
-      .select('id, amount, description, category, date, therapists(first_name, last_name), suppliers(name)')
+      .select('id, amount, description, category, date, therapists(first_name, last_name), suppliers(name)', { count: 'exact' })
       .eq('clinic_id', clinicId)
       .gte('date', start.slice(0, 10))
       .lte('date', end.slice(0, 10))
@@ -622,10 +626,12 @@ const toolHandlers = {
     if (input?.category) query = query.eq('category', input.category);
     if (input?.therapist_id) query = query.eq('therapist_id', input.therapist_id);
 
-    const { data, error } = await query;
+    const { data, error, count } = await query;
     if (error) return { error: error.message };
     return {
       range: { start, end },
+      total_matching: count ?? (data || []).length,
+      truncated: (count ?? 0) > (data || []).length,
       expenses: (data || []).map((e) => ({
         id: e.id,
         amount: e.amount,
@@ -799,11 +805,11 @@ const toolHandlers = {
 
   search_activity_log: async (supabase, clinicId, input) => {
     const { start, end } = resolveDateRange(input?.start_date, input?.end_date);
-    const limit = clampLimit(input?.limit, 20);
+    const limit = clampLimit(input?.limit, MAX_LEDGER_LIMIT);
 
     let query = supabase
       .from('activity_log')
-      .select('description, action_type, entity_type, user_email, created_at')
+      .select('description, action_type, entity_type, user_email, created_at', { count: 'exact' })
       .eq('clinic_id', clinicId)
       .gte('created_at', start)
       .lte('created_at', end)
@@ -811,9 +817,19 @@ const toolHandlers = {
       .limit(limit);
     if (input?.entity_type) query = query.eq('entity_type', input.entity_type);
 
-    const { data, error } = await query;
+    const { data, error, count } = await query;
     if (error) return { error: error.message };
-    return { range: { start, end }, entries: data || [] };
+    const entries = data || [];
+    const truncated = (count ?? 0) > entries.length;
+    return {
+      range: { start, end },
+      total_matching: count ?? entries.length,
+      truncated,
+      warning: truncated
+        ? `Only the ${entries.length} most recent of ${count} matching entries are shown, all from the tail end of the range. Do not infer when things happened across the full range from this alone — the earlier part of the range is not represented here.`
+        : undefined,
+      entries,
+    };
   },
 
   get_therapist_summary: async (supabase, clinicId, input) => {
