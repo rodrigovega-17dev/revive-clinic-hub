@@ -98,11 +98,13 @@ const loadRecentMessages = async (conversationId) => {
   return (data || []).reverse().map((m) => ({ role: m.role, content: m.content }));
 };
 
-const buildSystemPrompt = (clinicName) => `You are an internal AI assistant for ${clinicName}, a physical therapy clinic.
+const buildSystemPrompt = (clinicName, clinicTimezone, todayLocal) => `You are an internal AI assistant for ${clinicName}, a physical therapy clinic.
 Your purpose is to be a single place staff can ask about ANY aspect of the clinic's own data: patients, appointments, individual payments and expenses, financial summaries and breakdowns, therapist payroll (earnings, retention, incentives, net payable) and past payouts, generated documents, and the activity log.
-Today's date is ${new Date().toISOString().slice(0, 10)}.
-Use ONLY the provided tools — never fabricate data or numbers. Prefer the itemized tools (list_payments, list_expenses) when the staff member wants specific transactions, and the summary tools (get_financial_summary, get_payroll_summary, get_appointments_overview) when they want totals, breakdowns, or "how was this period" style answers.
-For ANY question about appointment counts, volume, busiest days, or an appointment-side summary of a date range, ALWAYS use get_appointments_overview — it covers the entire range with per-day/per-status counts. Do NOT use search_activity_log or get_client_appointments to answer these; they are per-record tools that only return a capped, most-recent-first slice and will misrepresent the period (e.g. making one day look "busiest" just because it's most recent).
+Today's date is ${todayLocal} (clinic timezone: ${clinicTimezone}).
+Use ONLY the provided tools — never fabricate data or numbers, and never state a metric that no tool actually returned (e.g. there is no schedule-capacity/occupancy data anywhere — never invent an "occupancy %").
+Never compute a day-of-week yourself from a date — this is unreliable. Only state a weekday when a tool explicitly provides a "weekday" field (get_appointments_overview's daily_breakdown does); otherwise omit it. When a tool already returns a computed percentage or breakdown, use that value verbatim instead of computing your own fraction — you are prone to arithmetic slips when computing several percentages in one answer.
+Prefer the itemized tools (list_payments, list_expenses) when the staff member wants specific transactions, and the summary tools (get_financial_summary, get_payroll_summary, get_appointments_overview) when they want totals, breakdowns, or "how was this period" style answers.
+For ANY question about appointment counts, volume, busiest days, or an appointment-side summary of a date range, ALWAYS use get_appointments_overview — it covers the entire range with per-day/per-status counts. Do NOT use search_activity_log or get_client_appointments to answer these; they are per-record tools that only return a capped, most-recent-first slice and will misrepresent the period (e.g. making one day look "busiest" just because it's most recent). Note get_appointments_overview's daily entries have both "total_appointments" (all statuses) and "completed" (completed only) — do not call the total "completed".
 You have READ-ONLY access: you cannot create, edit, cancel, or delete anything. If asked to perform an action, explain that you can only look up information.
 Always call a tool before answering with specific names, numbers, or dates.
 List-style tool results (list_payments, list_expenses, search_activity_log, get_client_appointments) may be capped — check their "truncated" and "total_matching" fields. If truncated is true, you are only seeing the most recent slice of a larger set: state that explicitly, and NEVER infer a pattern or timing claim (e.g. "all activity happened on one day", "this only occurred once") from what is only a partial, most-recent-first sample.
@@ -116,15 +118,16 @@ const extractText = (message) =>
     .join('\n')
     .trim() || "I wasn't able to find an answer to that.";
 
-const runAgentLoop = async (clinicId, clinicName, historyMessages) => {
+const runAgentLoop = async (clinicId, clinicName, clinicTimezone, historyMessages) => {
   let messages = historyMessages;
   const toolCallLog = [];
+  const todayLocal = new Intl.DateTimeFormat('en-CA', { timeZone: clinicTimezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     const response = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 1024,
-      system: buildSystemPrompt(clinicName),
+      system: buildSystemPrompt(clinicName, clinicTimezone, todayLocal),
       messages,
       tools: toolDefinitions,
     });
@@ -142,7 +145,7 @@ const runAgentLoop = async (clinicId, clinicName, historyMessages) => {
       const handler = toolHandlers[block.name];
       let result;
       try {
-        result = handler ? await handler(supabase, clinicId, block.input || {}) : { error: 'Unknown tool' };
+        result = handler ? await handler(supabase, clinicId, block.input || {}, clinicTimezone) : { error: 'Unknown tool' };
       } catch (err) {
         result = { error: err.message || 'Tool call failed' };
       }
@@ -184,14 +187,15 @@ exports.handler = async (event) => {
     const clinicId = await getClinicIdForUser(user.id);
     if (!clinicId) return jsonResponse(403, { error: 'No clinic found for user' });
 
-    const { data: clinic } = await supabase.from('clinics').select('name').eq('id', clinicId).single();
+    const { data: clinic } = await supabase.from('clinics').select('name, timezone').eq('id', clinicId).single();
     const clinicName = clinic?.name || 'the clinic';
+    const clinicTimezone = clinic?.timezone || 'UTC';
 
     const conversation = await resolveOrCreateConversation(clinicId, user.id);
     await insertMessage(conversation.id, clinicId, user.id, 'user', message);
 
     const history = await loadRecentMessages(conversation.id);
-    const { text, toolCallLog } = await runAgentLoop(clinicId, clinicName, history);
+    const { text, toolCallLog } = await runAgentLoop(clinicId, clinicName, clinicTimezone, history);
 
     const assistantMessage = await insertMessage(conversation.id, clinicId, user.id, 'assistant', text, toolCallLog);
     await supabase.from('ai_conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversation.id);

@@ -41,6 +41,19 @@ const resolveDateRange = (startDate, endDate) => {
 const fullName = (row) => `${row?.first_name || ''} ${row?.last_name || ''}`.trim() || null;
 
 /**
+ * The clinic's local calendar date + weekday name for a UTC timestamp. Computed here
+ * (not left to the model) for two reasons: a raw UTC date slice can misattribute an
+ * evening appointment to the wrong local day, and LLMs are unreliable at computing an
+ * arbitrary date's day-of-week from scratch.
+ */
+const localDateAndWeekday = (isoTimestamp, timezone) => {
+  const d = new Date(isoTimestamp);
+  const date = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  const weekday = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'long' }).format(d);
+  return { date, weekday };
+};
+
+/**
  * Turn a document instance's schema + filled values into readable {label, value}
  * pairs. Port of buildFieldSummary in src/hooks/useDocuments.ts / the section-walk
  * in _shared/document-render.js — skips the readonly header group and signatures.
@@ -292,7 +305,7 @@ const toolDefinitions = [
   },
   {
     name: 'get_financial_summary',
-    description: 'Revenue and expense totals for a date range (max 366 days), broken down by payment method and expense category. Use list_payments/list_expenses for individual transactions.',
+    description: 'Revenue and expense totals for a date range (max 366 days), broken down by payment method and expense category, including pre-computed percentages (payment_method_breakdown, expense_category_breakdown) — use those percent fields as-is rather than computing your own. Use list_payments/list_expenses for individual transactions.',
     input_schema: {
       type: 'object',
       properties: {
@@ -567,14 +580,34 @@ const toolHandlers = {
     const totalExpenses = (expenses || []).reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
     const revenueByMethod = {};
+    const paymentCountByMethod = {};
     (payments || []).forEach((p) => {
       revenueByMethod[p.method] = (revenueByMethod[p.method] || 0) + Number(p.amount || 0);
+      paymentCountByMethod[p.method] = (paymentCountByMethod[p.method] || 0) + 1;
     });
+    const totalPaymentCount = (payments || []).length;
+    // Percentages computed here, not left for the model to derive — do not recompute these.
+    const paymentMethodBreakdown = Object.keys(revenueByMethod)
+      .map((method) => ({
+        method,
+        amount: revenueByMethod[method],
+        count: paymentCountByMethod[method],
+        percent_of_payment_count: totalPaymentCount ? Number(((paymentCountByMethod[method] / totalPaymentCount) * 100).toFixed(1)) : 0,
+      }))
+      .sort((a, b) => b.amount - a.amount);
+
     const expensesByCategory = {};
     (expenses || []).forEach((e) => {
       const key = e.category || 'uncategorized';
       expensesByCategory[key] = (expensesByCategory[key] || 0) + Number(e.amount || 0);
     });
+    const expenseCategoryBreakdown = Object.keys(expensesByCategory)
+      .map((category) => ({
+        category,
+        amount: expensesByCategory[category],
+        percent_of_expenses: totalExpenses ? Number(((expensesByCategory[category] / totalExpenses) * 100).toFixed(1)) : 0,
+      }))
+      .sort((a, b) => b.amount - a.amount);
 
     return {
       range: { start, end },
@@ -583,6 +616,10 @@ const toolHandlers = {
       total_intangible: totalIntangible,
       total_expenses: totalExpenses,
       net_profit: totalRevenue - totalExpenses,
+      total_payment_count: totalPaymentCount,
+      // Already-computed percentages — use these values verbatim, do not recompute.
+      payment_method_breakdown: paymentMethodBreakdown,
+      expense_category_breakdown: expenseCategoryBreakdown,
       revenue_by_method: revenueByMethod,
       expenses_by_category: expensesByCategory,
     };
@@ -816,9 +853,10 @@ const toolHandlers = {
     };
   },
 
-  get_appointments_overview: async (supabase, clinicId, input) => {
+  get_appointments_overview: async (supabase, clinicId, input, clinicTimezone) => {
     if (!input?.start_date || !input?.end_date) return { error: 'start_date and end_date are required' };
     const { start, end } = resolveDateRange(input.start_date, input.end_date);
+    const timezone = clinicTimezone || 'UTC';
 
     const { data, error, count } = await supabase
       .from('appointments')
@@ -835,10 +873,12 @@ const toolHandlers = {
     const byDay = {};
     rows.forEach((a) => {
       byStatus[a.status] = (byStatus[a.status] || 0) + 1;
-      const day = String(a.start_time).slice(0, 10);
-      if (!byDay[day]) byDay[day] = { date: day, completed: 0, cancelled: 0, no_show: 0, scheduled: 0, other: 0, total: 0 };
+      // Bucket by the CLINIC'S LOCAL calendar day, not the raw UTC date — an evening
+      // appointment can fall on a different UTC date than the local date it belongs to.
+      const { date: day, weekday } = localDateAndWeekday(a.start_time, timezone);
+      if (!byDay[day]) byDay[day] = { date: day, weekday, completed: 0, cancelled: 0, no_show: 0, scheduled: 0, other: 0, total_appointments: 0 };
       const bucket = byDay[day];
-      bucket.total += 1;
+      bucket.total_appointments += 1;
       if (Object.prototype.hasOwnProperty.call(bucket, a.status)) bucket[a.status] += 1;
       else bucket.other += 1;
     });
@@ -848,9 +888,13 @@ const toolHandlers = {
 
     return {
       range: { start, end },
+      timezone,
       total_matching: count ?? rows.length,
       truncated: (count ?? 0) > rows.length,
       counts_by_status: byStatus,
+      // "weekday" and "date" here are already computed correctly in the clinic's local
+      // timezone — always use these values verbatim rather than computing/guessing the
+      // day of week from the date yourself; that computation is unreliable for you.
       daily_breakdown: dailyBreakdown,
       busiest_completed_day: busiestCompletedDay,
     };
