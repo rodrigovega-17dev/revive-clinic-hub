@@ -629,8 +629,19 @@ const toolDefinitions = [
     },
   },
   {
+    name: 'get_activity_summary',
+    description: 'Clinic-wide activity-log counts for a date range, broken down by calendar day and by action/entity type (appointment/client/payment/document) — covers the WHOLE range via internal server-side scanning, not a single capped page. Use this for "how is today/this week/this month going", "what kinds of things happened", or any period-wide activity-volume question. For the actual text description of specific events, use search_activity_log afterward — it returns one paginated page of raw entries per call and will NOT give a full picture of a broad range on its own.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        start_date: { type: 'string', description: 'Optional ISO date.' },
+        end_date: { type: 'string', description: 'Optional ISO date.' },
+      },
+    },
+  },
+  {
     name: 'search_activity_log',
-    description: 'Recent clinic activity (appointments/clients/payments/documents changed), optionally filtered by category and date range. Returns paginated rows with entity IDs/metadata; appointment rows also include an appointment_lookup snapshot from the current appointments table so historical events are interpreted correctly.',
+    description: 'Recent clinic activity (appointments/clients/payments/documents changed), optionally filtered by category and date range. Returns ONE PAGE of raw entries per call (with entity IDs/metadata; appointment rows also include an appointment_lookup snapshot) — use get_activity_summary first for any broad "how is the period going" question, since a single page here cannot represent a whole day/week/month.',
     input_schema: {
       type: 'object',
       properties: {
@@ -1415,6 +1426,106 @@ const toolHandlers = {
         start_time_local: localDateTime(a.start_time, timezone),
         end_time_local: localDateTime(a.end_time, timezone),
       })),
+    };
+  },
+
+  get_activity_summary: async (supabase, clinicId, input, clinicTimezone) => {
+    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date);
+    const timezone = clinicTimezone || 'UTC';
+    const rows = [];
+    const targetRows = Math.min(OVERVIEW_HARD_SCAN_MAX, OVERVIEW_TARGET_ROWS_BY_SPAN[span.kind] || OVERVIEW_TARGET_ROWS_BY_SPAN.long);
+    const pageSize = Math.min(OVERVIEW_PAGE_SIZE, targetRows);
+    let hasMoreRows = false;
+    let offset = 0;
+    let pagesFetched = 0;
+    let queryError = null;
+    let lastPageWasFull = false;
+
+    while (offset < targetRows && pagesFetched < OVERVIEW_MAX_PAGES) {
+      const to = Math.min(offset + pageSize - 1, targetRows - 1);
+      const { data, error } = await supabase
+        .from('activity_log')
+        .select('entity_type, action_type, created_at')
+        .eq('clinic_id', clinicId)
+        .gte('created_at', start)
+        .lte('created_at', end)
+        .order('created_at', { ascending: true })
+        .range(offset, to);
+
+      if (error) {
+        queryError = error;
+        break;
+      }
+
+      const pageRows = data || [];
+      if (pageRows.length === 0) break;
+      lastPageWasFull = pageRows.length === pageSize;
+
+      const remainingSlots = targetRows - rows.length;
+      rows.push(...pageRows.slice(0, remainingSlots));
+      pagesFetched += 1;
+      if (pageRows.length < pageSize || rows.length >= targetRows) break;
+      offset += pageRows.length;
+    }
+
+    if (queryError) return { error: queryError.message };
+    const hitPageBudget = pagesFetched >= OVERVIEW_MAX_PAGES && offset < targetRows;
+    const hitRowBudget = rows.length >= targetRows;
+
+    // Cheap one-row probe when we stopped on a full page to confirm whether more
+    // entries exist, without paying for a full exact COUNT on every call.
+    if (!hitPageBudget && !hitRowBudget && lastPageWasFull && rows.length > 0) {
+      const { data: probeRows, error: probeError } = await supabase
+        .from('activity_log')
+        .select('id')
+        .eq('clinic_id', clinicId)
+        .gte('created_at', start)
+        .lte('created_at', end)
+        .order('created_at', { ascending: true })
+        .range(rows.length, rows.length);
+      if (probeError) return { error: probeError.message };
+      hasMoreRows = (probeRows || []).length > 0;
+    } else {
+      hasMoreRows = hitPageBudget || hitRowBudget;
+    }
+
+    const byEntityType = {};
+    const byActionType = {};
+    const byDay = {};
+    rows.forEach((entry) => {
+      byEntityType[entry.entity_type] = (byEntityType[entry.entity_type] || 0) + 1;
+      byActionType[entry.action_type] = (byActionType[entry.action_type] || 0) + 1;
+      // Bucket by the CLINIC'S LOCAL calendar day, not the raw UTC date — same reasoning
+      // as get_appointments_overview's daily_breakdown.
+      const { date: day, weekday } = localDateAndWeekday(entry.created_at, timezone);
+      if (!byDay[day]) byDay[day] = { date: day, weekday, total_events: 0, by_entity_type: {} };
+      const bucket = byDay[day];
+      bucket.total_events += 1;
+      bucket.by_entity_type[entry.entity_type] = (bucket.by_entity_type[entry.entity_type] || 0) + 1;
+    });
+
+    const dailyBreakdown = Object.values(byDay).sort((a, b) => a.date.localeCompare(b.date));
+    const busiestDay = dailyBreakdown.reduce((best, d) => (!best || d.total_events > best.total_events ? d : best), null);
+    const truncated = hasMoreRows;
+    const warningReasons = [];
+    if (hitRowBudget) warningReasons.push(`row safety target (${targetRows}) reached`);
+    if (hitPageBudget) warningReasons.push(`page safety cap (${OVERVIEW_MAX_PAGES}) reached`);
+    if (!hitPageBudget && !hitRowBudget && hasMoreRows) warningReasons.push('additional matching rows detected beyond scanned window');
+
+    return {
+      range: { start, end, span_kind: span.kind, span_days: span.day_span },
+      timezone,
+      total_matching: truncated ? null : rows.length,
+      truncated,
+      warning: truncated
+        ? `Activity summary is partial: ${warningReasons.join(' and ') || 'not all matching rows were scanned'}. Narrow the date range for exhaustive coverage, or use search_activity_log to inspect specific events.`
+        : undefined,
+      counts_by_entity_type: byEntityType,
+      counts_by_action_type: byActionType,
+      // "weekday" here is already computed correctly in the clinic's local timezone —
+      // always use it verbatim rather than computing/guessing the day of week yourself.
+      daily_breakdown: dailyBreakdown,
+      busiest_day: busiestDay,
     };
   },
 
