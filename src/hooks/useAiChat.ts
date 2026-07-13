@@ -57,3 +57,23 @@ export const useSendAiChatMessage = () => {
     },
   });
 };
+
+/**
+ * Deletes the user's conversation row (ai_chat_messages cascades via FK) so the next
+ * message starts a fresh one. RLS already scopes this delete to the caller's own row.
+ */
+export const useClearAiChat = () => {
+  const queryClient = useQueryClient();
+  const { clinicId, user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      const { error } = await supabase.from('ai_conversations').delete().eq('id', conversationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ai-conversation', clinicId, user?.id] });
+      queryClient.removeQueries({ queryKey: ['ai-chat-messages'] });
+    },
+  });
+};

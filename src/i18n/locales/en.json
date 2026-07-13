@@ -305,7 +305,11 @@
     "emptyState": "Ask anything about your clients, appointments, finances, documents, or activity log.",
     "thinking": "Thinking...",
     "inputPlaceholder": "Ask a question about your clinic...",
-    "sendFailed": "Failed to send message. Please try again."
+    "sendFailed": "Failed to send message. Please try again.",
+    "clearChat": "Clear chat",
+    "clearChatConfirmTitle": "Clear this conversation?",
+    "clearChatConfirmDescription": "This deletes your entire AI chat history. This cannot be undone.",
+    "clearFailed": "Failed to clear the chat. Please try again."
   },
   "activityLog": {
     "title": "Activity Log",

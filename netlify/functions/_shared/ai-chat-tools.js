@@ -9,6 +9,7 @@ const DEFAULT_LIST_LIMIT = 10;
 const MAX_APPOINTMENTS_LIMIT = 50;
 const MAX_LEDGER_LIMIT = 30;
 const MAX_DATE_RANGE_DAYS = 366;
+const MAX_OVERVIEW_ROWS = 1000;
 
 const clampLimit = (requested, max) => {
   const n = Number(requested);
@@ -353,6 +354,18 @@ const toolDefinitions = [
         end_date: { type: 'string', description: 'ISO date.' },
         limit: { type: 'number', description: 'Max rows, up to 20.' },
       },
+    },
+  },
+  {
+    name: 'get_appointments_overview',
+    description: 'Clinic-wide appointment counts for a date range, broken down by calendar day and by status (completed/cancelled/no_show/scheduled) — covers the WHOLE range, not a capped recent sample. This is the right tool for "how many appointments", "which day was busiest", or "summarize appointments this month" — prefer it over search_activity_log or get_client_appointments for anything period-wide.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        start_date: { type: 'string', description: 'ISO date.' },
+        end_date: { type: 'string', description: 'ISO date.' },
+      },
+      required: ['start_date', 'end_date'],
     },
   },
   {
@@ -800,6 +813,46 @@ const toolHandlers = {
         status: p.status,
         notes: p.notes,
       })),
+    };
+  },
+
+  get_appointments_overview: async (supabase, clinicId, input) => {
+    if (!input?.start_date || !input?.end_date) return { error: 'start_date and end_date are required' };
+    const { start, end } = resolveDateRange(input.start_date, input.end_date);
+
+    const { data, error, count } = await supabase
+      .from('appointments')
+      .select('start_time, status', { count: 'exact' })
+      .eq('clinic_id', clinicId)
+      .gte('start_time', start)
+      .lte('start_time', end)
+      .order('start_time', { ascending: true })
+      .limit(MAX_OVERVIEW_ROWS);
+    if (error) return { error: error.message };
+
+    const rows = data || [];
+    const byStatus = {};
+    const byDay = {};
+    rows.forEach((a) => {
+      byStatus[a.status] = (byStatus[a.status] || 0) + 1;
+      const day = String(a.start_time).slice(0, 10);
+      if (!byDay[day]) byDay[day] = { date: day, completed: 0, cancelled: 0, no_show: 0, scheduled: 0, other: 0, total: 0 };
+      const bucket = byDay[day];
+      bucket.total += 1;
+      if (Object.prototype.hasOwnProperty.call(bucket, a.status)) bucket[a.status] += 1;
+      else bucket.other += 1;
+    });
+
+    const dailyBreakdown = Object.values(byDay).sort((a, b) => a.date.localeCompare(b.date));
+    const busiestCompletedDay = dailyBreakdown.reduce((best, d) => (!best || d.completed > best.completed ? d : best), null);
+
+    return {
+      range: { start, end },
+      total_matching: count ?? rows.length,
+      truncated: (count ?? 0) > rows.length,
+      counts_by_status: byStatus,
+      daily_breakdown: dailyBreakdown,
+      busiest_completed_day: busiestCompletedDay,
     };
   },
 

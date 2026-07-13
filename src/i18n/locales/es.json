@@ -305,7 +305,11 @@
     "emptyState": "Pregunta lo que quieras sobre tus pacientes, citas, finanzas, documentos o registro de actividad.",
     "thinking": "Pensando...",
     "inputPlaceholder": "Haz una pregunta sobre tu clínica...",
-    "sendFailed": "No se pudo enviar el mensaje. Intenta de nuevo."
+    "sendFailed": "No se pudo enviar el mensaje. Intenta de nuevo.",
+    "clearChat": "Borrar chat",
+    "clearChatConfirmTitle": "¿Borrar esta conversación?",
+    "clearChatConfirmDescription": "Esto elimina todo tu historial de chat con la IA. Esta acción no se puede deshacer.",
+    "clearFailed": "No se pudo borrar el chat. Intenta de nuevo."
   },
   "activityLog": {
     "title": "Registro de Actividad",
