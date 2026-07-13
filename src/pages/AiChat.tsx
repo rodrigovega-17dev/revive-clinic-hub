@@ -1,4 +1,6 @@
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -15,22 +17,31 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useAiConversation, useAiChatMessages, useSendAiChatMessage, useClearAiChat } from '@/hooks/useAiChat';
+import { useAiConversation, useAiChatMessages, useSendAiChatMessage, useClearAiChat, useAiChatJobStatus } from '@/hooks/useAiChat';
 import ChatMessageList from '@/components/ai-chat/ChatMessageList';
 import ChatInput from '@/components/ai-chat/ChatInput';
 
 const AiChat = () => {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const reportedFailedJobId = useRef<string | null>(null);
   const { data: conversation, isLoading: conversationLoading } = useAiConversation();
   const { data: messages = [], isLoading: messagesLoading } = useAiChatMessages(conversation?.id);
+  const { data: jobStatusData } = useAiChatJobStatus(conversation?.id, activeJobId);
   const sendMessage = useSendAiChatMessage();
   const clearChat = useClearAiChat();
 
   const isLoadingHistory = conversationLoading || (!!conversation?.id && messagesLoading);
+  const activeJob = jobStatusData?.job || null;
+  const isJobRunning = activeJob?.status === 'queued' || activeJob?.status === 'running';
 
   const handleSend = (message: string) => {
     sendMessage.mutate(message, {
+      onSuccess: (result) => {
+        setActiveJobId(result.jobId);
+      },
       onError: (error) => {
         toast({
           title: t('common.error'),
@@ -54,6 +65,31 @@ const AiChat = () => {
     });
   };
 
+  useEffect(() => {
+    if (!activeJob || !conversation?.id) return;
+
+    if (activeJob.status === 'succeeded' || activeJob.status === 'failed') {
+      queryClient.invalidateQueries({ queryKey: ['ai-chat-messages', conversation.id] });
+    }
+
+    if (activeJob.status === 'succeeded' && activeJobId && activeJob.id === activeJobId) {
+      setActiveJobId(null);
+      reportedFailedJobId.current = null;
+    }
+
+    if (activeJob.status === 'failed') {
+      if (activeJob.id !== reportedFailedJobId.current) {
+        reportedFailedJobId.current = activeJob.id;
+        toast({
+          title: t('common.error'),
+          description: activeJob.error || t('aiChat.sendFailed'),
+          variant: 'destructive',
+        });
+      }
+      if (activeJobId && activeJob.id === activeJobId) setActiveJobId(null);
+    }
+  }, [activeJob, activeJobId, conversation?.id, queryClient, t, toast]);
+
   return (
     <div className="flex flex-col h-full gap-6">
       <div className="flex items-start justify-between gap-4 shrink-0">
@@ -64,7 +100,7 @@ const AiChat = () => {
         {messages.length > 0 && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="shrink-0" disabled={clearChat.isPending}>
+              <Button variant="outline" size="sm" className="shrink-0" disabled={clearChat.isPending || isJobRunning}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 {t('aiChat.clearChat')}
               </Button>
@@ -95,9 +131,9 @@ const AiChat = () => {
               ))}
             </div>
           ) : (
-            <ChatMessageList messages={messages} isThinking={sendMessage.isPending} />
+            <ChatMessageList messages={messages} isThinking={sendMessage.isPending || isJobRunning} />
           )}
-          <ChatInput onSend={handleSend} disabled={sendMessage.isPending} />
+          <ChatInput onSend={handleSend} disabled={sendMessage.isPending || isJobRunning} />
         </CardContent>
       </Card>
     </div>

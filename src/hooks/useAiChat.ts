@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { sendChatMessage } from '@/integrations/aiChat/service';
+import { fetchAiChatJobStatus, sendChatMessage } from '@/integrations/aiChat/service';
 import { useAuth } from './useAuth';
 
 /**
@@ -54,6 +54,20 @@ export const useSendAiChatMessage = () => {
     onSuccess: ({ conversationId }) => {
       queryClient.invalidateQueries({ queryKey: ['ai-conversation', clinicId, user?.id] });
       queryClient.invalidateQueries({ queryKey: ['ai-chat-messages', conversationId] });
+    },
+  });
+};
+
+export const useAiChatJobStatus = (conversationId: string | null | undefined, jobId: string | null | undefined) => {
+  return useQuery({
+    queryKey: ['ai-chat-job-status', conversationId, jobId],
+    queryFn: () => fetchAiChatJobStatus({ jobId: jobId || undefined, conversationId: jobId ? undefined : conversationId || undefined }),
+    enabled: !!conversationId || !!jobId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.job?.status;
+      if (status === 'queued' || status === 'running') return 2000;
+      if (!jobId && conversationId) return 5000;
+      return false;
     },
   });
 };

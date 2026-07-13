@@ -6,6 +6,18 @@ import { supabase } from '../supabase/client';
 import type { Tables } from '../supabase/types';
 
 export type AiChatMessage = Tables<'ai_chat_messages'>;
+export type AiChatJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+export type AiChatEnqueueResponse = { conversationId: string; jobId: string; status: AiChatJobStatus };
+export type AiChatJob = {
+  id: string;
+  conversationId: string;
+  status: AiChatJobStatus;
+  error: string | null;
+  responseMessageId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
+};
 
 const getBaseUrl = () => {
   const fallback =
@@ -24,7 +36,7 @@ async function getToken(): Promise<string> {
   return token;
 }
 
-export async function sendChatMessage(message: string): Promise<{ conversationId: string; message: AiChatMessage }> {
+export async function sendChatMessage(message: string): Promise<AiChatEnqueueResponse> {
   const token = await getToken();
   const base = getBaseUrl();
   const res = await fetch(`${base}/.netlify/functions/ai-chat`, {
@@ -46,5 +58,40 @@ export async function sendChatMessage(message: string): Promise<{ conversationId
     }
     throw new Error(msg || 'AI chat request failed');
   }
-  return text ? JSON.parse(text) : ({} as { conversationId: string; message: AiChatMessage });
+  return text ? JSON.parse(text) : ({} as AiChatEnqueueResponse);
+}
+
+export async function fetchAiChatJobStatus({
+  jobId,
+  conversationId,
+}: {
+  jobId?: string;
+  conversationId?: string;
+}): Promise<{ job: AiChatJob | null }> {
+  if (!jobId && !conversationId) return { job: null };
+
+  const token = await getToken();
+  const base = getBaseUrl();
+  const params = new URLSearchParams();
+  if (jobId) params.set('jobId', jobId);
+  else if (conversationId) params.set('conversationId', conversationId);
+
+  const res = await fetch(`${base}/.netlify/functions/ai-chat-job-status?${params.toString()}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    let msg = text;
+    try {
+      const j = JSON.parse(text);
+      msg = j?.error ?? text;
+    } catch {
+      /* use text */
+    }
+    throw new Error(msg || 'AI chat job status request failed');
+  }
+  return text ? JSON.parse(text) : { job: null };
 }
