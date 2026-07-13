@@ -238,6 +238,43 @@ const localDateAndWeekday = (isoTimestamp, timezone) => {
 };
 
 /**
+ * Local date + weekday + 24-hour clock time for a UTC timestamp. Exists so the model is
+ * never handed a raw UTC instant to interpret itself — it has repeatedly mangled these
+ * (e.g. relabeling a raw UTC hour as if it were already clinic-local, or mislabeling a
+ * 24-hour value with the wrong AM/PM). Always prefer this over exposing a raw timestamp.
+ */
+const localDateTime = (isoTimestamp, timezone) => {
+  const { date, weekday } = localDateAndWeekday(isoTimestamp, timezone);
+  const time = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(isoTimestamp));
+  return { date, weekday, time };
+};
+
+/**
+ * Converts a clinic-local calendar day (YYYY-MM-DD) to correct UTC instant bounds via an
+ * Intl.DateTimeFormat offset probe (correct for any timezone, not a hardcoded offset).
+ * Used only to build the default "today" range for list_appointments — resolveDateRange's
+ * own date-only parsing assumes UTC calendar days, which is wrong for non-UTC clinics.
+ */
+const clinicLocalDayBoundsUtc = (dateStr, timezone) => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  // Probe the offset once, at a clean whole-second instant (noon, away from any day
+  // boundary) — probing directly at a .999ms boundary would have the millisecond
+  // truncated by formatToParts' second-only granularity, overshooting by up to ~1s.
+  const guessNoon = Date.UTC(year, month - 1, day, 12, 0, 0, 0);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date(guessNoon)).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+  const asIfUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  const offsetMs = asIfUtc - guessNoon;
+  return {
+    startUtcIso: new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0) - offsetMs).toISOString(),
+    endUtcIso: new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999) - offsetMs).toISOString(),
+  };
+};
+
+/**
  * Turn a document instance's schema + filled values into readable {label, value}
  * pairs. Port of buildFieldSummary in src/hooks/useDocuments.ts / the section-walk
  * in _shared/document-render.js — skips the readonly header group and signatures.
@@ -577,6 +614,21 @@ const toolDefinitions = [
     },
   },
   {
+    name: 'list_appointments',
+    description: 'Clinic-wide, per-appointment detail rows (patient, therapist, treatment, status, payment info, localized time) for a date range. Defaults to TODAY (clinic-local) if no dates are given. Use this for "list/show today\'s appointments", "what appointments do we have this week with details" — anything asking for individual appointment rows rather than counts. For counts/totals/busiest-day use get_appointments_overview instead.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        start_date: { type: 'string', description: 'ISO date. Omit along with end_date to default to today (clinic-local).' },
+        end_date: { type: 'string', description: 'ISO date. Omit along with start_date to default to today (clinic-local).' },
+        therapist_id: { type: 'string', description: 'From search_therapists, to filter to one therapist.' },
+        status: { type: 'string', description: 'One of: scheduled, completed, cancelled, no_show.' },
+        limit: { type: 'number', description: 'Rows per page; range-aware max (higher for day/week ranges).' },
+        offset: { type: 'number', description: 'Zero-based row offset for pagination.' },
+      },
+    },
+  },
+  {
     name: 'search_activity_log',
     description: 'Recent clinic activity (appointments/clients/payments/documents changed), optionally filtered by category and date range. Returns paginated rows with entity IDs/metadata; appointment rows also include an appointment_lookup snapshot from the current appointments table so historical events are interpreted correctly.',
     input_schema: {
@@ -731,7 +783,8 @@ const toolHandlers = {
     };
   },
 
-  get_client_appointments: async (supabase, clinicId, input) => {
+  get_client_appointments: async (supabase, clinicId, input, clinicTimezone) => {
+    const timezone = clinicTimezone || 'UTC';
     const clientId = input?.client_id;
     if (!clientId) return { error: 'client_id is required' };
     const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date);
@@ -768,6 +821,8 @@ const toolHandlers = {
         id: a.id,
         start_time: a.start_time,
         end_time: a.end_time,
+        start_time_local: localDateTime(a.start_time, timezone),
+        end_time_local: localDateTime(a.end_time, timezone),
         status: a.status,
         payment_amount: a.payment_amount,
         payment_status: a.payment_status,
@@ -1302,7 +1357,69 @@ const toolHandlers = {
     };
   },
 
-  search_activity_log: async (supabase, clinicId, input) => {
+  list_appointments: async (supabase, clinicId, input, clinicTimezone) => {
+    const timezone = clinicTimezone || 'UTC';
+    let startDateInput = input?.start_date;
+    let endDateInput = input?.end_date;
+    if (!startDateInput && !endDateInput) {
+      const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      const bounds = clinicLocalDayBoundsUtc(todayStr, timezone);
+      startDateInput = bounds.startUtcIso;
+      endDateInput = bounds.endUtcIso;
+    }
+    const { start, end, span } = resolveDateRange(startDateInput, endDateInput);
+    const { limit, offset, policy } = resolvePagination({
+      requestedLimit: input?.limit,
+      requestedOffset: input?.offset,
+      spanKind: span.kind,
+      baseDefaultLimit: DEFAULT_LIST_LIMIT,
+      baseMaxLimit: BASE_APPOINTMENTS_LIMIT,
+      hardMaxLimit: HARD_MAX_APPOINTMENTS_LIMIT,
+    });
+
+    let query = supabase
+      .from('appointments')
+      .select('id, start_time, end_time, status, payment_amount, payment_status, clients(first_name, last_name), therapists(first_name, last_name), treatments(name)')
+      .eq('clinic_id', clinicId)
+      .gte('start_time', start)
+      .lte('start_time', end)
+      .order('start_time', { ascending: true })
+      .range(offset, offset + limit - 1);
+    if (input?.therapist_id) query = query.eq('therapist_id', input.therapist_id);
+    if (input?.status) query = query.eq('status', input.status);
+
+    const { data, error } = await query;
+    if (error) return { error: error.message };
+    const rows = data || [];
+    const totalMatching = null;
+    const pagination = buildPaginationMeta({ offset, limit, totalMatching, returnedCount: rows.length });
+
+    return {
+      range: { start, end, span_kind: span.kind, span_days: span.day_span },
+      timezone,
+      total_matching: totalMatching,
+      truncated: pagination.has_more,
+      pagination,
+      limit_policy: policy,
+      warning: pagination.has_more
+        ? `Only ${rows.length} appointments are shown from offset ${offset}. Paginate for more rows before summarizing the full range.`
+        : undefined,
+      appointments: rows.map((a) => ({
+        id: a.id,
+        patient: fullName(a.clients),
+        therapist: fullName(a.therapists),
+        treatment: a.treatments?.name || null,
+        status: a.status,
+        payment_amount: a.payment_amount,
+        payment_status: a.payment_status,
+        start_time_local: localDateTime(a.start_time, timezone),
+        end_time_local: localDateTime(a.end_time, timezone),
+      })),
+    };
+  },
+
+  search_activity_log: async (supabase, clinicId, input, clinicTimezone) => {
+    const timezone = clinicTimezone || 'UTC';
     const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date);
     const { limit, offset, policy } = resolvePagination({
       requestedLimit: input?.limit,
@@ -1358,6 +1475,8 @@ const toolHandlers = {
           current_payment_status: appointment.payment_status,
           current_start_time: appointment.start_time,
           current_end_time: appointment.end_time,
+          current_start_time_local: localDateTime(appointment.start_time, timezone),
+          current_end_time_local: localDateTime(appointment.end_time, timezone),
           current_payment_amount: appointment.payment_amount,
           current_client: fullName(appointment.clients),
         };
@@ -1383,6 +1502,7 @@ const toolHandlers = {
         metadata,
         user_email: entry.user_email,
         created_at: entry.created_at,
+        created_at_local: localDateTime(entry.created_at, timezone),
         document_lookup: isDocument
           ? {
             can_open_directly: !!entry.entity_id,
@@ -1409,6 +1529,7 @@ const toolHandlers = {
       warning: truncated
         ? `Only ${entries.length} entries are shown from offset ${offset}. Paginate for more rows before inferring full-range patterns.`
         : undefined,
+      timing_note: 'Use created_at_local and current_start_time_local/current_end_time_local verbatim for anything about when something happened — do not reformat or reinterpret created_at or current_start_time/current_end_time yourself.',
       entries: mappedEntries,
     };
   },
