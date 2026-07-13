@@ -5,6 +5,7 @@ const MAX_ITERATIONS = 5;
 const MAX_AGENT_RUNTIME_MS = 210000;
 const MAX_TOOL_RESULT_CHARS = 12000;
 const MAX_DYNAMIC_RULES_CHARS = 1800;
+const MAX_OUTPUT_TOKENS = 4096;
 
 const pickClinicSettingsForAi = (settings) => {
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return null;
@@ -126,7 +127,7 @@ const runAgentLoop = async ({
 
     const response = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 2048,
+      max_tokens: MAX_OUTPUT_TOKENS,
       system: buildSystemPrompt(clinicName, clinicTimezone, todayLocal, dynamicRulesSnapshot),
       messages,
       tools: toolDefinitions,
