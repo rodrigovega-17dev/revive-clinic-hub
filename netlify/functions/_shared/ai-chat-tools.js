@@ -112,6 +112,52 @@ const resolveDateRange = (startDate, endDate) => {
 };
 
 const fullName = (row) => `${row?.first_name || ''} ${row?.last_name || ''}`.trim() || null;
+const MAX_ACTIVITY_METADATA_KEYS = 8;
+const PAYROLL_RULES_NOTE = {
+  pay_therapist_in_full: 'pay_therapist_in_full means therapist compensation is 100% of that appointment pre-IVA revenue; it does NOT mean the client fully paid their account balance.',
+  retention_positive: 'Positive retention_rate/retention_amount is a deduction from therapist payout.',
+  retention_negative: 'Negative retention_rate/retention_amount is an additive adjustment (bonus) that increases therapist payout.',
+};
+
+const compactActivityMetadata = (metadata) => {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  const preferredKeys = [
+    'document_id',
+    'templateName',
+    'clientFullName',
+    'responsibleName',
+    'clientName',
+    'appointmentId',
+    'paymentId',
+    'amount',
+  ];
+
+  const picked = {};
+  preferredKeys.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(metadata, key)) picked[key] = metadata[key];
+  });
+
+  if (Object.keys(picked).length > 0) return picked;
+
+  const compact = {};
+  Object.keys(metadata)
+    .slice(0, MAX_ACTIVITY_METADATA_KEYS)
+    .forEach((key) => {
+      const value = metadata[key];
+      if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) {
+        compact[key] = value;
+      } else {
+        compact[key] = String(value).slice(0, 120);
+      }
+    });
+  return compact;
+};
+
+const describeRetentionEffect = (retentionAmount) => {
+  if (retentionAmount > 0) return 'deducts_from_payout';
+  if (retentionAmount < 0) return 'adds_to_payout';
+  return 'no_effect';
+};
 
 /**
  * The clinic's local calendar date + weekday name for a UTC timestamp. Computed here
@@ -430,7 +476,7 @@ const toolDefinitions = [
   },
   {
     name: 'get_payroll_summary',
-    description: 'Computed payroll for one or all therapists over a pay period (defaults to the current semi-monthly period): gross earnings, retention withheld, net earnings, therapist-attributed expenses, final net payable, and paid-in-full appointment metrics.',
+    description: 'Computed payroll for one or all therapists over a pay period (defaults to the current semi-monthly period): gross earnings, retention withheld, net earnings, therapist-attributed expenses, final net payable, and paid-in-full appointment metrics. Note: pay_therapist_in_full means therapist gets 100% pre-IVA revenue for that appointment (compensation rule), not that the client fully paid their balance. Negative retention increases payout.',
     input_schema: {
       type: 'object',
       properties: {
@@ -596,9 +642,9 @@ const toolHandlers = {
       hardMaxLimit: HARD_MAX_APPOINTMENTS_LIMIT,
     });
 
-    const { data, error, count } = await supabase
+    const { data, error } = await supabase
       .from('appointments')
-      .select('id, start_time, end_time, status, payment_amount, payment_status, treatments(name), therapists(first_name, last_name)', { count: 'exact' })
+      .select('id, start_time, end_time, status, payment_amount, payment_status, treatments(name), therapists(first_name, last_name)')
       .eq('client_id', clientId)
       .eq('clinic_id', clinicId)
       .gte('start_time', start)
@@ -607,7 +653,7 @@ const toolHandlers = {
       .range(offset, offset + limit - 1);
     if (error) return { error: error.message };
     const rows = data || [];
-    const totalMatching = count ?? rows.length;
+    const totalMatching = null;
     const pagination = buildPaginationMeta({ offset, limit, totalMatching, returnedCount: rows.length });
 
     return {
@@ -762,7 +808,7 @@ const toolHandlers = {
 
     let query = supabase
       .from('payments')
-      .select('id, amount, method, description, payment_date, facturado, invoice_state, appointment_id, clients(first_name, last_name)', { count: 'exact' })
+      .select('id, amount, method, description, payment_date, facturado, invoice_state, appointment_id, clients(first_name, last_name)')
       .eq('clinic_id', clinicId)
       .gte('payment_date', start)
       .lte('payment_date', end)
@@ -772,10 +818,10 @@ const toolHandlers = {
     if (input?.method) query = query.eq('method', input.method);
     if (input?.standalone_only) query = query.is('appointment_id', null);
 
-    const { data, error, count } = await query;
+    const { data, error } = await query;
     if (error) return { error: error.message };
     const rows = data || [];
-    const totalMatching = count ?? rows.length;
+    const totalMatching = null;
     const pagination = buildPaginationMeta({ offset, limit, totalMatching, returnedCount: rows.length });
     return {
       range: { start, end, span_kind: span.kind, span_days: span.day_span },
@@ -810,7 +856,7 @@ const toolHandlers = {
 
     let query = supabase
       .from('expenses')
-      .select('id, amount, description, category, date, therapists(first_name, last_name), suppliers(name)', { count: 'exact' })
+      .select('id, amount, description, category, date, therapists(first_name, last_name), suppliers(name)')
       .eq('clinic_id', clinicId)
       .gte('date', start.slice(0, 10))
       .lte('date', end.slice(0, 10))
@@ -819,10 +865,10 @@ const toolHandlers = {
     if (input?.category) query = query.eq('category', input.category);
     if (input?.therapist_id) query = query.eq('therapist_id', input.therapist_id);
 
-    const { data, error, count } = await query;
+    const { data, error } = await query;
     if (error) return { error: error.message };
     const rows = data || [];
-    const totalMatching = count ?? rows.length;
+    const totalMatching = null;
     const pagination = buildPaginationMeta({ offset, limit, totalMatching, returnedCount: rows.length });
     return {
       range: { start, end, span_kind: span.kind, span_days: span.day_span },
@@ -972,9 +1018,11 @@ const toolHandlers = {
         const payInFullPercentage = s.total_appointments
           ? Number(((s.pay_in_full_appointments / s.total_appointments) * 100).toFixed(1))
           : 0;
+        const retentionEffect = describeRetentionEffect(s.retention_amount);
         return {
           ...s,
           pay_in_full_percentage: payInFullPercentage,
+          retention_effect: retentionEffect,
           attributed_expenses: attributedExpenses,
           net_payable: s.net_earnings - attributedExpenses,
         };
@@ -992,10 +1040,12 @@ const toolHandlers = {
 
     return {
       period: { start: toDateOnly(startDate), end: toDateOnly(endDate) },
+      payroll_rules: PAYROLL_RULES_NOTE,
       paid_in_full_overview: {
         completed_appointments: completedAppointments,
         paid_in_full_appointments: paidInFullAppointments,
         paid_in_full_percentage: paidInFullPercentage,
+        definition: PAYROLL_RULES_NOTE.pay_therapist_in_full,
       },
       therapists,
     };
@@ -1014,7 +1064,7 @@ const toolHandlers = {
 
     let query = supabase
       .from('therapist_payouts')
-      .select('id, therapist_id, period_start, period_end, payout_date, amount, payment_method, status, notes, therapists(first_name, last_name)', { count: 'exact' })
+      .select('id, therapist_id, period_start, period_end, payout_date, amount, payment_method, status, notes, therapists(first_name, last_name)')
       .eq('clinic_id', clinicId)
       .gte('payout_date', start.slice(0, 10))
       .lte('payout_date', end.slice(0, 10))
@@ -1022,10 +1072,10 @@ const toolHandlers = {
       .range(offset, offset + limit - 1);
     if (input?.therapist_id) query = query.eq('therapist_id', input.therapist_id);
 
-    const { data, error, count } = await query;
+    const { data, error } = await query;
     if (error) return { error: error.message };
     const rows = data || [];
-    const totalMatching = count ?? rows.length;
+    const totalMatching = null;
     const pagination = buildPaginationMeta({ offset, limit, totalMatching, returnedCount: rows.length });
     return {
       range: { start, end, span_kind: span.kind, span_days: span.day_span },
@@ -1147,7 +1197,7 @@ const toolHandlers = {
 
     let query = supabase
       .from('activity_log')
-      .select('id, description, action_type, entity_type, entity_id, metadata, user_email, created_at', { count: 'exact' })
+      .select('id, description, action_type, entity_type, entity_id, metadata, user_email, created_at')
       .eq('clinic_id', clinicId)
       .gte('created_at', start)
       .lte('created_at', end)
@@ -1155,21 +1205,22 @@ const toolHandlers = {
       .range(offset, offset + limit - 1);
     if (input?.entity_type) query = query.eq('entity_type', input.entity_type);
 
-    const { data, error, count } = await query;
+    const { data, error } = await query;
     if (error) return { error: error.message };
     const entries = data || [];
-    const totalMatching = count ?? entries.length;
+    const totalMatching = null;
     const pagination = buildPaginationMeta({ offset, limit, totalMatching, returnedCount: entries.length });
     const truncated = pagination.has_more;
     const mappedEntries = entries.map((entry) => {
       const isDocument = entry.entity_type === 'document';
+      const metadata = compactActivityMetadata(entry.metadata);
       return {
         id: entry.id,
         description: entry.description,
         action_type: entry.action_type,
         entity_type: entry.entity_type,
         entity_id: entry.entity_id,
-        metadata: entry.metadata,
+        metadata,
         user_email: entry.user_email,
         created_at: entry.created_at,
         document_lookup: isDocument
@@ -1188,7 +1239,7 @@ const toolHandlers = {
       pagination,
       limit_policy: policy,
       warning: truncated
-        ? `Only ${entries.length} entries are shown from offset ${offset} (of ${totalMatching} matching). Paginate for more rows before inferring full-range patterns.`
+        ? `Only ${entries.length} entries are shown from offset ${offset}. Paginate for more rows before inferring full-range patterns.`
         : undefined,
       entries: mappedEntries,
     };
