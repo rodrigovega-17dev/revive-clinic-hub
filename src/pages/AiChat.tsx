@@ -55,8 +55,8 @@ const AiChat = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+    <div className="flex flex-col h-full gap-6">
+      <div className="flex items-start justify-between gap-4 shrink-0">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">{t('aiChat.title')}</h1>
           <p className="text-muted-foreground">{t('aiChat.subtitle')}</p>
@@ -83,10 +83,10 @@ const AiChat = () => {
         )}
       </div>
 
-      <Card>
-        <CardContent className="pt-6">
+      <Card className="flex-1 min-h-0 flex flex-col">
+        <CardContent className="pt-6 flex-1 min-h-0 flex flex-col">
           {isLoadingHistory ? (
-            <div className="space-y-4 py-2">
+            <div className="space-y-4 py-2 flex-1 min-h-0">
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <Skeleton className="h-8 w-8 rounded-full shrink-0" />

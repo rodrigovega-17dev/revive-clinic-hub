@@ -126,7 +126,7 @@ const runAgentLoop = async (clinicId, clinicName, clinicTimezone, historyMessage
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     const response = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 1024,
+      max_tokens: 4096,
       system: buildSystemPrompt(clinicName, clinicTimezone, todayLocal),
       messages,
       tools: toolDefinitions,

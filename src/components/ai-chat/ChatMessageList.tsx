@@ -31,7 +31,7 @@ const ChatMessageList = ({ messages, isThinking }: ChatMessageListProps) => {
 
   if (messages.length === 0 && !isThinking) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-center text-muted-foreground">
         <Sparkles className="h-10 w-10 mb-3 opacity-40" />
         <p>{t('aiChat.emptyState')}</p>
       </div>
@@ -39,7 +39,7 @@ const ChatMessageList = ({ messages, isThinking }: ChatMessageListProps) => {
   }
 
   return (
-    <ScrollArea className="h-[50vh] min-h-[320px] pr-3">
+    <ScrollArea className="flex-1 min-h-0 pr-3">
       <div className="space-y-4 py-2">
         {messages.map((message) => (
           <div
