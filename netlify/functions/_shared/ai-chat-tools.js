@@ -502,14 +502,13 @@ const toolDefinitions = [
   },
   {
     name: 'get_appointments_overview',
-    description: 'Clinic-wide appointment counts for a date range, broken down by calendar day and by status (completed/cancelled/no_show/scheduled) — covers the WHOLE range, not a capped recent sample. This is the right tool for "how many appointments", "which day was busiest", or "summarize appointments this month" — prefer it over search_activity_log or get_client_appointments for anything period-wide.',
+    description: 'Clinic-wide appointment counts for a date range, broken down by calendar day and by status (completed/cancelled/no_show/scheduled) — covers the WHOLE range, not a capped recent sample. If start/end are omitted, defaults to last 90 days through now. This is the right tool for "how many appointments", "which day was busiest", or "summarize appointments this month" — prefer it over search_activity_log or get_client_appointments for anything period-wide.',
     input_schema: {
       type: 'object',
       properties: {
-        start_date: { type: 'string', description: 'ISO date.' },
-        end_date: { type: 'string', description: 'ISO date.' },
+        start_date: { type: 'string', description: 'Optional ISO date.' },
+        end_date: { type: 'string', description: 'Optional ISO date.' },
       },
-      required: ['start_date', 'end_date'],
     },
   },
   {
@@ -1098,16 +1097,16 @@ const toolHandlers = {
   },
 
   get_appointments_overview: async (supabase, clinicId, input, clinicTimezone) => {
-    if (!input?.start_date || !input?.end_date) return { error: 'start_date and end_date are required' };
-    const { start, end, span } = resolveDateRange(input.start_date, input.end_date);
+    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date);
     const timezone = clinicTimezone || 'UTC';
     const rows = [];
     const targetRows = Math.min(OVERVIEW_HARD_SCAN_MAX, OVERVIEW_TARGET_ROWS_BY_SPAN[span.kind] || OVERVIEW_TARGET_ROWS_BY_SPAN.long);
     const pageSize = Math.min(OVERVIEW_PAGE_SIZE, targetRows);
-    let totalMatching = null;
+    let hasMoreRows = false;
     let offset = 0;
     let pagesFetched = 0;
     let queryError = null;
+    let lastPageWasFull = false;
 
     while (offset < targetRows && pagesFetched < OVERVIEW_MAX_PAGES) {
       const to = Math.min(offset + pageSize - 1, targetRows - 1);
@@ -1118,18 +1117,16 @@ const toolHandlers = {
         .lte('start_time', end)
         .order('start_time', { ascending: true });
 
-      const { data, error, count } = pagesFetched === 0
-        ? await baseQuery.select('start_time, status', { count: 'exact' }).range(offset, to)
-        : await baseQuery.select('start_time, status').range(offset, to);
+      const { data, error } = await baseQuery.select('start_time, status').range(offset, to);
 
       if (error) {
         queryError = error;
         break;
       }
-      if (totalMatching === null) totalMatching = count ?? null;
 
       const pageRows = data || [];
       if (pageRows.length === 0) break;
+      lastPageWasFull = pageRows.length === pageSize;
 
       const remainingSlots = targetRows - rows.length;
       rows.push(...pageRows.slice(0, remainingSlots));
@@ -1139,6 +1136,26 @@ const toolHandlers = {
     }
 
     if (queryError) return { error: queryError.message };
+    const hitPageBudget = pagesFetched >= OVERVIEW_MAX_PAGES && offset < targetRows;
+    const hitRowBudget = rows.length >= targetRows;
+
+    // Cheap one-row probe when we stopped on a full page to confirm whether more
+    // appointments exist, without paying for a full exact COUNT on every call.
+    if (!hitPageBudget && !hitRowBudget && lastPageWasFull && rows.length > 0) {
+      const { data: probeRows, error: probeError } = await supabase
+        .from('appointments')
+        .select('start_time')
+        .eq('clinic_id', clinicId)
+        .gte('start_time', start)
+        .lte('start_time', end)
+        .order('start_time', { ascending: true })
+        .range(rows.length, rows.length);
+      if (probeError) return { error: probeError.message };
+      hasMoreRows = (probeRows || []).length > 0;
+    } else {
+      hasMoreRows = hitPageBudget || hitRowBudget;
+    }
+
     const byStatus = {};
     const byDay = {};
     rows.forEach((a) => {
@@ -1155,19 +1172,17 @@ const toolHandlers = {
 
     const dailyBreakdown = Object.values(byDay).sort((a, b) => a.date.localeCompare(b.date));
     const busiestCompletedDay = dailyBreakdown.reduce((best, d) => (!best || d.completed > best.completed ? d : best), null);
-    const finalTotalMatching = totalMatching ?? rows.length;
-    const hitPageBudget = pagesFetched >= OVERVIEW_MAX_PAGES && rows.length < finalTotalMatching;
-    const hitRowBudget = rows.length >= targetRows && rows.length < finalTotalMatching;
-    const truncated = finalTotalMatching > rows.length || hitPageBudget || hitRowBudget;
+    const truncated = hasMoreRows;
     const spanPolicy = RANGE_LIMIT_MULTIPLIERS[span.kind] || RANGE_LIMIT_MULTIPLIERS.long;
     const warningReasons = [];
     if (hitRowBudget) warningReasons.push(`row safety target (${targetRows}) reached`);
     if (hitPageBudget) warningReasons.push(`page safety cap (${OVERVIEW_MAX_PAGES}) reached`);
+    if (!hitPageBudget && !hitRowBudget && hasMoreRows) warningReasons.push('additional matching rows detected beyond scanned window');
 
     return {
       range: { start, end, span_kind: span.kind, span_days: span.day_span },
       timezone,
-      total_matching: finalTotalMatching,
+      total_matching: truncated ? null : rows.length,
       truncated,
       warning: truncated
         ? `Overview is partial: ${warningReasons.join(' and ') || 'not all matching rows were scanned'}. Narrow the date range for exhaustive coverage.`

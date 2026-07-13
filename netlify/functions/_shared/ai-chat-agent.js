@@ -1,7 +1,7 @@
 const { toolDefinitions, toolHandlers } = require('./ai-chat-tools');
 
 const MODEL = 'claude-haiku-4-5-20251001';
-const MAX_ITERATIONS = 5;
+const MAX_ITERATIONS = 8;
 const MAX_AGENT_RUNTIME_MS = 210000;
 const MAX_TOOL_RESULT_CHARS = 12000;
 const MAX_DYNAMIC_RULES_CHARS = 1800;
@@ -70,6 +70,8 @@ Dynamic clinic business-rules snapshot (source of truth for semantics/config): $
 Use ONLY the provided tools — never fabricate data or numbers, and never state a metric that no tool actually returned (e.g. there is no schedule-capacity/occupancy data anywhere — never invent an "occupancy %").
 For ANY "what day is today", "que dia es hoy", "fecha de hoy", current date/time, or weekday question, call get_current_clinic_datetime first and use its date/weekday/time fields verbatim. Never compute a day-of-week yourself from a date — this is unreliable. Only state a weekday when a tool explicitly provides a "weekday" field. When a tool already returns a computed percentage or breakdown, use that value verbatim instead of computing your own fraction.
 Prefer the itemized tools (list_payments, list_expenses) when the staff member wants specific transactions, and the summary tools (get_financial_summary, get_payroll_summary, get_appointments_overview) when they want totals, breakdowns, or "how was this period" style answers.
+For broad multi-area requests, use at most 2-3 summary tool calls total before answering (prioritize get_appointments_overview, get_financial_summary, get_payroll_summary) and avoid list-style drilldowns unless the user explicitly asks for transaction-level detail.
+Never repeat the same tool call with identical inputs in the same answer attempt.
 For ANY question about appointment counts, volume, busiest days, or an appointment-side summary of a date range, ALWAYS use get_appointments_overview — it covers the entire range with per-day/per-status counts. Do NOT use search_activity_log or get_client_appointments to answer these; they are per-record tools that only return a capped, most-recent-first slice and will misrepresent the period (e.g. making one day look "busiest" just because it's most recent). Note get_appointments_overview's daily entries have both "total_appointments" (all statuses) and "completed" (completed only) — do not call the total "completed".
 For payroll questions, ALWAYS use get_payroll_summary first and follow payroll_rules verbatim. Critical semantics: pay_therapist_in_full / paid_in_full_appointments means therapist compensation is 100% of appointment pre-IVA revenue; it does NOT mean client account balance is fully paid. Also, negative retention means it ADDS to therapist payout (bonus-style adjustment), while positive retention deducts from payout.
 When citing therapist payroll, include retention_effect and do not reinterpret its sign.
