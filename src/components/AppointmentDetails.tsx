@@ -657,11 +657,11 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="details">{t('appointments.details')}</TabsTrigger>
-            <TabsTrigger value="payment">{t('appointments.payment')}</TabsTrigger>
-            <TabsTrigger value="reschedule">{t('appointments.reschedule')}</TabsTrigger>
-            <TabsTrigger value="documents">{t('documents.tabTitle', 'Documentos')}</TabsTrigger>
+          <TabsList className="flex w-full justify-start gap-1 overflow-x-auto sm:grid sm:grid-cols-4">
+            <TabsTrigger value="details" className="shrink-0">{t('appointments.details')}</TabsTrigger>
+            <TabsTrigger value="payment" className="shrink-0">{t('appointments.payment')}</TabsTrigger>
+            <TabsTrigger value="reschedule" className="shrink-0">{t('appointments.reschedule')}</TabsTrigger>
+            <TabsTrigger value="documents" className="shrink-0">{t('documents.tabTitle', 'Documentos')}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="details" className="space-y-4">

@@ -42,8 +42,16 @@ const clampOffset = (requested) => {
   return Math.floor(n);
 };
 
-const parseDateOrNull = (value) => {
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+const parseDateOrNull = (value, boundary = 'exact') => {
   if (!value) return null;
+  if (typeof value === 'string' && DATE_ONLY_PATTERN.test(value.trim())) {
+    const [year, month, day] = value.trim().split('-').map((part) => Number(part));
+    if (![year, month, day].every(Number.isFinite)) return null;
+    if (boundary === 'end') return new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+    return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  }
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d;
 };
@@ -92,10 +100,10 @@ const buildPaginationMeta = ({ offset, limit, totalMatching, returnedCount }) =>
 
 /** Clamp a [start,end] range to MAX_DATE_RANGE_DAYS, defaulting to the last 90 days. */
 const resolveDateRange = (startDate, endDate) => {
-  let end = parseDateOrNull(endDate) || new Date();
+  let end = parseDateOrNull(endDate, 'end') || new Date();
   const defaultStart = new Date(end);
   defaultStart.setDate(defaultStart.getDate() - 90);
-  let start = parseDateOrNull(startDate) || defaultStart;
+  let start = parseDateOrNull(startDate, 'start') || defaultStart;
   if (start.getTime() > end.getTime()) {
     const tmp = start;
     start = end;

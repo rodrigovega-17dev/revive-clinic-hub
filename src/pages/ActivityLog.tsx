@@ -118,12 +118,12 @@ const ActivityLogPage = () => {
       </div>
 
       <Tabs value={entityFilter} onValueChange={handleFilterChange}>
-        <TabsList>
-          <TabsTrigger value="all">{t('activityLog.all')}</TabsTrigger>
-          <TabsTrigger value="appointment">{t('activityLog.appointments')}</TabsTrigger>
-          <TabsTrigger value="client">{t('activityLog.clients')}</TabsTrigger>
-          <TabsTrigger value="payment">{t('activityLog.payments')}</TabsTrigger>
-          <TabsTrigger value="document">{t('activityLog.documents')}</TabsTrigger>
+        <TabsList className="flex w-full justify-start gap-1 overflow-x-auto sm:grid sm:grid-cols-5">
+          <TabsTrigger value="all" className="shrink-0">{t('activityLog.all')}</TabsTrigger>
+          <TabsTrigger value="appointment" className="shrink-0">{t('activityLog.appointments')}</TabsTrigger>
+          <TabsTrigger value="client" className="shrink-0">{t('activityLog.clients')}</TabsTrigger>
+          <TabsTrigger value="payment" className="shrink-0">{t('activityLog.payments')}</TabsTrigger>
+          <TabsTrigger value="document" className="shrink-0">{t('activityLog.documents')}</TabsTrigger>
         </TabsList>
       </Tabs>
 

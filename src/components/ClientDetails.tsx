@@ -287,11 +287,11 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
 
         <Tabs defaultValue="overview" className="w-full">
           {/* Tabs: Overview, Appointments, CFDI, Documents */}
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="overview">{t('clients.overview')}</TabsTrigger>
-            <TabsTrigger value="appointments">{t('clients.appointmentsHistory')}</TabsTrigger>
-            <TabsTrigger value="cfdi">{t('clients.cfdiInvoices')}</TabsTrigger>
-            <TabsTrigger value="documents">{t('documents.tabTitle', 'Documentos')}</TabsTrigger>
+          <TabsList className="flex w-full justify-start gap-1 overflow-x-auto sm:grid sm:grid-cols-4">
+            <TabsTrigger value="overview" className="shrink-0">{t('clients.overview')}</TabsTrigger>
+            <TabsTrigger value="appointments" className="shrink-0">{t('clients.appointmentsHistory')}</TabsTrigger>
+            <TabsTrigger value="cfdi" className="shrink-0">{t('clients.cfdiInvoices')}</TabsTrigger>
+            <TabsTrigger value="documents" className="shrink-0">{t('documents.tabTitle', 'Documentos')}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6 mt-4">
