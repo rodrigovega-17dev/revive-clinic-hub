@@ -18,7 +18,7 @@ if (!supabaseUrl || !supabaseServiceKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
-const anthropic = anthropicApiKey ? new Anthropic({ apiKey: anthropicApiKey, timeout: 10000, maxRetries: 1 }) : null;
+const anthropic = anthropicApiKey ? new Anthropic({ apiKey: anthropicApiKey, timeout: 120000, maxRetries: 2 }) : null;
 
 const HISTORY_REPLAY_LIMIT = 8;
 const MAX_HISTORY_MESSAGE_CHARS = 1500;
@@ -187,7 +187,7 @@ exports.handler = async (event) => {
       if (jobId) {
         const clinicId = await getClinicIdForUser(user.id);
         if (clinicId) {
-          const fallbackText = 'I couldn\'t finish processing this request in time. Please narrow the date range or split the question into parts.';
+          const fallbackText = 'I hit a processing error while analyzing this request. Please retry once; if it persists, try splitting the question by area (operations, finance, therapists).';
           const { data: failedJob } = await supabase
             .from('ai_chat_jobs')
             .select('id, conversation_id, clinic_id, user_id')
