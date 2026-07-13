@@ -61,6 +61,86 @@ export type Database = {
           },
         ]
       }
+      ai_chat_messages: {
+        Row: {
+          clinic_id: string
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          role: string
+          tool_calls: Json | null
+          user_id: string
+        }
+        Insert: {
+          clinic_id: string
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          role: string
+          tool_calls?: Json | null
+          user_id: string
+        }
+        Update: {
+          clinic_id?: string
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          role?: string
+          tool_calls?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_chat_messages_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_chat_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "ai_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_conversations: {
+        Row: {
+          clinic_id: string
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          clinic_id: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          clinic_id?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_conversations_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointments: {
         Row: {
           client_id: string
@@ -1906,45 +1986,3 @@ export const Constants = {
     },
   },
 } as const
-
-export interface UserPreferences {
-  id: string;
-  user_id: string;
-  clinic_id: string;
-  
-  // Notification preferences
-  email_notifications: boolean;
-  push_notifications: boolean;
-  appointment_reminders: boolean;
-  payment_reminders: boolean;
-  
-  // UI preferences
-  theme: 'light' | 'dark' | 'system';
-  language: string;
-  
-  // Dashboard preferences
-  default_dashboard_view: 'overview' | 'appointments' | 'finance';
-  show_quick_stats: boolean;
-  show_recent_activity: boolean;
-  
-  // Calendar preferences
-  calendar_view: 'day' | 'week' | 'month';
-  show_past_appointments: boolean;
-  
-  created_at: string;
-  updated_at: string;
-}
-
-export interface UpdateUserPreferencesData {
-  email_notifications?: boolean;
-  push_notifications?: boolean;
-  appointment_reminders?: boolean;
-  payment_reminders?: boolean;
-  theme?: 'light' | 'dark' | 'system';
-  language?: string;
-  default_dashboard_view?: 'overview' | 'appointments' | 'finance';
-  show_quick_stats?: boolean;
-  show_recent_activity?: boolean;
-  calendar_view?: 'day' | 'week' | 'month';
-  show_past_appointments?: boolean;
-}

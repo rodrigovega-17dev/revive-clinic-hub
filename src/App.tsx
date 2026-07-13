@@ -20,6 +20,7 @@ import Settings from "./pages/Settings";
 import Subscription from "./pages/Subscription";
 import ComingSoon from "./pages/ComingSoon";
 import ActivityLog from "./pages/ActivityLog";
+import AiChat from "./pages/AiChat";
 import NotFound from "./pages/NotFound";
 import GoogleAuthCallback from "./pages/GoogleAuthCallback";
 import PasswordResetConfirm from "./components/auth/PasswordResetConfirm";
@@ -83,6 +84,7 @@ const App = () => {
               <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
               <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />
               <Route path="/activity" element={<ProtectedRoute><Layout><ActivityLog /></Layout></ProtectedRoute>} />
+              <Route path="/ai-chat" element={<ProtectedRoute><Layout><FinancePinGate><AiChat /></FinancePinGate></Layout></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><Layout><ComingSoon title={t('comingSoon.reportsTitle')} description={t('comingSoon.reportsDescription')} /></Layout></ProtectedRoute>} />
               <Route path="/google-auth-callback" element={<GoogleAuthCallback />} />
               <Route path="*" element={<NotFound />} />

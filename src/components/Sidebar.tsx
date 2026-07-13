@@ -14,6 +14,7 @@ import {
   Calculator,
   LogOut,
   ClipboardList,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,7 @@ const navigation = [
   { name: "navigation.finance", href: "/finance", icon: DollarSign },
   { name: "navigation.payroll", href: "/payroll", icon: Calculator },
   { name: "navigation.activity", href: "/activity", icon: ClipboardList },
+  { name: "navigation.aiChat", href: "/ai-chat", icon: Sparkles },
   { name: "navigation.settings", href: "/settings", icon: Settings },
 ];
 
