@@ -95,7 +95,7 @@ const AiChat = () => {
       <div className="flex items-start justify-between gap-4 shrink-0">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">{t('aiChat.title')}</h1>
-          <p className="text-muted-foreground">{t('aiChat.subtitle')}</p>
+          <p className="hidden md:block text-muted-foreground">{t('aiChat.subtitle')}</p>
         </div>
         {messages.length > 0 && (
           <AlertDialog>
