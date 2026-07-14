@@ -22,6 +22,13 @@ const OVERVIEW_TARGET_ROWS_BY_SPAN = {
   month: 12000,
   long: 6000,
 };
+// Balance isn't a stored column (it's computed from payments/completed appointments), so
+// filtering/sorting by it can't happen in SQL — scan up to this many clients, compute
+// balances in one batch, then filter/sort/paginate in memory. Well above any real clinic's
+// roster size; if a clinic actually exceeds it, list_clients reports truncated: true.
+const CLIENTS_LIST_SCAN_CAP = 1000;
+const CLIENTS_LIST_DEFAULT_LIMIT = 20;
+const CLIENTS_LIST_MAX_LIMIT = 100;
 
 const RANGE_LIMIT_MULTIPLIERS = {
   day: { default: 2.5, max: 4, shouldFullyAggregate: true },
@@ -559,11 +566,27 @@ const toolDefinitions = [
   },
   {
     name: 'search_clients',
-    description: 'Search the clinic\'s patients by name, email, or phone (active and archived). Uses case-insensitive + accent-insensitive token matching (helps with full-name keywords). Returns up to 10 ranked matches, each including their current balance (positive = credit, negative = owed) — no need to call get_client_details separately just for balance.',
+    description: 'Search the clinic\'s patients by name, email, or phone (active and archived). Uses case-insensitive + accent-insensitive token matching (helps with full-name keywords). Returns up to 10 ranked matches, each including their current balance (positive = credit, negative = owed) — no need to call get_client_details separately just for balance. Requires a search term — for "which clients owe money" or any filter-based listing with no name/contact to search by, use list_clients instead.',
     input_schema: {
       type: 'object',
       properties: { query: { type: 'string', description: 'Name, email, or phone fragment to search for.' } },
       required: ['query'],
+    },
+  },
+  {
+    name: 'list_clients',
+    description: 'Clinic-wide patient list with server-side filters — by balance status (who owes money vs has credit), active/archived, or the pay-in-full flag — plus sorting and pagination. Use this for "which clients owe money", "list clients with a credit balance", "all active patients", etc. — anything filter-based with no specific name/contact to search by (use search_clients for that instead). Excludes archived clients by default.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        balance_filter: { type: 'string', description: 'One of: owes (negative balance), has_credit (positive balance), zero. Omit for no balance filter.' },
+        is_active: { type: 'boolean', description: 'Filter by the active/inactive flag.' },
+        archived: { type: 'boolean', description: 'Include archived clients. Defaults to false (archived excluded).' },
+        pay_therapist_in_full: { type: 'boolean', description: 'Filter by the pay-therapist-in-full flag.' },
+        sort_by: { type: 'string', description: 'One of: balance_asc, balance_desc, name. Defaults to name.' },
+        limit: { type: 'number', description: 'Rows per page, up to 100.' },
+        offset: { type: 'number', description: 'Zero-based row offset for pagination.' },
+      },
     },
   },
   {
@@ -892,6 +915,65 @@ const toolHandlers = {
           balance_note: balance >= 0 ? 'positive = credit in their favor' : 'negative = amount they owe',
         };
       }),
+    };
+  },
+
+  list_clients: async (supabase, clinicId, input) => {
+    const limit = clampLimit(input?.limit, CLIENTS_LIST_MAX_LIMIT, CLIENTS_LIST_DEFAULT_LIMIT);
+    const offset = clampOffset(input?.offset);
+    const archived = typeof input?.archived === 'boolean' ? input.archived : false;
+
+    let query = supabase
+      .from('clients')
+      .select('id, first_name, last_name, email, phone, is_active, archived, pay_therapist_in_full')
+      .eq('clinic_id', clinicId)
+      .eq('archived', archived)
+      .limit(CLIENTS_LIST_SCAN_CAP);
+    if (typeof input?.is_active === 'boolean') query = query.eq('is_active', input.is_active);
+    if (typeof input?.pay_therapist_in_full === 'boolean') query = query.eq('pay_therapist_in_full', input.pay_therapist_in_full);
+
+    const { data, error } = await query;
+    if (error) return { error: error.message };
+    const clients = data || [];
+    const scanTruncated = clients.length >= CLIENTS_LIST_SCAN_CAP;
+
+    const balances = await computeClientBalancesBatch(supabase, clinicId, clients.map((c) => c.id));
+
+    let enriched = clients.map((c) => {
+      const balance = balances[c.id]?.balance ?? 0;
+      return {
+        id: c.id,
+        name: fullName(c),
+        email: c.email,
+        phone: c.phone,
+        is_active: c.is_active,
+        archived: !!c.archived,
+        pay_therapist_in_full: !!c.pay_therapist_in_full,
+        balance,
+        balance_note: balance >= 0 ? 'positive = credit in their favor' : 'negative = amount they owe',
+      };
+    });
+
+    if (input?.balance_filter === 'owes') enriched = enriched.filter((c) => c.balance < 0);
+    else if (input?.balance_filter === 'has_credit') enriched = enriched.filter((c) => c.balance > 0);
+    else if (input?.balance_filter === 'zero') enriched = enriched.filter((c) => c.balance === 0);
+
+    if (input?.sort_by === 'balance_asc') enriched.sort((a, b) => a.balance - b.balance);
+    else if (input?.sort_by === 'balance_desc') enriched.sort((a, b) => b.balance - a.balance);
+    else enriched.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+    const totalMatching = enriched.length;
+    const pageRows = enriched.slice(offset, offset + limit);
+    const pagination = buildPaginationMeta({ offset, limit, totalMatching, returnedCount: pageRows.length });
+
+    return {
+      total_matching: totalMatching,
+      truncated: scanTruncated,
+      pagination,
+      warning: scanTruncated
+        ? `Only the first ${CLIENTS_LIST_SCAN_CAP} clients (by id) were scanned before filtering — results may be incomplete. Narrow with is_active/archived/pay_therapist_in_full, or search_clients for a specific patient.`
+        : undefined,
+      clients: pageRows,
     };
   },
 
