@@ -667,7 +667,7 @@ const toolDefinitions = [
       properties: {
         start_date: { type: 'string', description: 'ISO date.' },
         end_date: { type: 'string', description: 'ISO date.' },
-        category: { type: 'string', description: 'e.g. supplies, office, maintenance, utilities, equipment, marketing, travel, food, general, Payroll.' },
+        category: { type: 'string', description: 'e.g. supplies, office, maintenance, utilities, equipment, marketing, travel, food, taxes, payroll_contributions, professional_services, general, Payroll.' },
         therapist_id: { type: 'string', description: 'From search_therapists, to filter to expenses attributed to one therapist.' },
         payment_method: { type: 'string', description: 'One of: cash, card, transfer, cheque.' },
         limit: { type: 'number', description: 'Rows per page; range-aware max (higher for day/week/month ranges).' },

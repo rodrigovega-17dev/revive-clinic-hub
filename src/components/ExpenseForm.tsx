@@ -75,6 +75,9 @@ const ExpenseForm = ({ open, onClose, editingExpense }: ExpenseFormProps) => {
     { value: 'marketing', label: t('finance.marketing') },
     { value: 'travel', label: t('finance.travel') },
     { value: 'food', label: t('finance.food') },
+    { value: 'taxes', label: t('finance.taxes') },
+    { value: 'payroll_contributions', label: t('finance.payrollContributions') },
+    { value: 'professional_services', label: t('finance.professionalServices') },
     { value: 'general', label: t('finance.general') }
   ];
 
