@@ -21,6 +21,8 @@ export type TherapistCompensationConfig = {
   incentiveThresholdSessions?: number | null;
   incentivePercentageBonus?: number | null;
   incentiveFixedBonus?: number | null;
+  reinvestmentEnabled?: boolean | null;
+  reinvestmentPercentage?: number | null;
 };
 
 export type PayrollComputationInput = {
@@ -41,6 +43,8 @@ export type PayrollComputationResult = {
   grossEarnings: number;
   retentionAmount: number;
   retentionRateApplied: number;
+  reinvestmentAmount: number;
+  reinvestmentPercentageApplied: number;
   netEarnings: number;
   clinicEarnings: number;
 };
@@ -107,6 +111,8 @@ export type AppointmentPayrollFields = {
   payroll_incentive_threshold_sessions?: number | null;
   payroll_incentive_percentage_bonus?: number | null;
   payroll_incentive_fixed_bonus?: number | null;
+  payroll_reinvestment_enabled?: boolean | null;
+  payroll_reinvestment_percentage?: number | null;
 };
 
 /**
@@ -132,6 +138,8 @@ export const resolveAppointmentPayrollConfig = (
     incentiveThresholdSessions: appointment.payroll_incentive_threshold_sessions,
     incentivePercentageBonus: appointment.payroll_incentive_percentage_bonus,
     incentiveFixedBonus: appointment.payroll_incentive_fixed_bonus,
+    reinvestmentEnabled: appointment.payroll_reinvestment_enabled,
+    reinvestmentPercentage: appointment.payroll_reinvestment_percentage,
   };
 };
 
@@ -146,6 +154,8 @@ export const buildPayrollSnapshotColumns = (liveConfig: TherapistCompensationCon
   payroll_incentive_threshold_sessions: liveConfig.incentiveThresholdSessions ?? null,
   payroll_incentive_percentage_bonus: liveConfig.incentivePercentageBonus ?? null,
   payroll_incentive_fixed_bonus: liveConfig.incentiveFixedBonus ?? null,
+  payroll_reinvestment_enabled: !!liveConfig.reinvestmentEnabled,
+  payroll_reinvestment_percentage: liveConfig.reinvestmentPercentage ?? 0,
   payroll_snapshot_at: new Date().toISOString(),
 });
 
@@ -192,10 +202,23 @@ export const computeTherapistPayroll = ({
   const incentiveApplied =
     incentiveEnabled && incentiveThresholdSessions > 0 && quarterSessions >= incentiveThresholdSessions;
 
-  const effectiveCommissionPercentage =
+  // Reinvestment is scoped to percentage compensation — there's no "rate" to reduce for a
+  // flat per-session fee.
+  const reinvestmentEnabled = compensationType === 'percentage' && !!config.reinvestmentEnabled;
+  const reinvestmentPercentage = clampPercent(Number(config.reinvestmentPercentage || 0));
+
+  const preReinvestmentCommissionPercentage =
     compensationType === 'percentage'
       ? clampPercent(baseCommission + (incentiveApplied ? incentivePercentageBonus : 0))
       : 0;
+
+  // Unlike retention (a post-hoc deduction from grossEarnings that never reaches
+  // clinicEarnings — used today for tax gross-up, money set aside for the therapist),
+  // reinvestment reduces the commission rate itself BEFORE grossEarnings is computed, so
+  // the difference automatically becomes real clinic revenue via clinicEarnings below.
+  const effectiveCommissionPercentage = reinvestmentEnabled
+    ? clampPercent(preReinvestmentCommissionPercentage - reinvestmentPercentage)
+    : preReinvestmentCommissionPercentage;
 
   const effectiveFixedSessionAmount =
     compensationType === 'fixed_per_session'
@@ -214,6 +237,18 @@ export const computeTherapistPayroll = ({
   const netEarnings = grossEarnings - retentionAmount;
   const clinicEarnings = periodPreIvaRevenue - grossEarnings;
 
+  // Diffed in percentage-point space (not a naive revenue*% calc) so this stays exact even
+  // in the floor-clamp edge case (e.g. 5% base, 10% reinvestment requested — only 5 points
+  // were actually available to give up). Guarded on !payInFull for the same reason
+  // retention is: grossEarnings bypasses effectiveCommissionPercentage entirely in the
+  // full-pay branch, so reinvestment "applying" there would be a reporting fiction.
+  const reinvestmentPercentageApplied = reinvestmentEnabled && !payInFull
+    ? preReinvestmentCommissionPercentage - effectiveCommissionPercentage
+    : 0;
+  const reinvestmentAmount = reinvestmentPercentageApplied > 0
+    ? periodPreIvaRevenue * (reinvestmentPercentageApplied / 100)
+    : 0;
+
   return {
     compensationType,
     effectiveCommissionPercentage,
@@ -222,6 +257,8 @@ export const computeTherapistPayroll = ({
     grossEarnings,
     retentionAmount,
     retentionRateApplied: retentionEnabled ? retentionRate : 0,
+    reinvestmentAmount,
+    reinvestmentPercentageApplied,
     netEarnings,
     clinicEarnings,
   };

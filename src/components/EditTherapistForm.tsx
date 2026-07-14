@@ -48,6 +48,8 @@ const EditTherapistForm = ({ therapist, open, onClose }: EditTherapistFormProps)
   const [incentiveThresholdSessions, setIncentiveThresholdSessions] = useState('');
   const [incentivePercentageBonus, setIncentivePercentageBonus] = useState('');
   const [incentiveFixedBonus, setIncentiveFixedBonus] = useState('');
+  const [reinvestmentEnabled, setReinvestmentEnabled] = useState(false);
+  const [reinvestmentPercentage, setReinvestmentPercentage] = useState('0');
   const [calendarColorId, setCalendarColorId] = useState('1');
   const [specialties, setSpecialties] = useState<string[]>([]);
   const [scheduleRules, setScheduleRules] = useState<TherapistScheduleRuleInput[]>(
@@ -76,6 +78,8 @@ const EditTherapistForm = ({ therapist, open, onClose }: EditTherapistFormProps)
       setIncentiveThresholdSessions(therapist.incentive_threshold_sessions?.toString() || '');
       setIncentivePercentageBonus(therapist.incentive_percentage_bonus?.toString() || '');
       setIncentiveFixedBonus(therapist.incentive_fixed_bonus?.toString() || '');
+      setReinvestmentEnabled(therapist.reinvestment_enabled || false);
+      setReinvestmentPercentage(therapist.reinvestment_percentage?.toString() || '0');
       setCalendarColorId(therapist.calendar_color_id || '1');
       setSpecialties(therapist.specialties || []);
       setTherapistSignature(therapist.signature_image_url || null);
@@ -114,6 +118,7 @@ const EditTherapistForm = ({ therapist, open, onClose }: EditTherapistFormProps)
       const parsedIncentiveThreshold = parseInt(incentiveThresholdSessions, 10);
       const parsedIncentivePercentageBonus = parseFloat(incentivePercentageBonus);
       const parsedIncentiveFixedBonus = parseFloat(incentiveFixedBonus);
+      const parsedReinvestmentPercentage = parseFloat(reinvestmentPercentage);
 
       if (compensationType === 'percentage' && (Number.isNaN(parsedCommission) || parsedCommission < 0 || parsedCommission > 100)) {
         toast({
@@ -137,6 +142,30 @@ const EditTherapistForm = ({ therapist, open, onClose }: EditTherapistFormProps)
         toast({
           title: t('common.validationError'),
           description: t('therapists.invalidRetentionRate'),
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (reinvestmentEnabled && (Number.isNaN(parsedReinvestmentPercentage) || parsedReinvestmentPercentage < 0 || parsedReinvestmentPercentage > 100)) {
+        toast({
+          title: t('common.validationError'),
+          description: t('therapists.invalidReinvestmentPercentage'),
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (
+        reinvestmentEnabled &&
+        compensationType === 'percentage' &&
+        !Number.isNaN(parsedReinvestmentPercentage) &&
+        !Number.isNaN(parsedCommission) &&
+        parsedReinvestmentPercentage > parsedCommission
+      ) {
+        toast({
+          title: t('common.validationError'),
+          description: t('therapists.reinvestmentExceedsCommission'),
           variant: 'destructive',
         });
         return;
@@ -195,6 +224,9 @@ const EditTherapistForm = ({ therapist, open, onClose }: EditTherapistFormProps)
           incentiveEnabled && compensationType === 'percentage' ? parsedIncentivePercentageBonus : null,
         incentive_fixed_bonus:
           incentiveEnabled && compensationType === 'fixed_per_session' ? parsedIncentiveFixedBonus : null,
+        reinvestment_enabled: compensationType === 'percentage' ? reinvestmentEnabled : false,
+        reinvestment_percentage:
+          compensationType === 'percentage' && reinvestmentEnabled ? parsedReinvestmentPercentage : 0,
         calendar_color_id: calendarColorId,
         specialties: null,
       });
@@ -372,6 +404,32 @@ const EditTherapistForm = ({ therapist, open, onClose }: EditTherapistFormProps)
                   </div>
                 )}
               </div>
+
+              {compensationType === 'percentage' && (
+                <div className="rounded-md border border-border p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="reinvestmentEnabled">{t('therapists.reinvestmentEnabled')}</Label>
+                    <Switch id="reinvestmentEnabled" checked={reinvestmentEnabled} onCheckedChange={setReinvestmentEnabled} />
+                  </div>
+                  {reinvestmentEnabled && (
+                    <div className="space-y-2">
+                      <Label htmlFor="reinvestmentPercentage">{t('therapists.reinvestmentPercentage')}</Label>
+                      <Input
+                        id="reinvestmentPercentage"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        value={reinvestmentPercentage}
+                        onChange={(e) => setReinvestmentPercentage(e.target.value)}
+                        placeholder="5"
+                        className="bg-input border-border text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:border-primary"
+                      />
+                      <p className="text-xs text-muted-foreground">{t('therapists.reinvestmentPercentageHint')}</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="rounded-md border border-border p-3 space-y-3">
                 <div className="flex items-center justify-between">

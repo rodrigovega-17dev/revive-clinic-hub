@@ -132,6 +132,7 @@ const PAYROLL_RULES_NOTE = {
   pay_therapist_in_full: 'pay_therapist_in_full means therapist compensation is 100% of that appointment pre-IVA revenue; it does NOT mean the client fully paid their account balance.',
   retention_positive: 'Positive retention_rate/retention_amount is a deduction from therapist payout.',
   retention_negative: 'Negative retention_rate/retention_amount is an additive adjustment (bonus) that increases therapist payout.',
+  reinvestment: 'reinvestment_percentage is voluntary, therapist-initiated percentage POINTS subtracted from commission_percentage before it is applied to revenue (not a % of the commission amount, e.g. 35% commission with 5-point reinvestment nets 30%). Unlike retention, the reinvested amount DOES flow into clinic_earnings — it is a real transfer to the clinic, not money withheld/set aside for the therapist. Never conflate reinvestment_amount with retention_amount.',
 };
 
 const normalizeSearchText = (value) => String(value || '')
@@ -453,6 +454,8 @@ const resolveAppointmentPayrollConfig = (appointment, liveConfig) => {
     incentiveThresholdSessions: appointment.payroll_incentive_threshold_sessions,
     incentivePercentageBonus: appointment.payroll_incentive_percentage_bonus,
     incentiveFixedBonus: appointment.payroll_incentive_fixed_bonus,
+    reinvestmentEnabled: appointment.payroll_reinvestment_enabled,
+    reinvestmentPercentage: appointment.payroll_reinvestment_percentage,
   };
 };
 
@@ -500,10 +503,22 @@ const computeTherapistPayroll = ({ periodSessions, periodPreIvaRevenue, quarterS
   const incentiveApplied =
     incentiveEnabled && incentiveThresholdSessions > 0 && quarterSessions >= incentiveThresholdSessions;
 
-  const effectiveCommissionPercentage =
+  // Reinvestment is scoped to percentage compensation — there's no "rate" to reduce for a
+  // flat per-session fee.
+  const reinvestmentEnabled = compensationType === 'percentage' && !!config.reinvestmentEnabled;
+  const reinvestmentPercentage = clampPercent(Number(config.reinvestmentPercentage || 0));
+
+  const preReinvestmentCommissionPercentage =
     compensationType === 'percentage'
       ? clampPercent(baseCommission + (incentiveApplied ? incentivePercentageBonus : 0))
       : 0;
+
+  // Unlike retention (a post-hoc deduction from grossEarnings that never reaches
+  // clinicEarnings), reinvestment reduces the commission rate itself BEFORE grossEarnings
+  // is computed, so the difference automatically becomes real clinic revenue below.
+  const effectiveCommissionPercentage = reinvestmentEnabled
+    ? clampPercent(preReinvestmentCommissionPercentage - reinvestmentPercentage)
+    : preReinvestmentCommissionPercentage;
 
   const effectiveFixedSessionAmount =
     compensationType === 'fixed_per_session'
@@ -520,6 +535,15 @@ const computeTherapistPayroll = ({ periodSessions, periodPreIvaRevenue, quarterS
   const netEarnings = grossEarnings - retentionAmount;
   const clinicEarnings = periodPreIvaRevenue - grossEarnings;
 
+  // Diffed in percentage-point space so this stays exact even in the floor-clamp edge case;
+  // guarded on !payInFull for the same reason retention is (see src/lib/payroll.ts).
+  const reinvestmentPercentageApplied = reinvestmentEnabled && !payInFull
+    ? preReinvestmentCommissionPercentage - effectiveCommissionPercentage
+    : 0;
+  const reinvestmentAmount = reinvestmentPercentageApplied > 0
+    ? periodPreIvaRevenue * (reinvestmentPercentageApplied / 100)
+    : 0;
+
   return {
     compensationType,
     effectiveCommissionPercentage,
@@ -528,6 +552,8 @@ const computeTherapistPayroll = ({ periodSessions, periodPreIvaRevenue, quarterS
     grossEarnings,
     retentionAmount,
     retentionRateApplied: retentionEnabled ? retentionRate : 0,
+    reinvestmentAmount,
+    reinvestmentPercentageApplied,
     netEarnings,
     clinicEarnings,
   };
@@ -677,7 +703,7 @@ const toolDefinitions = [
   },
   {
     name: 'get_payroll_summary',
-    description: 'Computed payroll for one or all therapists over a pay period (defaults to the current semi-monthly period): gross earnings, retention withheld, net earnings, therapist-attributed expenses, final net payable, and paid-in-full appointment metrics. Note: pay_therapist_in_full means therapist gets 100% pre-IVA revenue for that appointment (compensation rule), not that the client fully paid their balance. Negative retention increases payout.',
+    description: 'Computed payroll for one or all therapists over a pay period (defaults to the current semi-monthly period): gross earnings, retention withheld, reinvestment_amount (voluntarily given back to the clinic, if any), net earnings, therapist-attributed expenses, final net payable, and paid-in-full appointment metrics. Note: pay_therapist_in_full means therapist gets 100% pre-IVA revenue for that appointment (compensation rule), not that the client fully paid their balance. Negative retention increases payout.',
     input_schema: {
       type: 'object',
       properties: {
@@ -776,7 +802,7 @@ const toolDefinitions = [
   },
   {
     name: 'get_therapist_compensation_config',
-    description: 'Each therapist\'s actual live compensation policy: compensation type, commission percentage or fixed session amount, retention rate, and incentive threshold/bonus. Use this for direct policy questions like "what is Carlos\'s commission rate" or "what triggers Sebastián\'s incentive bonus" — get_payroll_summary only returns computed dollar RESULTS for a period, never these raw settings. Omit therapist_id to get every therapist\'s config at once.',
+    description: 'Each therapist\'s actual live compensation policy: compensation type, commission percentage or fixed session amount, retention rate, incentive threshold/bonus, and reinvestment percentage/effective rate (commission_percentage_after_reinvestment). Use this for direct policy questions like "what is Carlos\'s commission rate" or "what triggers Sebastián\'s incentive bonus" — get_payroll_summary only returns computed dollar RESULTS for a period, never these raw settings. Omit therapist_id to get every therapist\'s config at once.',
     input_schema: {
       type: 'object',
       properties: {
@@ -1341,9 +1367,9 @@ const toolHandlers = {
       .from('appointments')
       .select(`
         therapist_id, payment_amount, pay_therapist_in_full,
-        therapists ( id, first_name, last_name, compensation_type, commission_percentage, fixed_session_amount, retention_enabled, retention_rate, incentive_enabled, incentive_threshold_sessions, incentive_percentage_bonus, incentive_fixed_bonus ),
+        therapists ( id, first_name, last_name, compensation_type, commission_percentage, fixed_session_amount, retention_enabled, retention_rate, incentive_enabled, incentive_threshold_sessions, incentive_percentage_bonus, incentive_fixed_bonus, reinvestment_enabled, reinvestment_percentage ),
         payments ( amount, facturado, iva_amount ),
-        payroll_compensation_type, payroll_commission_percentage, payroll_fixed_session_amount, payroll_retention_enabled, payroll_retention_rate, payroll_incentive_enabled, payroll_incentive_threshold_sessions, payroll_incentive_percentage_bonus, payroll_incentive_fixed_bonus, payroll_snapshot_at
+        payroll_compensation_type, payroll_commission_percentage, payroll_fixed_session_amount, payroll_retention_enabled, payroll_retention_rate, payroll_incentive_enabled, payroll_incentive_threshold_sessions, payroll_incentive_percentage_bonus, payroll_incentive_fixed_bonus, payroll_reinvestment_enabled, payroll_reinvestment_percentage, payroll_snapshot_at
       `)
       .eq('clinic_id', clinicId)
       .eq('status', 'completed')
@@ -1383,6 +1409,8 @@ const toolHandlers = {
         incentiveThresholdSessions: therapist?.incentive_threshold_sessions,
         incentivePercentageBonus: therapist?.incentive_percentage_bonus,
         incentiveFixedBonus: therapist?.incentive_fixed_bonus,
+        reinvestmentEnabled: therapist?.reinvestment_enabled,
+        reinvestmentPercentage: therapist?.reinvestment_percentage,
       };
       const appointmentConfig = resolveAppointmentPayrollConfig(appointment, liveConfig);
       const paymentSummary = summarizeAppointmentPayments({
@@ -1408,6 +1436,7 @@ const toolHandlers = {
           total_revenue_pre_iva: 0,
           gross_earnings: 0,
           retention_amount: 0,
+          reinvestment_amount: 0,
           net_earnings: 0,
           clinic_earnings: 0,
         };
@@ -1418,6 +1447,7 @@ const toolHandlers = {
       s.total_revenue_pre_iva += paymentSummary.preIvaRevenue;
       s.gross_earnings += computed.grossEarnings;
       s.retention_amount += computed.retentionAmount;
+      s.reinvestment_amount += computed.reinvestmentAmount;
       s.net_earnings += computed.netEarnings;
       s.clinic_earnings += computed.clinicEarnings;
     });
@@ -1941,7 +1971,7 @@ const toolHandlers = {
   get_therapist_compensation_config: async (supabase, clinicId, input) => {
     let query = supabase
       .from('therapists')
-      .select('id, first_name, last_name, archived, is_active, compensation_type, commission_percentage, fixed_session_amount, retention_enabled, retention_rate, incentive_enabled, incentive_threshold_sessions, incentive_percentage_bonus, incentive_fixed_bonus')
+      .select('id, first_name, last_name, archived, is_active, compensation_type, commission_percentage, fixed_session_amount, retention_enabled, retention_rate, incentive_enabled, incentive_threshold_sessions, incentive_percentage_bonus, incentive_fixed_bonus, reinvestment_enabled, reinvestment_percentage')
       .eq('clinic_id', clinicId);
     if (input?.therapist_id) {
       query = query.eq('id', input.therapist_id);
@@ -1971,6 +2001,14 @@ const toolHandlers = {
         incentive_threshold_sessions: t.incentive_enabled ? t.incentive_threshold_sessions : null,
         incentive_percentage_bonus: t.incentive_enabled && compensationType === 'percentage' ? Number(t.incentive_percentage_bonus || 0) : null,
         incentive_fixed_bonus: t.incentive_enabled && compensationType === 'fixed_per_session' ? Number(t.incentive_fixed_bonus || 0) : null,
+        reinvestment_enabled: !!t.reinvestment_enabled,
+        reinvestment_percentage: t.reinvestment_enabled ? Number(t.reinvestment_percentage || 0) : null,
+        commission_percentage_after_reinvestment:
+          compensationType === 'percentage'
+            ? (t.reinvestment_enabled
+                ? Math.max(Number(t.commission_percentage || 0) - Number(t.reinvestment_percentage || 0), 0)
+                : Number(t.commission_percentage || 0))
+            : null,
       };
     });
 

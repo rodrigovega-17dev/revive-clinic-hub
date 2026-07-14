@@ -147,6 +147,7 @@ const Payroll = () => {
           totalIVA: 0,
           totalTherapistEarnings: 0,
           totalTherapistRetention: 0,
+          totalTherapistReinvestment: 0,
           totalTherapistIVAWithheld: 0,
           totalTherapistEarningsNet: 0,
           totalClinicEarnings: 0,
@@ -170,7 +171,9 @@ const Payroll = () => {
             incentive_enabled,
             incentive_threshold_sessions,
             incentive_percentage_bonus,
-            incentive_fixed_bonus
+            incentive_fixed_bonus,
+            reinvestment_enabled,
+            reinvestment_percentage
           ),
           clients (
             first_name,
@@ -192,6 +195,8 @@ const Payroll = () => {
           payroll_incentive_threshold_sessions,
           payroll_incentive_percentage_bonus,
           payroll_incentive_fixed_bonus,
+          payroll_reinvestment_enabled,
+          payroll_reinvestment_percentage,
           payroll_snapshot_at
         `)
         .eq('clinic_id', clinicId)
@@ -237,6 +242,8 @@ const Payroll = () => {
           incentiveThresholdSessions: therapist?.incentive_threshold_sessions,
           incentivePercentageBonus: therapist?.incentive_percentage_bonus,
           incentiveFixedBonus: therapist?.incentive_fixed_bonus,
+          reinvestmentEnabled: therapist?.reinvestment_enabled,
+          reinvestmentPercentage: therapist?.reinvestment_percentage,
         };
 
         const appointmentConfig = resolveAppointmentPayrollConfig(appointment, liveConfig);
@@ -265,6 +272,7 @@ const Payroll = () => {
             totalIVA: 0,
             therapistEarnings: 0,
             therapistRetentionAmount: 0,
+            therapistReinvestmentAmount: 0,
             therapistEarningsNet: 0,
             clinicEarnings: 0,
             fullPayAppointments: 0,
@@ -280,6 +288,7 @@ const Payroll = () => {
         acc[therapistId].totalIVA += paymentSummary.totalIva;
         acc[therapistId].therapistEarnings += computed.grossEarnings;
         acc[therapistId].therapistRetentionAmount += computed.retentionAmount;
+        acc[therapistId].therapistReinvestmentAmount += computed.reinvestmentAmount;
         acc[therapistId].therapistEarningsNet += computed.netEarnings;
         acc[therapistId].clinicEarnings += computed.clinicEarnings;
         if (payInFull) {
@@ -313,6 +322,9 @@ const Payroll = () => {
         stats.therapistRetentionRateApplied = stats.liveConfig.retentionEnabled
           ? Number(stats.liveConfig.retentionRate || 0)
           : 0;
+        stats.reinvestmentPercentageApplied = stats.liveConfig.reinvestmentEnabled
+          ? Number(stats.liveConfig.reinvestmentPercentage || 0)
+          : 0;
       });
 
       const totalRevenue = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.totalRevenue, 0);
@@ -320,6 +332,7 @@ const Payroll = () => {
       const totalIVA = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.totalIVA, 0);
       const totalTherapistEarnings = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.therapistEarnings, 0);
       const totalTherapistRetention = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.therapistRetentionAmount, 0);
+      const totalTherapistReinvestment = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.therapistReinvestmentAmount, 0);
       const totalTherapistEarningsNet = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.therapistEarningsNet, 0);
       const totalClinicEarnings = Object.values(therapistStats).reduce((sum, stats: any) => sum + stats.clinicEarnings, 0);
 
@@ -331,6 +344,7 @@ const Payroll = () => {
           totalIVA,
           totalTherapistEarnings,
           totalTherapistRetention,
+          totalTherapistReinvestment,
           // Legacy key kept to avoid breaking older UI references.
           totalTherapistIVAWithheld: totalTherapistRetention,
           totalTherapistEarningsNet,
@@ -537,7 +551,9 @@ const Payroll = () => {
             incentive_enabled,
             incentive_threshold_sessions,
             incentive_percentage_bonus,
-            incentive_fixed_bonus
+            incentive_fixed_bonus,
+            reinvestment_enabled,
+            reinvestment_percentage
           `)
           .eq('id', payoutTherapist.id)
           .single();
@@ -554,6 +570,8 @@ const Payroll = () => {
           incentiveThresholdSessions: freshTherapist.incentive_threshold_sessions,
           incentivePercentageBonus: freshTherapist.incentive_percentage_bonus,
           incentiveFixedBonus: freshTherapist.incentive_fixed_bonus,
+          reinvestmentEnabled: freshTherapist.reinvestment_enabled,
+          reinvestmentPercentage: freshTherapist.reinvestment_percentage,
         });
 
         const { error: freezeError } = await supabase
@@ -796,9 +814,17 @@ const Payroll = () => {
               <TrendingUp className="h-4 w-4 text-orange-400" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{t('payroll.clinicEarnings')}</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {formatCurrencyWithClinic(Number(payrollData?.totals.totalClinicEarnings || 0))}
-                </p>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <p className="text-2xl font-bold text-foreground inline-flex items-center gap-1 cursor-help decoration-dotted underline underline-offset-4">
+                      {formatCurrencyWithClinic(Number(payrollData?.totals.totalClinicEarnings || 0))}
+                      <Info className="h-3 w-3 text-muted-foreground" />
+                    </p>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{t('payroll.totalReinvestedLabel')}: {formatCurrencyWithClinic(Number(payrollData?.totals.totalTherapistReinvestment || 0))}</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </div>
           </CardContent>
@@ -875,6 +901,18 @@ const Payroll = () => {
                             {therapist.fullPayDetails.map((detail: { clientName: string; amount: number }, i: number) => (
                               <p key={i}>{detail.clientName}: {formatCurrencyWithClinic(detail.amount)}</p>
                             ))}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                      {therapist.therapistReinvestmentAmount > 0 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge className="mt-1 ml-1 cursor-help bg-teal-600 text-white hover:bg-teal-600">
+                              {t('payroll.reinvestmentBadge', { percentage: Number(therapist.reinvestmentPercentageApplied || 0).toFixed(0) })}
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{t('payroll.reinvestmentAmountLabel')}: {formatCurrencyWithClinic(Number(therapist.therapistReinvestmentAmount || 0))}</p>
                           </TooltipContent>
                         </Tooltip>
                       )}

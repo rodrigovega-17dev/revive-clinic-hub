@@ -284,6 +284,8 @@ export type Database = {
           payroll_incentive_fixed_bonus: number | null
           payroll_incentive_percentage_bonus: number | null
           payroll_incentive_threshold_sessions: number | null
+          payroll_reinvestment_enabled: boolean | null
+          payroll_reinvestment_percentage: number | null
           payroll_retention_enabled: boolean | null
           payroll_retention_rate: number | null
           payroll_snapshot_at: string | null
@@ -318,6 +320,8 @@ export type Database = {
           payroll_incentive_fixed_bonus?: number | null
           payroll_incentive_percentage_bonus?: number | null
           payroll_incentive_threshold_sessions?: number | null
+          payroll_reinvestment_enabled?: boolean | null
+          payroll_reinvestment_percentage?: number | null
           payroll_retention_enabled?: boolean | null
           payroll_retention_rate?: number | null
           payroll_snapshot_at?: string | null
@@ -352,6 +356,8 @@ export type Database = {
           payroll_incentive_fixed_bonus?: number | null
           payroll_incentive_percentage_bonus?: number | null
           payroll_incentive_threshold_sessions?: number | null
+          payroll_reinvestment_enabled?: boolean | null
+          payroll_reinvestment_percentage?: number | null
           payroll_retention_enabled?: boolean | null
           payroll_retention_rate?: number | null
           payroll_snapshot_at?: string | null
@@ -1700,6 +1706,8 @@ export type Database = {
           license_number: string | null
           percentage: number | null
           phone: string | null
+          reinvestment_enabled: boolean
+          reinvestment_percentage: number
           retention_enabled: boolean
           retention_rate: number
           signature_image_url: string | null
@@ -1728,6 +1736,8 @@ export type Database = {
           license_number?: string | null
           percentage?: number | null
           phone?: string | null
+          reinvestment_enabled?: boolean
+          reinvestment_percentage?: number
           retention_enabled?: boolean
           retention_rate?: number
           signature_image_url?: string | null
@@ -1756,6 +1766,8 @@ export type Database = {
           license_number?: string | null
           percentage?: number | null
           phone?: string | null
+          reinvestment_enabled?: boolean
+          reinvestment_percentage?: number
           retention_enabled?: boolean
           retention_rate?: number
           signature_image_url?: string | null
