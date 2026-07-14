@@ -556,6 +556,7 @@
     "scheduled": "Scheduled",
     "cancelled": "Cancelled",
     "noShow": "No Show",
+    "cancelledOrNoShow": "Cancelled/No-Show",
     "confirmed": "Confirmed",
     "inProgress": "In progress",
     "waitingCheckout": "Waiting for Checkout",

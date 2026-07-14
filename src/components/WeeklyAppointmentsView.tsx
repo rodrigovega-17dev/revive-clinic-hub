@@ -162,7 +162,6 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
   const { currentLanguage } = useLanguage();
   const { clinicId } = useAuth();
   const { timezone } = useClinicSettings();
-  const [selectedWeek, setSelectedWeek] = useState(currentDate);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showAppointmentDetails, setShowAppointmentDetails] = useState(false);
   const [showWeekends, setShowWeekends] = useState(() => {
@@ -182,8 +181,8 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
   const locale = currentLanguage === 'es' ? es : enUS;
   
   // Calculate week range
-  const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 1 }); // Monday start
-  const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: 1 });
+  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
+  const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
   // Optionally hide Saturday (6) and Sunday (0)
   const visibleDays = showWeekends
@@ -251,10 +250,10 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
   }, [filteredAppointments, weekDays]);
 
   const navigateWeek = (direction: 'prev' | 'next') => {
-    const newWeek = direction === 'next' 
-      ? addWeeks(selectedWeek, 1) 
-      : subWeeks(selectedWeek, 1);
-    setSelectedWeek(newWeek);
+    const newWeek = direction === 'next'
+      ? addWeeks(currentDate, 1)
+      : subWeeks(currentDate, 1);
+    onDateSelect(newWeek);
   };
 
   const handleAppointmentClick = (appointment: Appointment) => {
@@ -276,11 +275,8 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
   }, [timezone]);
 
   const initialScrollTop = useMemo(() => {
-    const targetDate =
-      currentDate >= weekStart && currentDate <= weekEnd ? currentDate : selectedWeek;
-
     const dayAppointments = filteredAppointments.filter((apt) =>
-      isSameDay(new Date(apt.start_time), targetDate)
+      isSameDay(new Date(apt.start_time), currentDate)
     );
 
     const timedAppointments = dayAppointments.filter((apt) => {
@@ -305,7 +301,7 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
 
     const slotOffset = (minutesFromMidnight / 60) * TIME_SLOT_HEIGHT;
     return Math.max(0, ALL_DAY_HEIGHT + slotOffset - SCROLL_TOP_PADDING);
-  }, [currentDate, weekStart, weekEnd, selectedWeek, filteredAppointments, getClinicTimeParts]);
+  }, [currentDate, filteredAppointments, getClinicTimeParts]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -399,7 +395,7 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setSelectedWeek(new Date())}
+            onClick={() => onDateSelect(new Date())}
           >
             {t('appointments.today')}
           </Button>

@@ -530,6 +530,7 @@
     "completed": "Completada",
     "cancelled": "Cancelada",
     "noShow": "No Presentó",
+    "cancelledOrNoShow": "Cancelada/No Presentó",
     "confirmed": "Confirmada",
     "inProgress": "En progreso",
     "waitingCheckout": "Esperando Salida",

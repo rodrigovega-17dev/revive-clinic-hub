@@ -23,7 +23,7 @@ import { getStatusDotColor } from '@/lib/appointment-status';
 
 interface MonthlyAppointmentsViewProps {
   currentDate: Date;
-  onDateSelect?: (date: Date) => void;
+  onDateSelect: (date: Date) => void;
   searchTerm?: string;
 }
 
@@ -35,14 +35,13 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
   const { t } = useTranslation();
   const { currentLanguage } = useLanguage();
   const { currency, timezone } = useClinicSettings();
-  const [selectedMonth, setSelectedMonth] = useState(currentDate);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showDayPopup, setShowDayPopup] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [showAppointmentDetails, setShowAppointmentDetails] = useState(false);
 
-  const year = selectedMonth.getFullYear();
-  const month = selectedMonth.getMonth() + 1;
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth() + 1;
   const { data: appointmentsByDate, isLoading } = useAppointmentsByMonth(year, month);
   const normalizedSearch = searchTerm?.trim().toLowerCase() || '';
 
@@ -63,8 +62,8 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
   const locale = currentLanguage === 'es' ? es : enUS;
 
   // Get the start and end of the month
-  const monthStart = startOfMonth(selectedMonth);
-  const monthEnd = endOfMonth(selectedMonth);
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(currentDate);
 
   // Get the start and end of the week that contains the month start
   const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 }); // Sunday
@@ -77,11 +76,11 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   const handlePreviousMonth = () => {
-    setSelectedMonth(subMonths(selectedMonth, 1));
+    onDateSelect(subMonths(currentDate, 1));
   };
 
   const handleNextMonth = () => {
-    setSelectedMonth(addMonths(selectedMonth, 1));
+    onDateSelect(addMonths(currentDate, 1));
   };
 
   const handleDateClick = (date: Date) => {
@@ -166,7 +165,7 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
           </Button>
           
           <h2 className="text-xl font-semibold text-foreground">
-            {format(selectedMonth, 'MMMM yyyy', { locale })}
+            {format(currentDate, 'MMMM yyyy', { locale })}
           </h2>
           
           <Button
@@ -182,7 +181,7 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => setSelectedMonth(new Date())}
+          onClick={() => onDateSelect(new Date())}
           className="text-sm"
         >
           {t('appointments.today')}
@@ -209,7 +208,7 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
             {days.map((day) => {
               const dateKey = format(day, 'yyyy-MM-dd');
               const dayAppointments = filteredAppointmentsByDate?.[dateKey] || [];
-              const isCurrentMonth = isSameMonth(day, selectedMonth);
+              const isCurrentMonth = isSameMonth(day, currentDate);
               const isCurrentDay = isToday(day);
               const hasAppointments = dayAppointments.length > 0;
 

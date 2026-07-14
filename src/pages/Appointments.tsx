@@ -61,6 +61,7 @@ const Appointments = () => {
   const totalAppointments = statsSource.length;
   const completedToday = statsSource.filter((a) => a.status === 'completed').length;
   const pendingToday = statsSource.filter((a) => a.status === 'scheduled').length;
+  const cancelledToday = statsSource.filter((a) => a.status === 'cancelled' || a.status === 'no_show').length;
 
   // Check URL parameters to auto-open form
   useEffect(() => {
@@ -166,10 +167,12 @@ const Appointments = () => {
       {/* Filters */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
-          <DateFilter
-                selectedDate={format(selectedDate, 'yyyy-MM-dd')}
-                onDateChange={handleDateChange}
-          />
+          {useDaily && (
+            <DateFilter
+              selectedDate={format(selectedDate, 'yyyy-MM-dd')}
+              onDateChange={handleDateChange}
+            />
+          )}
           <div className="space-y-2 w-full sm:w-[240px]">
             <Label className="text-sm text-foreground">{t('appointments.searchByClient')}</Label>
             <ClientSearchSelect
@@ -183,8 +186,8 @@ const Appointments = () => {
             />
           </div>
         </div>
-        
-        {/* Quick Stats for selected date */}
+
+        {/* Quick Stats for selected period */}
         <div className="flex gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">{totalAppointments}</div>
@@ -197,6 +200,10 @@ const Appointments = () => {
           <div className="text-center">
             <div className="text-2xl font-bold text-orange-600">{pendingToday}</div>
                 <div className="text-sm text-muted-foreground">{t('appointments.scheduled')}</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-red-600">{cancelledToday}</div>
+                <div className="text-sm text-muted-foreground">{t('appointments.cancelledOrNoShow')}</div>
           </div>
         </div>
       </div>

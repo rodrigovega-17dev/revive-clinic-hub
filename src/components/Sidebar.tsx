@@ -88,9 +88,17 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
       <div className="flex items-center justify-between p-4 pt-[calc(1rem+env(safe-area-inset-top))] border-b border-sidebar-border bg-sidebar/50">
         {!collapsed && (
           <div className="flex items-center space-x-3 md:flex hidden">
-            <div className="w-10 h-10 bg-gradient-to-br from-sidebar-primary to-sidebar-primary/80 rounded-xl flex items-center justify-center shadow-md">
-              <Activity className="w-6 h-6 text-sidebar-primary-foreground" />
-            </div>
+            {clinic?.logo_url ? (
+              <img
+                src={clinic.logo_url}
+                alt={getClinicDisplayName()}
+                className="w-10 h-10 rounded-xl object-cover shadow-md shrink-0"
+              />
+            ) : (
+              <div className="w-10 h-10 bg-gradient-to-br from-sidebar-primary to-sidebar-primary/80 rounded-xl flex items-center justify-center shadow-md shrink-0">
+                <Activity className="w-6 h-6 text-sidebar-primary-foreground" />
+              </div>
+            )}
             <div>
               <h1 className="text-lg font-bold text-sidebar-foreground">{getClinicDisplayName()}</h1>
               <p className="text-xs text-muted-foreground font-medium">{t('sidebar.subBrand')}</p>
@@ -99,9 +107,17 @@ export const Sidebar = ({ mobileOpen = false, onMobileClose }: SidebarProps) => 
         )}
         {/* Mobile header shows brand always */}
         <div className="flex items-center space-x-3 md:hidden">
-          <div className="w-10 h-10 bg-gradient-to-br from-sidebar-primary to-sidebar-primary/80 rounded-xl flex items-center justify-center shadow-md">
-            <Activity className="w-6 h-6 text-sidebar-primary-foreground" />
-          </div>
+          {clinic?.logo_url ? (
+            <img
+              src={clinic.logo_url}
+              alt={getClinicDisplayName()}
+              className="w-10 h-10 rounded-xl object-cover shadow-md shrink-0"
+            />
+          ) : (
+            <div className="w-10 h-10 bg-gradient-to-br from-sidebar-primary to-sidebar-primary/80 rounded-xl flex items-center justify-center shadow-md shrink-0">
+              <Activity className="w-6 h-6 text-sidebar-primary-foreground" />
+            </div>
+          )}
           <div>
             <h1 className="text-lg font-bold text-sidebar-foreground">{getClinicDisplayName()}</h1>
             <p className="text-xs text-muted-foreground font-medium">{t('sidebar.subBrand')}</p>
