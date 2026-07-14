@@ -20,8 +20,8 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const anthropic = anthropicApiKey ? new Anthropic({ apiKey: anthropicApiKey, timeout: 120000, maxRetries: 2 }) : null;
 
-const HISTORY_REPLAY_LIMIT = 8;
-const MAX_HISTORY_MESSAGE_CHARS = 1500;
+const HISTORY_REPLAY_LIMIT = 24;
+const MAX_HISTORY_MESSAGE_CHARS = 4000;
 
 const jsonResponse = (statusCode, body) => ({
   statusCode,

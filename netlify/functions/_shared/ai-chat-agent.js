@@ -1,6 +1,6 @@
 const { toolDefinitions, toolHandlers } = require('./ai-chat-tools');
 
-const MODEL = 'claude-sonnet-5';
+const MODEL = 'claude-haiku-4-5-20251001';
 const MAX_ITERATIONS = 8;
 const MAX_AGENT_RUNTIME_MS = 210000;
 const MAX_TOOL_RESULT_CHARS = 12000;
