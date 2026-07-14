@@ -339,6 +339,59 @@ const computeClientBalance = async (supabase, clinicId, clientId) => {
 };
 
 /**
+ * Same formula as computeClientBalance, but for many clients in 2 queries total
+ * instead of 2*N — used by search_clients so a broad search doesn't need a
+ * separate get_client_details round trip per candidate just to see who owes money.
+ */
+const computeClientBalancesBatch = async (supabase, clinicId, clientIds) => {
+  const ids = [...new Set(clientIds)].filter(Boolean);
+  if (ids.length === 0) return {};
+
+  const [{ data: payments }, { data: completedAppointments }] = await Promise.all([
+    supabase
+      .from('payments')
+      .select('client_id, amount, appointment_id, method, iva_amount, facturado')
+      .eq('clinic_id', clinicId)
+      .in('client_id', ids),
+    supabase
+      .from('appointments')
+      .select('id, client_id')
+      .eq('clinic_id', clinicId)
+      .eq('status', 'completed')
+      .in('client_id', ids),
+  ]);
+
+  const completedIdsByClient = {};
+  (completedAppointments || []).forEach((a) => {
+    if (!completedIdsByClient[a.client_id]) completedIdsByClient[a.client_id] = new Set();
+    completedIdsByClient[a.client_id].add(a.id);
+  });
+
+  const baseAmount = (p) => (p.facturado ? Number(p.amount || 0) - Number(p.iva_amount || 0) : Number(p.amount || 0));
+
+  const totals = {};
+  ids.forEach((id) => { totals[id] = { totalPayments: 0, totalCharges: 0 }; });
+  (payments || []).forEach((p) => {
+    const bucket = totals[p.client_id];
+    if (!bucket) return;
+    const completedIds = completedIdsByClient[p.client_id] || new Set();
+    if (p.appointment_id && completedIds.has(p.appointment_id)) {
+      bucket.totalCharges += Math.abs(baseAmount(p));
+    }
+    if (p.method !== 'balance') {
+      bucket.totalPayments += baseAmount(p);
+    }
+  });
+
+  const balances = {};
+  ids.forEach((id) => {
+    const { totalPayments, totalCharges } = totals[id];
+    balances[id] = { balance: totalPayments - totalCharges, totalPayments, totalCharges };
+  });
+  return balances;
+};
+
+/**
  * Payroll math ported 1:1 from src/lib/payroll.ts, which the Payroll page uses to
  * compute what each therapist earns/is owed. Kept in sync manually since Netlify
  * functions run as plain CommonJS and can't import the TS module directly.
@@ -483,8 +536,19 @@ const toolDefinitions = [
     },
   },
   {
+    name: 'remember_fact',
+    description: 'Permanently remember a clinic-wide business fact or rule (e.g. "Sergio is the clinic owner", "Fridays are half-days"). This is visible to every staff member using this chat from now on, and to you in every future conversation — write it as a clear, self-contained statement. ONLY call this when a staff member explicitly asks you to remember/note/keep in mind something — never proactively, and never for information already available from another tool (e.g. do not remember a client\'s balance). This is the ONLY tool that writes anything; every other tool is strictly read-only.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fact: { type: 'string', description: 'The fact to remember, self-contained and clear (max 500 characters).' },
+      },
+      required: ['fact'],
+    },
+  },
+  {
     name: 'search_clients',
-    description: 'Search the clinic\'s patients by name, email, or phone (active and archived). Uses case-insensitive + accent-insensitive token matching (helps with full-name keywords). Returns up to 10 ranked matches.',
+    description: 'Search the clinic\'s patients by name, email, or phone (active and archived). Uses case-insensitive + accent-insensitive token matching (helps with full-name keywords). Returns up to 10 ranked matches, each including their current balance (positive = credit, negative = owed) — no need to call get_client_details separately just for balance.',
     input_schema: {
       type: 'object',
       properties: { query: { type: 'string', description: 'Name, email, or phone fragment to search for.' } },
@@ -493,7 +557,7 @@ const toolDefinitions = [
   },
   {
     name: 'get_client_details',
-    description: 'Full profile for one patient, including their current balance (positive = credit, negative = owed).',
+    description: 'Full profile for one patient — contact info, default charge amount, pay-in-full flag, emergency contact, invoicing (RFC/tax regime/CFDI) fields, and current balance (positive = credit, negative = owed).',
     input_schema: {
       type: 'object',
       properties: { client_id: { type: 'string', description: 'The patient id, from search_clients.' } },
@@ -547,7 +611,7 @@ const toolDefinitions = [
   },
   {
     name: 'list_payments',
-    description: 'Individual payment records for a date range (defaults to the last 90 days), optionally filtered by patient, payment method, or standalone-only (not tied to an appointment). Returns paginated rows with range-aware limits.',
+    description: 'Individual payment records for a date range (defaults to the last 90 days), optionally filtered by patient, payment method, or standalone-only (not tied to an appointment). Each row includes iva_amount, refund info, which appointment it belongs to (if any), and who received it (received_by). Returns paginated rows with range-aware limits.',
     input_schema: {
       type: 'object',
       properties: {
@@ -563,7 +627,7 @@ const toolDefinitions = [
   },
   {
     name: 'list_expenses',
-    description: 'Individual expense records for a date range (defaults to the last 90 days), optionally filtered by category, attributed therapist, or payment method. Each row includes payment_method (cash/card/transfer/cheque) — only "cash" expenses affect the physical cash drawer; non-cash expenses (e.g. a bank-transferred INFONAVIT payment) reduce net profit but not cash on hand. Returns paginated rows with range-aware limits.',
+    description: 'Individual expense records for a date range (defaults to the last 90 days), optionally filtered by category, attributed therapist, or payment method. Each row includes payment_method (cash/card/transfer/cheque) — only "cash" expenses affect the physical cash drawer; non-cash expenses (e.g. a bank-transferred INFONAVIT payment) reduce net profit but not cash on hand — and recorded_by (who logged it). Returns paginated rows with range-aware limits.',
     input_schema: {
       type: 'object',
       properties: {
@@ -706,6 +770,24 @@ const toolHandlers = {
     };
   },
 
+  // The one deliberate exception to this file's read-only invariant — every other
+  // handler here may only .select(). Scoped tightly: clinic-wide fact storage only,
+  // triggered only when the model is explicitly asked to remember something.
+  remember_fact: async (supabase, clinicId, input, _clinicTimezone, userId) => {
+    const fact = String(input?.fact || '').trim();
+    if (!fact) return { error: 'fact is required' };
+    if (fact.length > 500) return { error: 'fact is too long (max 500 characters) — summarize it more concisely' };
+
+    const { data, error } = await supabase
+      .from('ai_clinic_memory')
+      .insert({ clinic_id: clinicId, fact, created_by: userId || null })
+      .select('id, fact, created_at')
+      .single();
+    if (error) return { error: error.message };
+
+    return { remembered: true, id: data.id, fact: data.fact, created_at: data.created_at };
+  },
+
   search_clients: async (supabase, clinicId, input) => {
     const query = String(input?.query || '').trim();
     if (!query) return { error: 'query is required' };
@@ -754,15 +836,22 @@ const toolHandlers = {
       .slice(0, DEFAULT_LIST_LIMIT);
     const finalClients = ranked.length > 0 ? ranked : fallback;
 
+    const balances = await computeClientBalancesBatch(supabase, clinicId, finalClients.map((c) => c.id));
+
     return {
-      clients: finalClients.map((c) => ({
-        id: c.id,
-        name: fullName(c),
-        email: c.email,
-        phone: c.phone,
-        is_active: c.is_active,
-        archived: !!c.archived,
-      })),
+      clients: finalClients.map((c) => {
+        const balance = balances[c.id]?.balance ?? 0;
+        return {
+          id: c.id,
+          name: fullName(c),
+          email: c.email,
+          phone: c.phone,
+          is_active: c.is_active,
+          archived: !!c.archived,
+          balance,
+          balance_note: balance >= 0 ? 'positive = credit in their favor' : 'negative = amount they owe',
+        };
+      }),
     };
   },
 
@@ -771,7 +860,7 @@ const toolHandlers = {
     if (!clientId) return { error: 'client_id is required' };
     const { data: client, error } = await supabase
       .from('clients')
-      .select('id, first_name, last_name, email, phone, birth_date, gender, address, medical_notes, tags, is_active')
+      .select('id, first_name, last_name, email, phone, birth_date, gender, address, medical_notes, is_active, archived, charge_amount, pay_therapist_in_full, emergency_contact_name, emergency_contact_phone, rfc, tax_regime, cfdi_email, cfdi_use')
       .eq('id', clientId)
       .eq('clinic_id', clinicId)
       .single();
@@ -788,8 +877,17 @@ const toolHandlers = {
       gender: client.gender,
       address: client.address,
       medical_notes: client.medical_notes ? String(client.medical_notes).slice(0, 500) : null,
-      tags: client.tags,
       is_active: client.is_active,
+      archived: !!client.archived,
+      charge_amount: client.charge_amount,
+      pay_therapist_in_full: !!client.pay_therapist_in_full,
+      pay_therapist_in_full_note: 'If true, the therapist is compensated 100% of this client\'s pre-IVA appointment revenue by default — this does NOT mean the client themself owes/paid nothing.',
+      emergency_contact_name: client.emergency_contact_name,
+      emergency_contact_phone: client.emergency_contact_phone,
+      rfc: client.rfc,
+      tax_regime: client.tax_regime,
+      cfdi_email: client.cfdi_email,
+      cfdi_use: client.cfdi_use,
       balance: balance.balance,
       balance_note: balance.balance >= 0 ? 'positive = credit in their favor' : 'negative = amount they owe',
     };
@@ -1002,7 +1100,7 @@ const toolHandlers = {
 
     let query = supabase
       .from('payments')
-      .select('id, amount, method, description, payment_date, facturado, invoice_state, appointment_id, clients(first_name, last_name)')
+      .select('id, amount, method, description, payment_date, facturado, iva_amount, invoice_state, refund_amount, refunded_at, appointment_id, clients(first_name, last_name), profiles:received_by(first_name, last_name)')
       .eq('clinic_id', clinicId)
       .gte('payment_date', start)
       .lte('payment_date', end)
@@ -1030,9 +1128,14 @@ const toolHandlers = {
         description: p.description,
         payment_date: p.payment_date,
         facturado: p.facturado,
+        iva_amount: p.iva_amount,
         invoice_state: p.invoice_state,
+        refund_amount: p.refund_amount,
+        refunded_at: p.refunded_at,
         standalone: !p.appointment_id,
+        appointment_id: p.appointment_id,
         client: fullName(p.clients),
+        received_by: fullName(p.profiles),
       })),
     };
   },
@@ -1050,7 +1153,7 @@ const toolHandlers = {
 
     let query = supabase
       .from('expenses')
-      .select('id, amount, description, category, date, payment_method, therapists(first_name, last_name), suppliers(name)')
+      .select('id, amount, description, category, date, payment_method, therapists(first_name, last_name), suppliers(name), profiles:recorded_by(first_name, last_name)')
       .eq('clinic_id', clinicId)
       .gte('date', start.slice(0, 10))
       .lte('date', end.slice(0, 10))
@@ -1080,6 +1183,7 @@ const toolHandlers = {
         payment_method: e.payment_method || 'cash',
         therapist: fullName(e.therapists),
         supplier: e.suppliers?.name || null,
+        recorded_by: fullName(e.profiles),
       })),
     };
   },

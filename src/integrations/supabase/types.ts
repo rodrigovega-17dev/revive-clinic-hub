@@ -186,6 +186,45 @@ export type Database = {
           },
         ]
       }
+      ai_clinic_memory: {
+        Row: {
+          clinic_id: string
+          created_at: string
+          created_by: string | null
+          fact: string
+          id: string
+        }
+        Insert: {
+          clinic_id: string
+          created_at?: string
+          created_by?: string | null
+          fact: string
+          id?: string
+        }
+        Update: {
+          clinic_id?: string
+          created_at?: string
+          created_by?: string | null
+          fact?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_clinic_memory_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_clinic_memory_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_conversations: {
         Row: {
           clinic_id: string

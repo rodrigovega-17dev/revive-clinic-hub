@@ -3,9 +3,24 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Loader2, Sparkles, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AiChatMessage } from '@/integrations/aiChat/service';
+import type { Json } from '@/integrations/supabase/types';
+
+/** tool_calls is stored as an array of {name, input} — extract distinct tool names, in call order. */
+const getUsedToolNames = (toolCalls: Json | null): string[] => {
+  if (!Array.isArray(toolCalls)) return [];
+  const names: string[] = [];
+  toolCalls.forEach((entry) => {
+    if (entry && typeof entry === 'object' && !Array.isArray(entry) && typeof (entry as { name?: unknown }).name === 'string') {
+      const name = (entry as { name: string }).name;
+      if (!names.includes(name)) names.push(name);
+    }
+  });
+  return names;
+};
 
 const MARKDOWN_CLASSNAMES = cn(
   'prose prose-sm dark:prose-invert max-w-none',
@@ -41,29 +56,44 @@ const ChatMessageList = ({ messages, isThinking }: ChatMessageListProps) => {
   return (
     <ScrollArea className="flex-1 min-h-0">
       <div className="mx-auto w-full max-w-4xl space-y-4 py-2">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={cn('w-full', message.role === 'user' && 'flex justify-end')}
-          >
+        {messages.map((message) => {
+          const usedTools = message.role === 'assistant' ? getUsedToolNames(message.tool_calls) : [];
+          return (
             <div
-              className={cn(
-                'text-sm',
-                message.role === 'user'
-                  ? 'max-w-[85%] rounded-2xl bg-primary px-4 py-2 text-primary-foreground whitespace-pre-wrap'
-                  : 'w-full rounded-none bg-transparent px-0 py-1 text-foreground'
-              )}
+              key={message.id}
+              className={cn('w-full', message.role === 'user' && 'flex justify-end')}
             >
-              {message.role === 'assistant'
-                ? (
-                  <div className={MARKDOWN_CLASSNAMES}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
-                  </div>
-                )
-                : message.content}
+              <div
+                className={cn(
+                  'text-sm',
+                  message.role === 'user'
+                    ? 'max-w-[85%] rounded-2xl bg-primary px-4 py-2 text-primary-foreground whitespace-pre-wrap'
+                    : 'w-full rounded-none bg-transparent px-0 py-1 text-foreground'
+                )}
+              >
+                {message.role === 'assistant'
+                  ? (
+                    <>
+                      {usedTools.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                          <Wrench className="h-3 w-3 text-muted-foreground shrink-0" />
+                          {usedTools.map((toolName) => (
+                            <Badge key={toolName} variant="secondary" className="text-[10px] font-mono font-normal px-1.5 py-0">
+                              {toolName}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      <div className={MARKDOWN_CLASSNAMES}>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                      </div>
+                    </>
+                  )
+                  : message.content}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {isThinking && (
           <div className="w-full text-sm text-muted-foreground flex items-center gap-2 py-1">
             <Sparkles className="h-3.5 w-3.5" />

@@ -140,16 +140,25 @@ exports.handler = async (event) => {
       return jsonResponse(200, { ok: true, skipped: 'Job already claimed or not queued' });
     }
 
-    const [{ data: clinic }, { data: therapists, error: therapistsError }] = await Promise.all([
+    const [{ data: clinic }, { data: therapists, error: therapistsError }, { data: rememberedFacts, error: memoryError }] = await Promise.all([
       supabase.from('clinics').select('name, timezone, currency, settings').eq('id', clinicId).single(),
       supabase
         .from('therapists')
         .select('id, archived, is_active, compensation_type, retention_enabled, retention_rate, incentive_enabled')
         .eq('clinic_id', clinicId)
         .limit(200),
+      supabase
+        .from('ai_clinic_memory')
+        .select('fact, created_at')
+        .eq('clinic_id', clinicId)
+        .order('created_at', { ascending: true })
+        .limit(100),
     ]);
     if (therapistsError) {
       console.warn('ai-chat worker: therapists config snapshot unavailable:', therapistsError.message);
+    }
+    if (memoryError) {
+      console.warn('ai-chat worker: remembered facts unavailable:', memoryError.message);
     }
     const clinicName = clinic?.name || 'the clinic';
     const clinicTimezone = clinic?.timezone || 'UTC';
@@ -164,6 +173,8 @@ exports.handler = async (event) => {
       clinicTimezone,
       historyMessages: history,
       dynamicRulesSnapshot,
+      rememberedFacts: rememberedFacts || [],
+      userId: user.id,
     });
 
     const assistantMessage = await insertMessage(job.conversation_id, clinicId, user.id, 'assistant', text, toolCallLog);

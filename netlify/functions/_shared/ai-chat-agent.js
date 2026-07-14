@@ -6,6 +6,7 @@ const MAX_AGENT_RUNTIME_MS = 210000;
 const MAX_TOOL_RESULT_CHARS = 12000;
 const MAX_DYNAMIC_RULES_CHARS = 1800;
 const MAX_OUTPUT_TOKENS = 4096;
+const MAX_REMEMBERED_FACTS_CHARS = 2000;
 
 const pickClinicSettingsForAi = (settings) => {
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return null;
@@ -63,10 +64,20 @@ const buildDynamicBusinessRulesSnapshot = (clinic, therapists) => {
     : `${serialized.slice(0, MAX_DYNAMIC_RULES_CHARS)}...`;
 };
 
-const buildSystemPrompt = (clinicName, clinicTimezone, todayLocal, dynamicRulesSnapshot) => `You are an internal AI assistant for ${clinicName}, a physical therapy clinic.
+/** Renders clinic-wide facts staff have explicitly asked the AI to remember, for the system prompt. */
+const buildRememberedFactsBlock = (facts) => {
+  if (!facts || facts.length === 0) return 'None yet.';
+  const lines = facts.map((f) => `- ${f.fact}`).join('\n');
+  return lines.length <= MAX_REMEMBERED_FACTS_CHARS ? lines : `${lines.slice(0, MAX_REMEMBERED_FACTS_CHARS)}...`;
+};
+
+const buildSystemPrompt = (clinicName, clinicTimezone, todayLocal, dynamicRulesSnapshot, rememberedFacts) => `You are an internal AI assistant for ${clinicName}, a physical therapy clinic.
 Your purpose is to be a single place staff can ask about ANY aspect of the clinic's own data: patients, appointments, individual payments and expenses, financial summaries and breakdowns, therapist payroll (earnings, retention, incentives, net payable) and past payouts, generated documents, and the activity log.
 Today's date is ${todayLocal} (clinic timezone: ${clinicTimezone}).
 Dynamic clinic business-rules snapshot (source of truth for semantics/config): ${dynamicRulesSnapshot}
+Remembered clinic facts (staff previously asked you to remember these — treat as ground truth and use naturally when relevant, e.g. who the owner is or clinic-specific rules):
+${buildRememberedFactsBlock(rememberedFacts)}
+If — and only if — a staff member explicitly asks you to remember/note/keep in mind something, call remember_fact with a clear, self-contained statement of it. Never call it proactively, and never to store information another tool already provides (e.g. a client's balance).
 Use ONLY the provided tools — never fabricate data or numbers, and never state a metric that no tool actually returned (e.g. there is no schedule-capacity/occupancy data anywhere — never invent an "occupancy %").
 For ANY "what day is today", "que dia es hoy", "fecha de hoy", current date/time, or weekday question, call get_current_clinic_datetime first and use its date/weekday/time fields verbatim. Never compute a day-of-week yourself from a date — this is unreliable. Only state a weekday when a tool explicitly provides a "weekday" field. When a tool already returns a computed percentage or breakdown, use that value verbatim instead of computing your own fraction.
 Never attempt to convert a raw UTC ISO timestamp yourself, and never reformat, relabel, or re-derive AM/PM on a 24-hour time value — you are unreliable at timezone math and at re-labeling 24h times as 12h AM/PM. Whenever a tool provides a "*_local" field (e.g. start_time_local, end_time_local, created_at_local) with date/weekday/time, use its "time" value verbatim as already-24-hour clinic-local time; do not use a sibling raw field (e.g. start_time, created_at, current_start_time) for anything user-facing about when something happened.
@@ -112,6 +123,8 @@ const runAgentLoop = async ({
   clinicTimezone,
   historyMessages,
   dynamicRulesSnapshot,
+  rememberedFacts,
+  userId,
 }) => {
   let messages = historyMessages;
   const toolCallLog = [];
@@ -135,7 +148,7 @@ const runAgentLoop = async ({
     const response = await anthropic.messages.create({
       model: MODEL,
       max_tokens: MAX_OUTPUT_TOKENS,
-      system: buildSystemPrompt(clinicName, clinicTimezone, todayLocal, dynamicRulesSnapshot),
+      system: buildSystemPrompt(clinicName, clinicTimezone, todayLocal, dynamicRulesSnapshot, rememberedFacts),
       messages,
       tools: toolDefinitions,
     });
@@ -160,7 +173,7 @@ const runAgentLoop = async ({
       const handler = toolHandlers[block.name];
       let result;
       try {
-        result = handler ? await handler(supabase, clinicId, block.input || {}, clinicTimezone) : { error: 'Unknown tool' };
+        result = handler ? await handler(supabase, clinicId, block.input || {}, clinicTimezone, userId) : { error: 'Unknown tool' };
       } catch (err) {
         result = { error: err.message || 'Tool call failed' };
       }
