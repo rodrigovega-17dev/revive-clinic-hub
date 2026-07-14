@@ -23,6 +23,7 @@ export interface EditableExpense {
   category: string;
   date: string;
   therapist_id: string | null;
+  payment_method: string;
 }
 
 interface ExpenseFormProps {
@@ -40,6 +41,7 @@ const ExpenseForm = ({ open, onClose, editingExpense }: ExpenseFormProps) => {
   const [category, setCategory] = useState('');
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [therapistId, setTherapistId] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
   const { data: therapists = [] } = useTherapists();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -53,12 +55,14 @@ const ExpenseForm = ({ open, onClose, editingExpense }: ExpenseFormProps) => {
       setCategory(editingExpense.category);
       setDate(editingExpense.date);
       setTherapistId(editingExpense.therapist_id || '');
+      setPaymentMethod(editingExpense.payment_method || 'cash');
     } else {
       setAmount('');
       setDescription('');
       setCategory('');
       setDate(format(new Date(), 'yyyy-MM-dd'));
       setTherapistId('');
+      setPaymentMethod('cash');
     }
   }, [open, editingExpense]);
 
@@ -143,6 +147,7 @@ const ExpenseForm = ({ open, onClose, editingExpense }: ExpenseFormProps) => {
         category,
         date,
         therapist_id: therapistId || null,
+        payment_method: paymentMethod,
       };
       updateExpense.mutate(update, {
         onSuccess: () => {
@@ -167,6 +172,7 @@ const ExpenseForm = ({ open, onClose, editingExpense }: ExpenseFormProps) => {
       category,
       date,
       therapist_id: therapistId || null,
+      payment_method: paymentMethod,
     });
   };
 
@@ -220,6 +226,21 @@ const ExpenseForm = ({ open, onClose, editingExpense }: ExpenseFormProps) => {
                     {cat.label}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="expense-payment-method">{t('finance.paymentMethod')} *</Label>
+            <Select value={paymentMethod} onValueChange={setPaymentMethod} required>
+              <SelectTrigger id="expense-payment-method" className="bg-input border-border text-foreground">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cash">{t('finance.cash')}</SelectItem>
+                <SelectItem value="card">{t('finance.card')}</SelectItem>
+                <SelectItem value="transfer">{t('finance.transfer')}</SelectItem>
+                <SelectItem value="cheque">{t('finance.cheque')}</SelectItem>
               </SelectContent>
             </Select>
           </div>

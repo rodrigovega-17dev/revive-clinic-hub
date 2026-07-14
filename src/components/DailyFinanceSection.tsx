@@ -164,9 +164,14 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
   const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
   const netProfit = totalRevenue - totalExpenses;
 
+  // Only expenses actually paid out of the physical register affect the cash count —
+  // a big non-cash expense (e.g. an INFONAVIT payment via bank transfer) must not
+  // deflate the drawer figure just because it happened the same day.
+  const totalCashExpenses = expenses?.filter(e => (e.payment_method || 'cash') === 'cash').reduce((sum, e) => sum + Number(e.amount), 0) || 0;
+
   const totalCash = payments?.filter(p => p.method === 'cash').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
   const totalIntangible = payments?.filter(p => p.method !== 'cash' && p.method !== 'balance' && p.method !== 'adjustment').reduce((sum, p) => sum + Number(p.amount), 0) || 0;
-  const amountInCashier = totalCash - totalExpenses;
+  const amountInCashier = totalCash - totalCashExpenses;
 
   // Appointment counts for the day (for the printable report)
   const apptTotal = dayAppointments?.length || 0;
@@ -208,7 +213,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
     const reportTotalIntangible = reportPayments
       .filter((payment) => payment.method !== 'cash' && payment.method !== 'balance' && payment.method !== 'adjustment')
       .reduce((sum, payment) => sum + Number(payment.amount), 0);
-    const reportAmountInCashier = reportTotalCash - totalExpenses;
+    const reportAmountInCashier = reportTotalCash - totalCashExpenses;
     const reportNetProfit = reportTotalRevenue - totalExpenses;
 
     const paymentsTable: FinanceReportTable = {
@@ -232,16 +237,17 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
 
     const expensesTable: FinanceReportTable = {
       title: t('finance.dailyExpenses'),
-      columns: [t('finance.time'), t('finance.description'), t('finance.category'), t('finance.amount')],
-      numericColumns: [3],
+      columns: [t('finance.time'), t('finance.description'), t('finance.category'), t('finance.paymentMethod'), t('finance.amount')],
+      numericColumns: [4],
       emptyText: t('finance.noExpensesToday'),
       rows: (expenses || []).map((e) => [
         formatReportTime(e.created_at),
         e.description || '-',
         e.category || 'general',
+        getPaymentMethodText(e.payment_method || 'cash'),
         formatCurrencyWithClinic(e.amount),
       ]),
-      footer: [t('finance.expensesCash'), '', '', formatCurrencyWithClinic(totalExpenses)],
+      footer: [t('finance.expensesCash'), '', '', '', formatCurrencyWithClinic(totalCashExpenses)],
     };
 
     openFinanceReport({
@@ -263,7 +269,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
         { label: t('finance.totalEarnings'), value: formatCurrencyWithClinic(reportTotalRevenue) },
         { label: t('finance.totalCash'), value: formatCurrencyWithClinic(reportTotalCash) },
         { label: t('finance.totalIntangible'), value: formatCurrencyWithClinic(reportTotalIntangible) },
-        { label: t('finance.expensesCash'), value: formatCurrencyWithClinic(totalExpenses) },
+        { label: t('finance.expensesCash'), value: formatCurrencyWithClinic(totalCashExpenses) },
         { label: t('finance.amountInCashier'), value: formatCurrencyWithClinic(reportAmountInCashier), highlight: true },
         { label: t('finance.netProfit'), value: formatCurrencyWithClinic(reportNetProfit), highlight: true },
       ],
@@ -380,7 +386,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
               <TrendingDown className="h-4 w-4 text-red-400" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{t('finance.expensesCash')}</p>
-                <p className="text-2xl font-bold text-foreground">{formatCurrencyWithClinic(totalExpenses)}</p>
+                <p className="text-2xl font-bold text-foreground">{formatCurrencyWithClinic(totalCashExpenses)}</p>
               </div>
             </div>
           </CardContent>
@@ -537,6 +543,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                 <TableRow className="border-border">
                   <TableHead className="text-foreground">{t('finance.description')}</TableHead>
                   <TableHead className="text-foreground">{t('finance.category')}</TableHead>
+                  <TableHead className="text-foreground">{t('finance.paymentMethod')}</TableHead>
                   <TableHead className="text-foreground">{t('finance.amount')}</TableHead>
                   <TableHead className="text-foreground">{t('finance.time')}</TableHead>
                   <TableHead className="text-foreground text-right">{t('common.actions')}</TableHead>
@@ -550,6 +557,9 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                       <Badge variant="secondary" className="capitalize">
                         {expense.category || 'general'}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {getPaymentMethodText(expense.payment_method || 'cash')}
                     </TableCell>
                     <TableCell>
                       <span className="font-medium text-red-600">

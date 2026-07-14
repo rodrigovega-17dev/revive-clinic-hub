@@ -61,6 +61,83 @@ export type Database = {
           },
         ]
       }
+      ai_chat_jobs: {
+        Row: {
+          clinic_id: string
+          conversation_id: string
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          request_message_id: string | null
+          response_message_id: string | null
+          started_at: string | null
+          status: string
+          tool_calls: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          clinic_id: string
+          conversation_id: string
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          request_message_id?: string | null
+          response_message_id?: string | null
+          started_at?: string | null
+          status: string
+          tool_calls?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          clinic_id?: string
+          conversation_id?: string
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          request_message_id?: string | null
+          response_message_id?: string | null
+          started_at?: string | null
+          status?: string
+          tool_calls?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_chat_jobs_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_chat_jobs_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "ai_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_chat_jobs_request_message_id_fkey"
+            columns: ["request_message_id"]
+            isOneToOne: false
+            referencedRelation: "ai_chat_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_chat_jobs_response_message_id_fkey"
+            columns: ["response_message_id"]
+            isOneToOne: false
+            referencedRelation: "ai_chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_chat_messages: {
         Row: {
           clinic_id: string
@@ -848,6 +925,7 @@ export type Database = {
           date: string
           description: string
           id: string
+          payment_method: string
           recorded_by: string | null
           supplier_id: string | null
           therapist_id: string | null
@@ -861,6 +939,7 @@ export type Database = {
           date: string
           description: string
           id?: string
+          payment_method?: string
           recorded_by?: string | null
           supplier_id?: string | null
           therapist_id?: string | null
@@ -874,6 +953,7 @@ export type Database = {
           date?: string
           description?: string
           id?: string
+          payment_method?: string
           recorded_by?: string | null
           supplier_id?: string | null
           therapist_id?: string | null

@@ -576,6 +576,7 @@ const Payroll = () => {
           amount: numericAmount,
           date: payoutDate,
           category: 'Payroll',
+          payment_method: payoutMethod,
           clinic_id: clinicId,
           recorded_by: user.id,
         });

@@ -17,6 +17,7 @@ export interface ExpenseUpdate {
   category: string;
   date: string;
   therapist_id: string | null;
+  payment_method: string;
 }
 
 export const useUpdateExpense = () => {

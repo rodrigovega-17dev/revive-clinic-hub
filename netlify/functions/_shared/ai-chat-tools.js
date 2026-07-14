@@ -535,7 +535,7 @@ const toolDefinitions = [
   },
   {
     name: 'get_financial_summary',
-    description: 'Revenue and expense totals for a date range (max 366 days), broken down by payment method and expense category, including pre-computed percentages (payment_method_breakdown, expense_category_breakdown) — use those percent fields as-is rather than computing your own. Use list_payments/list_expenses for individual transactions.',
+    description: 'Revenue and expense totals for a date range (max 366 days), broken down by payment method and expense category, including pre-computed percentages (payment_method_breakdown, expense_category_breakdown, expense_payment_method_breakdown) — use those percent fields as-is rather than computing your own. Includes amount_in_cashier: physical cash-drawer reconciliation (cash revenue minus only CASH-PAID expenses) — use this, not total_cash minus total_expenses, for "how much cash should be in the register" questions, since a large non-cash expense (e.g. an INFONAVIT payment via bank transfer) must not appear to drain the drawer. Use list_payments/list_expenses for individual transactions.',
     input_schema: {
       type: 'object',
       properties: {
@@ -563,7 +563,7 @@ const toolDefinitions = [
   },
   {
     name: 'list_expenses',
-    description: 'Individual expense records for a date range (defaults to the last 90 days), optionally filtered by category or attributed therapist. Returns paginated rows with range-aware limits.',
+    description: 'Individual expense records for a date range (defaults to the last 90 days), optionally filtered by category, attributed therapist, or payment method. Each row includes payment_method (cash/card/transfer/cheque) — only "cash" expenses affect the physical cash drawer; non-cash expenses (e.g. a bank-transferred INFONAVIT payment) reduce net profit but not cash on hand. Returns paginated rows with range-aware limits.',
     input_schema: {
       type: 'object',
       properties: {
@@ -571,6 +571,7 @@ const toolDefinitions = [
         end_date: { type: 'string', description: 'ISO date.' },
         category: { type: 'string', description: 'e.g. supplies, office, maintenance, utilities, equipment, marketing, travel, food, general, Payroll.' },
         therapist_id: { type: 'string', description: 'From search_therapists, to filter to expenses attributed to one therapist.' },
+        payment_method: { type: 'string', description: 'One of: cash, card, transfer, cheque.' },
         limit: { type: 'number', description: 'Rows per page; range-aware max (higher for day/week/month ranges).' },
         offset: { type: 'number', description: 'Zero-based row offset for pagination.' },
       },
@@ -899,7 +900,7 @@ const toolHandlers = {
         .lte('payment_date', end),
       supabase
         .from('expenses')
-        .select('amount, category')
+        .select('amount, category, payment_method')
         .eq('clinic_id', clinicId)
         .gte('date', start.slice(0, 10))
         .lte('date', end.slice(0, 10)),
@@ -916,6 +917,12 @@ const toolHandlers = {
       .filter((p) => p.method !== 'cash' && !['balance', 'adjustment'].includes(p.method))
       .reduce((sum, p) => sum + Number(p.amount || 0), 0);
     const totalExpenses = (expenses || []).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    // Only expenses actually paid out of the physical register affect the cash-drawer
+    // figure — a big non-cash expense (e.g. an INFONAVIT payment via bank transfer)
+    // must not deflate amount_in_cashier just because it happened the same period.
+    const totalCashExpenses = (expenses || [])
+      .filter((e) => (e.payment_method || 'cash') === 'cash')
+      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
     const revenueByMethod = {};
     const paymentCountByMethod = {};
@@ -947,17 +954,36 @@ const toolHandlers = {
       }))
       .sort((a, b) => b.amount - a.amount);
 
+    const expensesByPaymentMethod = {};
+    (expenses || []).forEach((e) => {
+      const key = e.payment_method || 'cash';
+      expensesByPaymentMethod[key] = (expensesByPaymentMethod[key] || 0) + Number(e.amount || 0);
+    });
+    const expensePaymentMethodBreakdown = Object.keys(expensesByPaymentMethod)
+      .map((method) => ({
+        method,
+        amount: expensesByPaymentMethod[method],
+        percent_of_expenses: totalExpenses ? Number(((expensesByPaymentMethod[method] / totalExpenses) * 100).toFixed(1)) : 0,
+      }))
+      .sort((a, b) => b.amount - a.amount);
+
     return {
       range: { start, end },
       total_revenue: totalRevenue,
       total_cash: totalCash,
       total_intangible: totalIntangible,
       total_expenses: totalExpenses,
+      total_cash_expenses: totalCashExpenses,
+      // Physical cash-drawer reconciliation: cash revenue minus only cash-paid expenses.
+      // This is NOT total_cash minus total_expenses — non-cash expenses (card/transfer/
+      // cheque, e.g. a bank-transferred INFONAVIT payment) never touch the drawer.
+      amount_in_cashier: totalCash - totalCashExpenses,
       net_profit: totalRevenue - totalExpenses,
       total_payment_count: totalPaymentCount,
       // Already-computed percentages — use these values verbatim, do not recompute.
       payment_method_breakdown: paymentMethodBreakdown,
       expense_category_breakdown: expenseCategoryBreakdown,
+      expense_payment_method_breakdown: expensePaymentMethodBreakdown,
       revenue_by_method: revenueByMethod,
       expenses_by_category: expensesByCategory,
     };
@@ -1024,7 +1050,7 @@ const toolHandlers = {
 
     let query = supabase
       .from('expenses')
-      .select('id, amount, description, category, date, therapists(first_name, last_name), suppliers(name)')
+      .select('id, amount, description, category, date, payment_method, therapists(first_name, last_name), suppliers(name)')
       .eq('clinic_id', clinicId)
       .gte('date', start.slice(0, 10))
       .lte('date', end.slice(0, 10))
@@ -1032,6 +1058,7 @@ const toolHandlers = {
       .range(offset, offset + limit - 1);
     if (input?.category) query = query.eq('category', input.category);
     if (input?.therapist_id) query = query.eq('therapist_id', input.therapist_id);
+    if (input?.payment_method) query = query.eq('payment_method', input.payment_method);
 
     const { data, error } = await query;
     if (error) return { error: error.message };
@@ -1050,6 +1077,7 @@ const toolHandlers = {
         description: e.description,
         category: e.category,
         date: e.date,
+        payment_method: e.payment_method || 'cash',
         therapist: fullName(e.therapists),
         supplier: e.suppliers?.name || null,
       })),
