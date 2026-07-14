@@ -64,11 +64,7 @@ const Landing = () => {
       <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25">
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-            </div>
+            <img src="/logo.png" alt={t("landing.brand")} className="h-9 w-9 shrink-0 rounded-lg object-contain" />
             <span className="truncate text-lg font-semibold tracking-tight text-foreground">{t("landing.brand")}</span>
           </div>
           <nav className="flex shrink-0 items-center gap-1.5 sm:gap-2">
@@ -492,11 +488,7 @@ const Landing = () => {
         <div className="mx-auto max-w-6xl px-6">
           <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md">
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-              </div>
+              <img src="/logo.png" alt={t("landing.brand")} className="h-9 w-9 rounded-lg object-contain" />
               <div>
                 <div className="font-semibold text-foreground">{t("landing.brand")}</div>
                 <div className="text-xs text-muted-foreground">{t("landing.footerTagline")}</div>
