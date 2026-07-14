@@ -35,8 +35,8 @@ const ChatInput = ({ onSend, disabled }: ChatInputProps) => {
         onKeyDown={handleKeyDown}
         placeholder={t('aiChat.inputPlaceholder')}
         disabled={disabled}
-        rows={2}
-        className="resize-none"
+        rows={1}
+        className="min-h-0 h-10 resize-none py-2"
       />
       <Button onClick={handleSend} disabled={disabled || !value.trim()} size="icon" className="shrink-0">
         {disabled ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
