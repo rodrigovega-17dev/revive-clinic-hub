@@ -18,6 +18,15 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const MAX_MESSAGE_LENGTH = 4000;
+// A queued job that's sat this long with no started_at means the background-trigger
+// fetch never actually reached/claimed it (e.g. a cold-start slower than the trigger's
+// own abort timeout) — treat it as abandoned rather than blocking the user forever.
+const STALE_QUEUED_MS = 20000;
+// A "running" job that hasn't updated in this long is presumed crashed/orphaned — the
+// worker refreshes updated_at on every tool call (onProgress) and on completion, and
+// MAX_AGENT_RUNTIME_MS in ai-chat-agent.js caps a real run at 210s, so this generously
+// covers any legitimate in-flight run.
+const STALE_RUNNING_MS = 240000;
 
 const jsonResponse = (statusCode, body) => ({
   statusCode,
@@ -85,13 +94,52 @@ const insertMessage = async (conversationId, clinicId, userId, role, content, to
 const findActiveJob = async (conversationId) => {
   const { data } = await supabase
     .from('ai_chat_jobs')
-    .select('id, status')
+    .select('id, status, created_at, started_at, updated_at')
     .eq('conversation_id', conversationId)
     .in('status', ['queued', 'running'])
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
   return data || null;
+};
+
+const isJobStale = (job) => {
+  const now = Date.now();
+  if (job.status === 'queued' && !job.started_at) {
+    return now - new Date(job.created_at).getTime() > STALE_QUEUED_MS;
+  }
+  if (job.status === 'running') {
+    return now - new Date(job.updated_at).getTime() > STALE_RUNNING_MS;
+  }
+  return false;
+};
+
+/** Marks an abandoned job failed and leaves a visible chat message, so the conversation
+ * doesn't just silently drop the user's original question. */
+const failStaleJob = async ({ jobId, conversationId, clinicId, userId }) => {
+  const { data: fallbackMessage } = await supabase
+    .from('ai_chat_messages')
+    .insert({
+      conversation_id: conversationId,
+      clinic_id: clinicId,
+      user_id: userId,
+      role: 'assistant',
+      content: 'That request stalled before finishing — please try asking again.',
+      tool_calls: [],
+    })
+    .select('id')
+    .single();
+  await supabase
+    .from('ai_chat_jobs')
+    .update({
+      status: 'failed',
+      error: 'Job went stale (no progress) and was auto-recovered.',
+      response_message_id: fallbackMessage?.id || null,
+      current_tool: null,
+      finished_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', jobId);
 };
 
 const enqueueJob = async ({ conversationId, clinicId, userId, requestMessageId }) => {
@@ -121,13 +169,9 @@ const getRequestBaseUrl = (event) => {
   return process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || null;
 };
 
-const triggerBackgroundProcessor = async (event, jobId) => {
-  const baseUrl = getRequestBaseUrl(event);
-  const authHeader = getAuthHeader(event);
-  if (!baseUrl || !authHeader) return;
-
+const attemptTriggerBackgroundProcessor = async (baseUrl, authHeader, jobId) => {
   const ac = new AbortController();
-  const timeout = setTimeout(() => ac.abort(), 1200);
+  const timeout = setTimeout(() => ac.abort(), 3000);
   try {
     await fetch(`${baseUrl}/.netlify/functions/ai-chat-process-background`, {
       method: 'POST',
@@ -138,11 +182,26 @@ const triggerBackgroundProcessor = async (event, jobId) => {
       body: JSON.stringify({ jobId }),
       signal: ac.signal,
     });
+    return true;
   } catch (error) {
-    console.warn('ai-chat enqueue: background trigger failed', error?.message || error);
+    console.warn('ai-chat enqueue: background trigger attempt failed', error?.message || error);
+    return false;
   } finally {
     clearTimeout(timeout);
   }
+};
+
+// Fire-and-forget kickoff for the background worker. Retries once — a single flaky/
+// cold-start trigger shouldn't leave a job stuck in "queued" forever (this is also
+// backstopped by ai-chat-job-status.js re-triggering on poll, and by the staleness
+// check above if both of those fail).
+const triggerBackgroundProcessor = async (event, jobId) => {
+  const baseUrl = getRequestBaseUrl(event);
+  const authHeader = getAuthHeader(event);
+  if (!baseUrl || !authHeader) return;
+
+  const ok = await attemptTriggerBackgroundProcessor(baseUrl, authHeader, jobId);
+  if (!ok) await attemptTriggerBackgroundProcessor(baseUrl, authHeader, jobId);
 };
 
 exports.handler = async (event) => {
@@ -170,7 +229,11 @@ exports.handler = async (event) => {
     if (!clinicId) return jsonResponse(403, { error: 'No clinic found for user' });
 
     const conversation = await resolveOrCreateConversation(clinicId, user.id);
-    const existingActiveJob = await findActiveJob(conversation.id);
+    let existingActiveJob = await findActiveJob(conversation.id);
+    if (existingActiveJob && isJobStale(existingActiveJob)) {
+      await failStaleJob({ jobId: existingActiveJob.id, conversationId: conversation.id, clinicId, userId: user.id });
+      existingActiveJob = null;
+    }
     if (existingActiveJob) {
       return jsonResponse(409, {
         error: 'AI is still processing the previous request. Please wait a moment.',

@@ -25,6 +25,47 @@ const getAuthToken = (event) => {
   return h.slice(7).trim();
 };
 
+const getAuthHeader = (event) => event.headers.authorization || event.headers.Authorization || '';
+
+const getRequestBaseUrl = (event) => {
+  const host = event.headers['x-forwarded-host'] || event.headers.host;
+  if (host) {
+    const proto = event.headers['x-forwarded-proto'] || (host.includes('localhost') ? 'http' : 'https');
+    return `${proto}://${host}`;
+  }
+  return process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || null;
+};
+
+// If a job is still queued with no started_at this long after it was created, the
+// enqueue function's own background-trigger fetch likely never landed — re-fire it
+// here so most stalls self-heal within a poll cycle or two, before the enqueue
+// endpoint's own (slower) staleness check would otherwise have to fail the job outright.
+const RETRIGGER_AFTER_MS = 8000;
+
+const maybeRetriggerStalledJob = async (event, row) => {
+  if (!row || row.status !== 'queued' || row.started_at) return;
+  if (Date.now() - new Date(row.created_at).getTime() < RETRIGGER_AFTER_MS) return;
+
+  const baseUrl = getRequestBaseUrl(event);
+  const authHeader = getAuthHeader(event);
+  if (!baseUrl || !authHeader) return;
+
+  const ac = new AbortController();
+  const timeout = setTimeout(() => ac.abort(), 3000);
+  try {
+    await fetch(`${baseUrl}/.netlify/functions/ai-chat-process-background`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: authHeader },
+      body: JSON.stringify({ jobId: row.id }),
+      signal: ac.signal,
+    });
+  } catch (error) {
+    console.warn('ai-chat-job-status: re-trigger attempt failed (non-fatal)', error?.message || error);
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 const getUser = async (event) => {
   const token = getAuthToken(event);
   if (!token) return null;
@@ -72,7 +113,7 @@ exports.handler = async (event) => {
 
     let query = supabase
       .from('ai_chat_jobs')
-      .select('id, conversation_id, status, error, response_message_id, current_tool, created_at, updated_at, finished_at')
+      .select('id, conversation_id, status, error, response_message_id, current_tool, created_at, started_at, updated_at, finished_at')
       .eq('clinic_id', clinicId)
       .eq('user_id', user.id);
 
@@ -90,6 +131,7 @@ exports.handler = async (event) => {
     if (error) throw new Error(error.message || 'Failed to load AI job status');
 
     const row = Array.isArray(data) ? data[0] : null;
+    await maybeRetriggerStalledJob(event, row);
     return jsonResponse(200, { job: mapJob(row) });
   } catch (error) {
     console.error('ai-chat-job-status error:', error);
