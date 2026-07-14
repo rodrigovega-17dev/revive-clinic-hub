@@ -34,9 +34,11 @@ const MARKDOWN_CLASSNAMES = cn(
 interface ChatMessageListProps {
   messages: AiChatMessage[];
   isThinking: boolean;
+  /** Tool the background worker is currently calling, if known — shown next to the thinking indicator. */
+  currentTool?: string | null;
 }
 
-const ChatMessageList = ({ messages, isThinking }: ChatMessageListProps) => {
+const ChatMessageList = ({ messages, isThinking, currentTool }: ChatMessageListProps) => {
   const { t } = useTranslation();
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -99,6 +101,11 @@ const ChatMessageList = ({ messages, isThinking }: ChatMessageListProps) => {
             <Sparkles className="h-3.5 w-3.5" />
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             <span>{t('aiChat.thinking')}</span>
+            {currentTool && (
+              <Badge variant="secondary" className="text-[10px] font-mono font-normal px-1.5 py-0">
+                {currentTool}
+              </Badge>
+            )}
           </div>
         )}
         <div ref={bottomRef} />

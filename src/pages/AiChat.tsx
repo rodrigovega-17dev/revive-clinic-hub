@@ -131,7 +131,11 @@ const AiChat = () => {
               ))}
             </div>
           ) : (
-            <ChatMessageList messages={messages} isThinking={sendMessage.isPending || isJobRunning} />
+            <ChatMessageList
+              messages={messages}
+              isThinking={sendMessage.isPending || isJobRunning}
+              currentTool={isJobRunning ? activeJob?.currentTool ?? null : null}
+            />
           )}
           <ChatInput onSend={handleSend} disabled={sendMessage.isPending || isJobRunning} />
         </CardContent>

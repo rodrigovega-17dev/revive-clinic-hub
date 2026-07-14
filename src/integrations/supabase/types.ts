@@ -66,6 +66,7 @@ export type Database = {
           clinic_id: string
           conversation_id: string
           created_at: string
+          current_tool: string | null
           error: string | null
           finished_at: string | null
           id: string
@@ -81,6 +82,7 @@ export type Database = {
           clinic_id: string
           conversation_id: string
           created_at?: string
+          current_tool?: string | null
           error?: string | null
           finished_at?: string | null
           id?: string
@@ -96,6 +98,7 @@ export type Database = {
           clinic_id?: string
           conversation_id?: string
           created_at?: string
+          current_tool?: string | null
           error?: string | null
           finished_at?: string | null
           id?: string

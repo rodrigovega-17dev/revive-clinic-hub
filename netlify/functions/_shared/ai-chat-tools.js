@@ -537,13 +537,24 @@ const toolDefinitions = [
   },
   {
     name: 'remember_fact',
-    description: 'Permanently remember a clinic-wide business fact or rule (e.g. "Sergio is the clinic owner", "Fridays are half-days"). This is visible to every staff member using this chat from now on, and to you in every future conversation — write it as a clear, self-contained statement. ONLY call this when a staff member explicitly asks you to remember/note/keep in mind something — never proactively, and never for information already available from another tool (e.g. do not remember a client\'s balance). This is the ONLY tool that writes anything; every other tool is strictly read-only.',
+    description: 'Permanently remember a clinic-wide business fact or rule (e.g. "Sergio is the clinic owner", "Fridays are half-days"). This is visible to every staff member using this chat from now on, and to you in every future conversation — write it as a clear, self-contained statement. ONLY call this when a staff member explicitly asks you to remember/note/keep in mind something — never proactively, and never for information already available from another tool (e.g. do not remember a client\'s balance). This and forget_fact are the ONLY tools that write anything; every other tool is strictly read-only.',
     input_schema: {
       type: 'object',
       properties: {
         fact: { type: 'string', description: 'The fact to remember, self-contained and clear (max 500 characters).' },
       },
       required: ['fact'],
+    },
+  },
+  {
+    name: 'forget_fact',
+    description: 'Permanently delete a previously remembered clinic-wide fact, by its id (shown as "[id: ...]" next to each fact in your system context). ONLY call this when a staff member explicitly asks you to forget/remove/correct a remembered fact. If they want to correct a fact rather than just remove it, forget the old one and remember the new one.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fact_id: { type: 'string', description: 'The id of the fact to forget, from the "[id: ...]" tag in your remembered-facts context.' },
+      },
+      required: ['fact_id'],
     },
   },
   {
@@ -566,7 +577,7 @@ const toolDefinitions = [
   },
   {
     name: 'get_client_appointments',
-    description: 'A patient\'s appointment history (defaults to the last 90 days if no dates given), with range-aware pagination.',
+    description: 'A patient\'s appointment history (defaults to the last 90 days if no dates given), with range-aware pagination. Each row includes pay_therapist_in_full for that specific appointment.',
     input_schema: {
       type: 'object',
       properties: {
@@ -680,7 +691,7 @@ const toolDefinitions = [
   },
   {
     name: 'list_appointments',
-    description: 'Clinic-wide, per-appointment detail rows (patient, therapist, treatment, status, payment info, localized time) for a date range. Defaults to TODAY (clinic-local) if no dates are given. Use this for "list/show today\'s appointments", "what appointments do we have this week with details" — anything asking for individual appointment rows rather than counts. For counts/totals/busiest-day use get_appointments_overview instead.',
+    description: 'Clinic-wide, per-appointment detail rows (patient, therapist, treatment, status, payment info, pay_therapist_in_full, localized time) for a date range. Defaults to TODAY (clinic-local) if no dates are given. Use this for "list/show today\'s appointments", "what appointments do we have this week with details" — anything asking for individual appointment rows rather than counts. For counts/totals/busiest-day use get_appointments_overview instead.',
     input_schema: {
       type: 'object',
       properties: {
@@ -741,6 +752,16 @@ const toolDefinitions = [
     },
   },
   {
+    name: 'get_therapist_compensation_config',
+    description: 'Each therapist\'s actual live compensation policy: compensation type, commission percentage or fixed session amount, retention rate, and incentive threshold/bonus. Use this for direct policy questions like "what is Carlos\'s commission rate" or "what triggers Sebastián\'s incentive bonus" — get_payroll_summary only returns computed dollar RESULTS for a period, never these raw settings. Omit therapist_id to get every therapist\'s config at once.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        therapist_id: { type: 'string', description: 'From search_therapists. Omit to get all therapists.' },
+      },
+    },
+  },
+  {
     name: 'search_treatments',
     description: 'Look up the clinic\'s treatments/services by name.',
     input_schema: {
@@ -786,6 +807,25 @@ const toolHandlers = {
     if (error) return { error: error.message };
 
     return { remembered: true, id: data.id, fact: data.fact, created_at: data.created_at };
+  },
+
+  // Second and last deliberate write exception — scoped delete-by-id-and-clinic only,
+  // so it can never remove another clinic's memory even if a wrong id were somehow passed.
+  forget_fact: async (supabase, clinicId, input) => {
+    const factId = String(input?.fact_id || '').trim();
+    if (!factId) return { error: 'fact_id is required' };
+
+    const { data, error } = await supabase
+      .from('ai_clinic_memory')
+      .delete()
+      .eq('id', factId)
+      .eq('clinic_id', clinicId)
+      .select('id, fact')
+      .maybeSingle();
+    if (error) return { error: error.message };
+    if (!data) return { error: 'No remembered fact found with that id for this clinic.' };
+
+    return { forgotten: true, id: data.id, fact: data.fact };
   },
 
   search_clients: async (supabase, clinicId, input) => {
@@ -909,7 +949,7 @@ const toolHandlers = {
 
     const { data, error } = await supabase
       .from('appointments')
-      .select('id, start_time, end_time, status, payment_amount, payment_status, treatments(name), therapists(first_name, last_name)')
+      .select('id, start_time, end_time, status, payment_amount, payment_status, pay_therapist_in_full, treatments(name), therapists(first_name, last_name)')
       .eq('client_id', clientId)
       .eq('clinic_id', clinicId)
       .gte('start_time', start)
@@ -936,6 +976,7 @@ const toolHandlers = {
         status: a.status,
         payment_amount: a.payment_amount,
         payment_status: a.payment_status,
+        pay_therapist_in_full: !!a.pay_therapist_in_full,
         treatment: a.treatments?.name || null,
         therapist: fullName(a.therapists),
       })),
@@ -1522,7 +1563,7 @@ const toolHandlers = {
 
     let query = supabase
       .from('appointments')
-      .select('id, start_time, end_time, status, payment_amount, payment_status, clients(first_name, last_name), therapists(first_name, last_name), treatments(name)')
+      .select('id, start_time, end_time, status, payment_amount, payment_status, pay_therapist_in_full, clients(first_name, last_name), therapists(first_name, last_name), treatments(name)')
       .eq('clinic_id', clinicId)
       .gte('start_time', start)
       .lte('start_time', end)
@@ -1555,6 +1596,7 @@ const toolHandlers = {
         status: a.status,
         payment_amount: a.payment_amount,
         payment_status: a.payment_status,
+        pay_therapist_in_full: !!a.pay_therapist_in_full,
         start_time_local: localDateTime(a.start_time, timezone),
         end_time_local: localDateTime(a.end_time, timezone),
       })),
@@ -1811,6 +1853,48 @@ const toolHandlers = {
       range: { start, end },
       appointment_counts_by_status: byStatus,
       completed_revenue: revenue,
+    };
+  },
+
+  get_therapist_compensation_config: async (supabase, clinicId, input) => {
+    let query = supabase
+      .from('therapists')
+      .select('id, first_name, last_name, archived, is_active, compensation_type, commission_percentage, fixed_session_amount, retention_enabled, retention_rate, incentive_enabled, incentive_threshold_sessions, incentive_percentage_bonus, incentive_fixed_bonus')
+      .eq('clinic_id', clinicId);
+    if (input?.therapist_id) {
+      query = query.eq('id', input.therapist_id);
+    } else {
+      query = query.order('first_name', { ascending: true }).limit(100);
+    }
+
+    const { data, error } = await query;
+    if (error) return { error: error.message };
+    if (!data || data.length === 0) return { error: 'Therapist not found' };
+
+    const configs = data.map((t) => {
+      const compensationType = normalizeCompensationType(t.compensation_type);
+      const retentionRate = t.retention_enabled ? Number(t.retention_rate || 0) : null;
+      return {
+        id: t.id,
+        name: fullName(t),
+        archived: !!t.archived,
+        is_active: t.is_active,
+        compensation_type: compensationType,
+        commission_percentage: compensationType === 'percentage' ? Number(t.commission_percentage || 0) : null,
+        fixed_session_amount: compensationType === 'fixed_per_session' ? Number(t.fixed_session_amount || 0) : null,
+        retention_enabled: !!t.retention_enabled,
+        retention_rate: retentionRate,
+        retention_effect: t.retention_enabled ? describeRetentionEffect(retentionRate) : 'no_effect',
+        incentive_enabled: !!t.incentive_enabled,
+        incentive_threshold_sessions: t.incentive_enabled ? t.incentive_threshold_sessions : null,
+        incentive_percentage_bonus: t.incentive_enabled && compensationType === 'percentage' ? Number(t.incentive_percentage_bonus || 0) : null,
+        incentive_fixed_bonus: t.incentive_enabled && compensationType === 'fixed_per_session' ? Number(t.incentive_fixed_bonus || 0) : null,
+      };
+    });
+
+    return {
+      payroll_rules: PAYROLL_RULES_NOTE,
+      therapists: input?.therapist_id ? configs[0] : configs,
     };
   },
 

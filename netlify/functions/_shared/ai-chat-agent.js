@@ -64,10 +64,14 @@ const buildDynamicBusinessRulesSnapshot = (clinic, therapists) => {
     : `${serialized.slice(0, MAX_DYNAMIC_RULES_CHARS)}...`;
 };
 
-/** Renders clinic-wide facts staff have explicitly asked the AI to remember, for the system prompt. */
+/**
+ * Renders clinic-wide facts staff have explicitly asked the AI to remember, for the
+ * system prompt. Each line includes the fact's id so the model can call forget_fact
+ * with an exact id when asked to remove/correct one, instead of fuzzy-matching text.
+ */
 const buildRememberedFactsBlock = (facts) => {
   if (!facts || facts.length === 0) return 'None yet.';
-  const lines = facts.map((f) => `- ${f.fact}`).join('\n');
+  const lines = facts.map((f) => `- [id: ${f.id}] ${f.fact}`).join('\n');
   return lines.length <= MAX_REMEMBERED_FACTS_CHARS ? lines : `${lines.slice(0, MAX_REMEMBERED_FACTS_CHARS)}...`;
 };
 
@@ -77,7 +81,7 @@ Today's date is ${todayLocal} (clinic timezone: ${clinicTimezone}).
 Dynamic clinic business-rules snapshot (source of truth for semantics/config): ${dynamicRulesSnapshot}
 Remembered clinic facts (staff previously asked you to remember these — treat as ground truth and use naturally when relevant, e.g. who the owner is or clinic-specific rules):
 ${buildRememberedFactsBlock(rememberedFacts)}
-If — and only if — a staff member explicitly asks you to remember/note/keep in mind something, call remember_fact with a clear, self-contained statement of it. Never call it proactively, and never to store information another tool already provides (e.g. a client's balance).
+If — and only if — a staff member explicitly asks you to remember/note/keep in mind something, call remember_fact with a clear, self-contained statement of it. Never call it proactively, and never to store information another tool already provides (e.g. a client's balance). If asked to forget/remove/correct a remembered fact, call forget_fact with its exact id from the "[id: ...]" tag above (for a correction, forget the old one and remember the new one).
 Use ONLY the provided tools — never fabricate data or numbers, and never state a metric that no tool actually returned (e.g. there is no schedule-capacity/occupancy data anywhere — never invent an "occupancy %").
 For ANY "what day is today", "que dia es hoy", "fecha de hoy", current date/time, or weekday question, call get_current_clinic_datetime first and use its date/weekday/time fields verbatim. Never compute a day-of-week yourself from a date — this is unreliable. Only state a weekday when a tool explicitly provides a "weekday" field. When a tool already returns a computed percentage or breakdown, use that value verbatim instead of computing your own fraction.
 Never attempt to convert a raw UTC ISO timestamp yourself, and never reformat, relabel, or re-derive AM/PM on a 24-hour time value — you are unreliable at timezone math and at re-labeling 24h times as 12h AM/PM. Whenever a tool provides a "*_local" field (e.g. start_time_local, end_time_local, created_at_local) with date/weekday/time, use its "time" value verbatim as already-24-hour clinic-local time; do not use a sibling raw field (e.g. start_time, created_at, current_start_time) for anything user-facing about when something happened.
@@ -125,6 +129,7 @@ const runAgentLoop = async ({
   dynamicRulesSnapshot,
   rememberedFacts,
   userId,
+  onProgress,
 }) => {
   let messages = historyMessages;
   const toolCallLog = [];
@@ -170,6 +175,13 @@ const runAgentLoop = async ({
       }
 
       toolCallLog.push({ name: block.name, input: block.input });
+      if (onProgress) {
+        try {
+          await onProgress(block.name);
+        } catch (progressErr) {
+          console.warn('ai-chat: onProgress failed (non-fatal)', progressErr?.message || progressErr);
+        }
+      }
       const handler = toolHandlers[block.name];
       let result;
       try {

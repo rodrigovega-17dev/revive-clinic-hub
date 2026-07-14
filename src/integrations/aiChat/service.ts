@@ -14,6 +14,7 @@ export type AiChatJob = {
   status: AiChatJobStatus;
   error: string | null;
   responseMessageId: string | null;
+  currentTool: string | null;
   createdAt: string;
   updatedAt: string;
   finishedAt: string | null;

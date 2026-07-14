@@ -108,11 +108,21 @@ const completeJob = async ({ jobId, status, errorMessage, responseMessageId, too
       error: errorMessage || null,
       response_message_id: responseMessageId || null,
       tool_calls: toolCalls || [],
+      current_tool: null,
       finished_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .eq('id', jobId);
   if (error) throw new Error('Failed to finalize job');
+};
+
+/** Reports which tool the agent loop is about to call, for the frontend's live progress poll. */
+const updateJobProgress = async (jobId, toolName) => {
+  const { error } = await supabase
+    .from('ai_chat_jobs')
+    .update({ current_tool: toolName, updated_at: new Date().toISOString() })
+    .eq('id', jobId);
+  if (error) console.warn('ai-chat worker: failed to report progress (non-fatal)', error.message);
 };
 
 exports.handler = async (event) => {
@@ -149,7 +159,7 @@ exports.handler = async (event) => {
         .limit(200),
       supabase
         .from('ai_clinic_memory')
-        .select('fact, created_at')
+        .select('id, fact, created_at')
         .eq('clinic_id', clinicId)
         .order('created_at', { ascending: true })
         .limit(100),
@@ -175,6 +185,7 @@ exports.handler = async (event) => {
       dynamicRulesSnapshot,
       rememberedFacts: rememberedFacts || [],
       userId: user.id,
+      onProgress: (toolName) => updateJobProgress(job.id, toolName),
     });
 
     const assistantMessage = await insertMessage(job.conversation_id, clinicId, user.id, 'assistant', text, toolCallLog);

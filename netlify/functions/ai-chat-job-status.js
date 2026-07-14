@@ -46,6 +46,7 @@ const mapJob = (row) => (row
     status: row.status,
     error: row.error,
     responseMessageId: row.response_message_id,
+    currentTool: row.current_tool,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     finishedAt: row.finished_at,
@@ -71,7 +72,7 @@ exports.handler = async (event) => {
 
     let query = supabase
       .from('ai_chat_jobs')
-      .select('id, conversation_id, status, error, response_message_id, created_at, updated_at, finished_at')
+      .select('id, conversation_id, status, error, response_message_id, current_tool, created_at, updated_at, finished_at')
       .eq('clinic_id', clinicId)
       .eq('user_id', user.id);
 
