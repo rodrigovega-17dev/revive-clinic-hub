@@ -199,7 +199,9 @@ export function useDataExport() {
             incentive_enabled,
             incentive_threshold_sessions,
             incentive_percentage_bonus,
-            incentive_fixed_bonus
+            incentive_fixed_bonus,
+            reinvestment_enabled,
+            reinvestment_percentage
           ),
           payroll_compensation_type,
           payroll_commission_percentage,
@@ -210,6 +212,8 @@ export function useDataExport() {
           payroll_incentive_threshold_sessions,
           payroll_incentive_percentage_bonus,
           payroll_incentive_fixed_bonus,
+          payroll_reinvestment_enabled,
+          payroll_reinvestment_percentage,
           payroll_snapshot_at,
           payments (amount, facturado, iva_amount)
         `)
@@ -252,6 +256,8 @@ export function useDataExport() {
           incentiveThresholdSessions: therapist.incentive_threshold_sessions,
           incentivePercentageBonus: therapist.incentive_percentage_bonus,
           incentiveFixedBonus: therapist.incentive_fixed_bonus,
+          reinvestmentEnabled: therapist.reinvestment_enabled,
+          reinvestmentPercentage: therapist.reinvestment_percentage,
         };
 
         const appointmentConfig = resolveAppointmentPayrollConfig(apt, liveConfig);
@@ -277,6 +283,7 @@ export function useDataExport() {
             ivaTotal: 0,
             therapistEarnings: 0,
             retentionAmount: 0,
+            reinvestmentAmount: 0,
             therapistEarningsNet: 0,
             clinicEarnings: 0,
           };
@@ -287,6 +294,7 @@ export function useDataExport() {
         therapistStats[tid].ivaTotal += summary.totalIva;
         therapistStats[tid].therapistEarnings += computed.grossEarnings;
         therapistStats[tid].retentionAmount += computed.retentionAmount;
+        therapistStats[tid].reinvestmentAmount += computed.reinvestmentAmount;
         therapistStats[tid].therapistEarningsNet += computed.netEarnings;
         therapistStats[tid].clinicEarnings += computed.clinicEarnings;
       });
@@ -318,23 +326,58 @@ export function useDataExport() {
         paidByTherapist[p.therapist_id] = (paidByTherapist[p.therapist_id] || 0) + Number(p.amount);
       });
 
-      const rows = Object.entries(therapistStats).map(([tid, s]) => ({
-        therapist_name: s.name,
-        sessions: s.sessions,
-        total_revenue: s.revenue,
-        revenue_pre_iva: s.revenueBeforeIva,
-        total_iva: s.ivaTotal,
-        compensation_model:
-          s.compensationType === 'percentage'
-            ? `${Number(s.effectiveCommissionPercentage || 0).toFixed(2)}%`
-            : `fixed ${Number(s.effectiveFixedSessionAmount || 0).toFixed(2)}`,
-        therapist_earnings_gross: s.therapistEarnings,
-        therapist_retention: s.retentionAmount,
-        therapist_earnings_net: s.therapistEarningsNet,
-        clinic_earnings: s.clinicEarnings,
-        total_paid: paidByTherapist[tid] || 0,
-        remaining: Math.max(0, (s.therapistEarningsNet || 0) - (paidByTherapist[tid] || 0)),
-      }));
+      // Therapist-attributed expenses, offset by any standalone payments the therapist made
+      // back to the clinic this period — same zero-floor logic as the Payroll page.
+      const { data: expenseRows } = await supabase
+        .from('expenses')
+        .select('therapist_id, amount')
+        .eq('clinic_id', clinicId)
+        .not('therapist_id', 'is', null)
+        .gte('date', periodStart.toISOString().slice(0, 10))
+        .lte('date', periodEnd.toISOString().slice(0, 10));
+      const expensesByTherapist: Record<string, number> = {};
+      (expenseRows || []).forEach((e: any) => {
+        expensesByTherapist[e.therapist_id] = (expensesByTherapist[e.therapist_id] || 0) + Number(e.amount || 0);
+      });
+
+      const { data: paymentRows } = await supabase
+        .from('payments')
+        .select('therapist_id, amount')
+        .eq('clinic_id', clinicId)
+        .not('therapist_id', 'is', null)
+        .gte('payment_date', periodStart.toISOString())
+        .lte('payment_date', periodEnd.toISOString());
+      const paymentsByTherapist: Record<string, number> = {};
+      (paymentRows || []).forEach((p: any) => {
+        paymentsByTherapist[p.therapist_id] = (paymentsByTherapist[p.therapist_id] || 0) + Number(p.amount || 0);
+      });
+
+      const rows = Object.entries(therapistStats).map(([tid, s]) => {
+        const attributedExpenses = expensesByTherapist[tid] || 0;
+        const attributedTherapistPayments = paymentsByTherapist[tid] || 0;
+        const netPayable = (s.therapistEarningsNet || 0) - Math.max(0, attributedExpenses - attributedTherapistPayments);
+        return {
+          therapist_name: s.name,
+          sessions: s.sessions,
+          total_revenue: s.revenue,
+          revenue_pre_iva: s.revenueBeforeIva,
+          total_iva: s.ivaTotal,
+          compensation_model:
+            s.compensationType === 'percentage'
+              ? `${Number(s.effectiveCommissionPercentage || 0).toFixed(2)}%`
+              : `fixed ${Number(s.effectiveFixedSessionAmount || 0).toFixed(2)}`,
+          therapist_earnings_gross: s.therapistEarnings,
+          therapist_retention: s.retentionAmount,
+          therapist_reinvestment: s.reinvestmentAmount,
+          therapist_earnings_net: s.therapistEarningsNet,
+          attributed_expenses: attributedExpenses,
+          attributed_therapist_payments: attributedTherapistPayments,
+          net_payable: netPayable,
+          clinic_earnings: s.clinicEarnings,
+          total_paid: paidByTherapist[tid] || 0,
+          remaining: Math.max(0, netPayable - (paidByTherapist[tid] || 0)),
+        };
+      });
 
       const columns = [
         'therapist_name',
@@ -345,7 +388,11 @@ export function useDataExport() {
         'compensation_model',
         'therapist_earnings_gross',
         'therapist_retention',
+        'therapist_reinvestment',
         'therapist_earnings_net',
+        'attributed_expenses',
+        'attributed_therapist_payments',
+        'net_payable',
         'clinic_earnings',
         'total_paid',
         'remaining',

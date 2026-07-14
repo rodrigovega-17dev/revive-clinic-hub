@@ -5,15 +5,17 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, DollarSign, TrendingUp, Users, Download, Loader2, FileText, Paperclip, Info } from 'lucide-react';
+import { Calendar, DollarSign, TrendingUp, Users, Download, Loader2, FileText, Paperclip, Info, Printer } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
+import { es, enUS } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
-import { useClinicSettings } from '@/hooks/useClinic';
+import { useClinic, useClinicSettings } from '@/hooks/useClinic';
+import { useLanguage } from '@/hooks/useLanguage';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,6 +25,7 @@ import { useDataExport } from '@/hooks/useDataExport';
 import { CfdiUploadModal } from '@/components/CfdiUploadModal';
 import { parseCfdiXml } from '@/lib/cfdi-xml';
 import { getCfdiFileUrl } from '@/hooks/useCfdiFileUrl';
+import { openFinanceReport, type FinanceReportTable } from '@/lib/finance-report';
 import {
   computeTherapistPayroll,
   getPayrollQuarterRange,
@@ -36,6 +39,9 @@ const Payroll = () => {
   const { t } = useTranslation();
   const { clinicId, user } = useAuth();
   const { currency } = useClinicSettings();
+  const { data: clinic } = useClinic();
+  const { currentLanguage } = useLanguage();
+  const locale = currentLanguage === 'es' ? es : enUS;
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -449,6 +455,83 @@ const Payroll = () => {
     return Math.max(0, Number(earnings || 0) - getTotalPaid(therapistId));
   };
 
+  const handlePrintPayrollReport = () => {
+    if (!payrollData) return;
+    const therapistStats = payrollData.therapistStats as any[];
+
+    const totalExpensesDeducted = Object.values(therapistExpenses || {}).reduce(
+      (sum: number, value) => sum + Number(value || 0), 0,
+    );
+    const totalTherapistPaymentsOffset = Object.values(therapistPayments || {}).reduce(
+      (sum: number, value) => sum + Number(value || 0), 0,
+    );
+    const totalNetPayable = therapistStats.reduce((sum, therapist) => sum + getNetPayable(therapist), 0);
+    const totalPaidAll = therapistStats.reduce((sum, therapist) => sum + getTotalPaid(therapist.id), 0);
+    const totalRemainingAll = therapistStats.reduce(
+      (sum, therapist) => sum + getRemainingAmount(therapist.id, getNetPayable(therapist)), 0,
+    );
+
+    const payrollTable: FinanceReportTable = {
+      title: t('payroll.byTherapistTable'),
+      columns: [
+        t('payroll.therapist'),
+        t('common.sessions'),
+        t('payroll.grossLabel'),
+        t('payroll.therapistNetPayout'),
+        t('payroll.payoutPaidSoFar'),
+        t('payroll.payoutRemaining'),
+        t('payroll.clinicEarnings'),
+      ],
+      numericColumns: [2, 3, 4, 5, 6],
+      emptyText: t('payroll.noPayrollData'),
+      rows: therapistStats.map((therapist) => {
+        const netPayable = getNetPayable(therapist);
+        return [
+          therapist.name,
+          String(therapist.totalAppointments || 0),
+          formatCurrencyWithClinic(Number(therapist.therapistEarnings || 0)),
+          formatCurrencyWithClinic(netPayable),
+          formatCurrencyWithClinic(getTotalPaid(therapist.id)),
+          formatCurrencyWithClinic(getRemainingAmount(therapist.id, netPayable)),
+          formatCurrencyWithClinic(Number(therapist.clinicEarnings || 0)),
+        ];
+      }),
+      footer: [
+        t('common.total'), '',
+        formatCurrencyWithClinic(payrollData.totals.totalTherapistEarnings),
+        formatCurrencyWithClinic(totalNetPayable),
+        formatCurrencyWithClinic(totalPaidAll),
+        formatCurrencyWithClinic(totalRemainingAll),
+        formatCurrencyWithClinic(payrollData.totals.totalClinicEarnings),
+      ],
+    };
+
+    openFinanceReport({
+      clinicName: clinic?.name || t('payroll.title'),
+      clinicLogoUrl: clinic?.logo_url,
+      reportTitle: t('payroll.reportTitle'),
+      periodLabel: currentPeriod.label,
+      generatedLabel: `${t('finance.reportGenerated')}: ${format(new Date(), 'PPpp', { locale })}`,
+      appointmentsTitle: t('payroll.periodOverview'),
+      appointmentStats: [
+        { label: t('payroll.totalSessions'), value: String(payrollData.totals.totalAppointments) },
+        { label: t('payroll.therapistsIncluded'), value: String(therapistStats.length) },
+      ],
+      financialTitle: t('payroll.financialSummary'),
+      financialStats: [
+        { label: t('payroll.totalRevenue'), value: formatCurrencyWithClinic(payrollData.totals.totalRevenue) },
+        { label: t('payroll.therapistEarnings'), value: formatCurrencyWithClinic(payrollData.totals.totalTherapistEarnings) },
+        { label: t('payroll.retentionLabel'), value: formatCurrencyWithClinic(payrollData.totals.totalTherapistRetention) },
+        { label: t('payroll.totalReinvestedLabel'), value: formatCurrencyWithClinic(payrollData.totals.totalTherapistReinvestment) },
+        { label: t('payroll.totalExpensesDeducted'), value: formatCurrencyWithClinic(totalExpensesDeducted) },
+        { label: t('payroll.therapistPaymentsLabel'), value: formatCurrencyWithClinic(totalTherapistPaymentsOffset) },
+        { label: t('payroll.therapistNetPayout'), value: formatCurrencyWithClinic(totalNetPayable), highlight: true },
+        { label: t('payroll.clinicEarnings'), value: formatCurrencyWithClinic(payrollData.totals.totalClinicEarnings), highlight: true },
+      ],
+      tables: [payrollTable],
+    });
+  };
+
   const openPayoutDialog = (therapist: any) => {
     const remaining = getRemainingAmount(therapist.id, getNetPayable(therapist));
     setPayoutTherapist(therapist);
@@ -736,6 +819,15 @@ const Payroll = () => {
               <Download className="h-4 w-4 mr-2" />
             )}
             {t('payroll.exportReport')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!payrollData || !clinicId}
+            onClick={handlePrintPayrollReport}
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            {t('payroll.printReport')}
           </Button>
         </div>
       </div>
