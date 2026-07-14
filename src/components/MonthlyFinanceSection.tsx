@@ -222,6 +222,24 @@ const MonthlyFinanceSection = () => {
     }
   };
 
+  const getExpenseCategoryText = (category: string) => {
+    switch (category) {
+      case 'supplies': return t('finance.supplies');
+      case 'office': return t('finance.office');
+      case 'maintenance': return t('finance.maintenance');
+      case 'utilities': return t('finance.utilities');
+      case 'equipment': return t('finance.equipment');
+      case 'marketing': return t('finance.marketing');
+      case 'travel': return t('finance.travel');
+      case 'food': return t('finance.food');
+      case 'taxes': return t('finance.taxes');
+      case 'payroll_contributions': return t('finance.payrollContributions');
+      case 'professional_services': return t('finance.professionalServices');
+      case 'general': return t('finance.general');
+      default: return category;
+    }
+  };
+
   // Clinic-aware currency formatting
   const formatCurrencyWithClinic = (value: number) => {
     return formatCurrency(value, 2, currency);
@@ -277,7 +295,7 @@ const MonthlyFinanceSection = () => {
       rows: reportExpenses.map((expense) => [
         formatReportDateTime(expense.created_at || expense.date),
         expense.description || '-',
-        expense.category || 'general',
+        getExpenseCategoryText(expense.category || 'general'),
         formatCurrencyWithClinic(expense.amount),
       ]),
       footer: [t('finance.totalExpenses'), '', '', formatCurrencyWithClinic(totalExpenses)],
@@ -587,7 +605,7 @@ const MonthlyFinanceSection = () => {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">
-                        {expense.category}
+                        {getExpenseCategoryText(expense.category)}
                       </Badge>
                     </TableCell>
                     <TableCell className="font-medium text-red-600">

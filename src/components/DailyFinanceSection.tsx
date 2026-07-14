@@ -243,7 +243,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
       rows: (expenses || []).map((e) => [
         formatReportTime(e.created_at),
         e.description || '-',
-        e.category || 'general',
+        getExpenseCategoryText(e.category || 'general'),
         getPaymentMethodText(e.payment_method || 'cash'),
         formatCurrencyWithClinic(e.amount),
       ]),
@@ -305,6 +305,24 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
       case 'insurance': return t('finance.insurance');
       case 'adjustment': return t('finance.adjustment');
       default: return method;
+    }
+  };
+
+  const getExpenseCategoryText = (category: string) => {
+    switch (category) {
+      case 'supplies': return t('finance.supplies');
+      case 'office': return t('finance.office');
+      case 'maintenance': return t('finance.maintenance');
+      case 'utilities': return t('finance.utilities');
+      case 'equipment': return t('finance.equipment');
+      case 'marketing': return t('finance.marketing');
+      case 'travel': return t('finance.travel');
+      case 'food': return t('finance.food');
+      case 'taxes': return t('finance.taxes');
+      case 'payroll_contributions': return t('finance.payrollContributions');
+      case 'professional_services': return t('finance.professionalServices');
+      case 'general': return t('finance.general');
+      default: return category;
     }
   };
 
@@ -554,8 +572,8 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                   <TableRow key={expense.id} className="hover:bg-muted/50 border-border">
                     <TableCell className="text-foreground">{expense.description}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className="capitalize">
-                        {expense.category || 'general'}
+                      <Badge variant="secondary">
+                        {getExpenseCategoryText(expense.category || 'general')}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
