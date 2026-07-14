@@ -133,6 +133,7 @@ const PAYROLL_RULES_NOTE = {
   retention_positive: 'Positive retention_rate/retention_amount is a deduction from therapist payout.',
   retention_negative: 'Negative retention_rate/retention_amount is an additive adjustment (bonus) that increases therapist payout.',
   reinvestment: 'reinvestment_percentage is voluntary, therapist-initiated percentage POINTS subtracted from commission_percentage before it is applied to revenue (not a % of the commission amount, e.g. 35% commission with 5-point reinvestment nets 30%). Unlike retention, the reinvested amount DOES flow into clinic_earnings — it is a real transfer to the clinic, not money withheld/set aside for the therapist. Never conflate reinvestment_amount with retention_amount.',
+  therapist_payment_offset: 'attributed_therapist_payments is the sum of standalone payments (income) linked directly to this therapist for the period — e.g. them reimbursing the clinic in cash for an expense already attributed to them via attributed_expenses. It offsets that expense deduction dollar-for-dollar in net_payable, floored at zero: if payments >= expenses, no deduction at all, but an overpayment never becomes a bonus (net_payable is never increased above net_earnings by this mechanism). A payment can link to a client OR a therapist, never both.',
 };
 
 const normalizeSearchText = (value) => String(value || '')
@@ -671,13 +672,14 @@ const toolDefinitions = [
   },
   {
     name: 'list_payments',
-    description: 'Individual payment records for a date range (defaults to the last 90 days), optionally filtered by patient, payment method, or standalone-only (not tied to an appointment). Each row includes iva_amount, refund info, which appointment it belongs to (if any), and who received it (received_by). Returns paginated rows with range-aware limits.',
+    description: 'Individual payment records for a date range (defaults to the last 90 days), optionally filtered by patient, therapist, payment method, or standalone-only (not tied to an appointment). Each row includes iva_amount, refund info, which appointment it belongs to (if any), who received it (received_by), and who it\'s attributed to — client or therapist, never both. Returns paginated rows with range-aware limits.',
     input_schema: {
       type: 'object',
       properties: {
         start_date: { type: 'string', description: 'ISO date.' },
         end_date: { type: 'string', description: 'ISO date.' },
         client_id: { type: 'string', description: 'From search_clients, to filter to one patient.' },
+        therapist_id: { type: 'string', description: 'From search_therapists, to filter to payments linked to one therapist (mutually exclusive with client_id on a given payment).' },
         method: { type: 'string', description: 'One of: cash, card, transfer, cheque, insurance, balance, adjustment.' },
         standalone_only: { type: 'boolean', description: 'If true, only payments not tied to an appointment (manual finance movements).' },
         limit: { type: 'number', description: 'Rows per page; range-aware max (higher for day/week/month ranges).' },
@@ -703,7 +705,7 @@ const toolDefinitions = [
   },
   {
     name: 'get_payroll_summary',
-    description: 'Computed payroll for one or all therapists over a pay period (defaults to the current semi-monthly period): gross earnings, retention withheld, reinvestment_amount (voluntarily given back to the clinic, if any), net earnings, therapist-attributed expenses, final net payable, and paid-in-full appointment metrics. Note: pay_therapist_in_full means therapist gets 100% pre-IVA revenue for that appointment (compensation rule), not that the client fully paid their balance. Negative retention increases payout.',
+    description: 'Computed payroll for one or all therapists over a pay period (defaults to the current semi-monthly period): gross earnings, retention withheld, reinvestment_amount (voluntarily given back to the clinic, if any), net earnings, therapist-attributed expenses, attributed_therapist_payments (standalone payments the therapist made back to the clinic, offsetting those expenses — see payroll_rules.therapist_payment_offset), final net payable, and paid-in-full appointment metrics. Note: pay_therapist_in_full means therapist gets 100% pre-IVA revenue for that appointment (compensation rule), not that the client fully paid their balance. Negative retention increases payout.',
     input_schema: {
       type: 'object',
       properties: {
@@ -1249,13 +1251,14 @@ const toolHandlers = {
 
     let query = supabase
       .from('payments')
-      .select('id, amount, method, description, payment_date, facturado, iva_amount, invoice_state, refund_amount, refunded_at, appointment_id, clients(first_name, last_name), profiles:received_by(first_name, last_name)')
+      .select('id, amount, method, description, payment_date, facturado, iva_amount, invoice_state, refund_amount, refunded_at, appointment_id, clients(first_name, last_name), therapists(first_name, last_name), profiles:received_by(first_name, last_name)')
       .eq('clinic_id', clinicId)
       .gte('payment_date', start)
       .lte('payment_date', end)
       .order('payment_date', { ascending: false })
       .range(offset, offset + limit - 1);
     if (input?.client_id) query = query.eq('client_id', input.client_id);
+    if (input?.therapist_id) query = query.eq('therapist_id', input.therapist_id);
     if (input?.method) query = query.eq('method', input.method);
     if (input?.standalone_only) query = query.is('appointment_id', null);
 
@@ -1284,6 +1287,7 @@ const toolHandlers = {
         standalone: !p.appointment_id,
         appointment_id: p.appointment_id,
         client: fullName(p.clients),
+        therapist: fullName(p.therapists),
         received_by: fullName(p.profiles),
       })),
     };
@@ -1465,9 +1469,26 @@ const toolHandlers = {
       expensesByTherapist[e.therapist_id] = (expensesByTherapist[e.therapist_id] || 0) + Number(e.amount || 0);
     });
 
+    const { data: paymentRows, error: paymentError } = await supabase
+      .from('payments')
+      .select('therapist_id, amount')
+      .eq('clinic_id', clinicId)
+      .not('therapist_id', 'is', null)
+      .gte('payment_date', startOfDayIso(startDate))
+      .lte('payment_date', endOfDayIso(endDate));
+    if (paymentError) return { error: paymentError.message };
+    const paymentsByTherapist = {};
+    (paymentRows || []).forEach((p) => {
+      paymentsByTherapist[p.therapist_id] = (paymentsByTherapist[p.therapist_id] || 0) + Number(p.amount || 0);
+    });
+
     const therapists = Object.values(statsByTherapist)
       .map((s) => {
         const attributedExpenses = Number(expensesByTherapist[s.id] || 0);
+        const attributedTherapistPayments = Number(paymentsByTherapist[s.id] || 0);
+        // Standalone payments from the therapist back to the clinic (e.g. reimbursing this
+        // same expense directly) offset the deduction, floored at zero — never a bonus.
+        const netDeduction = Math.max(0, attributedExpenses - attributedTherapistPayments);
         const payInFullPercentage = s.total_appointments
           ? Number(((s.pay_in_full_appointments / s.total_appointments) * 100).toFixed(1))
           : 0;
@@ -1477,7 +1498,8 @@ const toolHandlers = {
           pay_in_full_percentage: payInFullPercentage,
           retention_effect: retentionEffect,
           attributed_expenses: attributedExpenses,
-          net_payable: s.net_earnings - attributedExpenses,
+          attributed_therapist_payments: attributedTherapistPayments,
+          net_payable: s.net_earnings - netDeduction,
         };
       })
       .slice(0, 20);

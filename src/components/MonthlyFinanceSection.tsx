@@ -125,6 +125,7 @@ const MonthlyFinanceSection = () => {
         .select(`
           *,
           clients (first_name, last_name),
+          therapists (first_name, last_name, calendar_color_id),
           appointments (start_time, therapists (first_name, last_name, calendar_color_id, email))
         `)
         .eq('clinic_id', clinicId)
@@ -186,6 +187,8 @@ const MonthlyFinanceSection = () => {
       payment.description,
       payment.appointments?.therapists?.first_name,
       payment.appointments?.therapists?.last_name,
+      payment.therapists?.first_name,
+      payment.therapists?.last_name,
     ].filter(Boolean).join(' ').toLowerCase();
     
     return searchableText.includes(searchTerm.toLowerCase());
@@ -274,9 +277,10 @@ const MonthlyFinanceSection = () => {
       rows: reportPayments.map((payment) => [
         formatReportDateTime(payment.payment_date),
         payment.clients ? `${payment.clients.first_name} ${payment.clients.last_name}` : 'N/A',
-        payment.appointments?.therapists
-          ? `${payment.appointments.therapists.first_name} ${payment.appointments.therapists.last_name}`
-          : 'N/A',
+        (() => {
+          const th = payment.appointments?.therapists || payment.therapists;
+          return th ? `${th.first_name} ${th.last_name}` : 'N/A';
+        })(),
         getPaymentMethodText(payment.method),
         formatCurrencyWithClinic(payment.amount),
       ]),

@@ -1145,6 +1145,7 @@
     "incentiveApplied": "Incentivo aplicado",
     "fullPayBadge": "{{count}} al 100%",
     "expensesShort": "Gastos",
+    "therapistPaymentsLabel": "Pagos recibidos",
     "reinvestmentBadge": "{{percentage}}% reinvertido",
     "reinvestmentAmountLabel": "Reinvertido este periodo",
     "totalReinvestedLabel": "Total reinvertido",

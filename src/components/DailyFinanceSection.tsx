@@ -84,6 +84,11 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
             first_name,
             last_name
           ),
+          therapists (
+            first_name,
+            last_name,
+            calendar_color_id
+          ),
           appointments (
             start_time,
             therapists (
@@ -224,7 +229,10 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
       rows: reportPayments.map((p) => [
         formatReportTime(p.payment_date),
         p.clients ? `${p.clients.first_name} ${p.clients.last_name}` : 'N/A',
-        p.appointments?.therapists ? `${p.appointments.therapists.first_name} ${p.appointments.therapists.last_name}` : 'N/A',
+        (() => {
+          const th = p.appointments?.therapists || p.therapists;
+          return th ? `${th.first_name} ${th.last_name}` : 'N/A';
+        })(),
         getPaymentMethodText(p.method),
         formatCurrencyWithClinic(p.amount),
       ]),
@@ -479,10 +487,10 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                       }
                     </TableCell>
                     <TableCell className="text-foreground">
-                      {payment.appointments?.therapists ?
-                        `${payment.appointments.therapists.first_name} ${payment.appointments.therapists.last_name}` :
-                        'N/A'
-                      }
+                      {(() => {
+                        const th = payment.appointments?.therapists || payment.therapists;
+                        return th ? `${th.first_name} ${th.last_name}` : 'N/A';
+                      })()}
                     </TableCell>
                     <TableCell>
                       <span className={`font-medium ${payment.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>

@@ -401,10 +401,38 @@ const Payroll = () => {
     enabled: !!clinicId,
   });
 
+  // Therapist-attributed standalone payments within this period (e.g. a therapist reimbursing
+  // the clinic directly for an expense already attributed to them), summed per therapist.
+  const { data: therapistPayments } = useQuery({
+    queryKey: ['payments', 'by-therapist', clinicId, format(currentPeriod.startDate, 'yyyy-MM-dd'), format(currentPeriod.endDate, 'yyyy-MM-dd')],
+    queryFn: async () => {
+      if (!clinicId) return {} as Record<string, number>;
+      const { data, error } = await supabase
+        .from('payments')
+        .select('therapist_id, amount')
+        .eq('clinic_id', clinicId)
+        .not('therapist_id', 'is', null)
+        .gte('payment_date', startOfDay(currentPeriod.startDate).toISOString())
+        .lte('payment_date', endOfDay(currentPeriod.endDate).toISOString());
+      if (error) throw error;
+      return (data || []).reduce((acc: Record<string, number>, p: any) => {
+        acc[p.therapist_id] = (acc[p.therapist_id] || 0) + Number(p.amount || 0);
+        return acc;
+      }, {} as Record<string, number>);
+    },
+    enabled: !!clinicId,
+  });
+
   const getAttributedExpenses = (therapistId: string) => Number(therapistExpenses?.[therapistId] || 0);
-  // Final payout = gross earnings − configured retention − therapist-attributed expenses.
-  const getNetPayable = (therapist: any) =>
-    Number(therapist?.therapistEarningsNet || 0) - getAttributedExpenses(therapist?.id);
+  const getAttributedTherapistPayments = (therapistId: string) => Number(therapistPayments?.[therapistId] || 0);
+  // Final payout = gross earnings − configured retention − therapist-attributed expenses,
+  // offset by any standalone payments the therapist made back to the clinic this period
+  // (e.g. reimbursing that same expense directly) — floored at zero so an overpayment
+  // never becomes a bonus.
+  const getNetPayable = (therapist: any) => {
+    const netDeduction = Math.max(0, getAttributedExpenses(therapist?.id) - getAttributedTherapistPayments(therapist?.id));
+    return Number(therapist?.therapistEarningsNet || 0) - netDeduction;
+  };
 
   const payoutsByTherapist = (payoutRecords || []).reduce((acc: Map<string, { total: number }>, payout: any) => {
     const existing = acc.get(payout.therapist_id);
@@ -875,6 +903,7 @@ const Payroll = () => {
                     const retentionAmount = Number(therapist.therapistRetentionAmount || 0);
                     const retentionRate = Number(therapist.therapistRetentionRateApplied || 0);
                     const attributedExpenses = getAttributedExpenses(therapist.id);
+                    const attributedTherapistPayments = getAttributedTherapistPayments(therapist.id);
                     const netPayable = getNetPayable(therapist);
                     const remainingAmount = getRemainingAmount(therapist.id, netPayable);
                     const hasEarnings = netPayable > 0;
@@ -947,6 +976,9 @@ const Payroll = () => {
                           <p>{t('payroll.retentionLabel')} ({retentionRate.toFixed(0)}%): {retentionAmount >= 0 ? '−' : '+'}{formatCurrencyWithClinic(Math.abs(retentionAmount))}</p>
                           {attributedExpenses > 0 && (
                             <p>{t('payroll.expensesShort')}: −{formatCurrencyWithClinic(attributedExpenses)}</p>
+                          )}
+                          {attributedTherapistPayments > 0 && (
+                            <p>{t('payroll.therapistPaymentsLabel')}: +{formatCurrencyWithClinic(attributedTherapistPayments)}</p>
                           )}
                         </TooltipContent>
                       </Tooltip>

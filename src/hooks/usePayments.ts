@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 const invalidateFinanceQueries = (queryClient: ReturnType<typeof useQueryClient>) => {
   queryClient.invalidateQueries({ queryKey: ['daily-payments'] });
   queryClient.invalidateQueries({ queryKey: ['monthly-payments'] });
+  queryClient.invalidateQueries({ queryKey: ['payments'] });
   queryClient.invalidateQueries({ queryKey: ['stats'] });
   queryClient.invalidateQueries({ queryKey: ['client-balance'] });
   queryClient.invalidateQueries({ queryKey: ['all-client-balances'] });
@@ -18,6 +19,7 @@ export interface StandalonePaymentUpdate {
   amount: number;
   description: string;
   client_id: string | null;
+  therapist_id: string | null;
   method: string;
   payment_date: string;
 }

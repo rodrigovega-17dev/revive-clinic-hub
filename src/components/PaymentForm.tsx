@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useClients } from '@/hooks/useClients';
+import { useTherapists } from '@/hooks/useTherapists';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -17,6 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useClinicSettings } from '@/hooks/useClinic';
 import { Loader2, DollarSign, CreditCard, Banknote } from 'lucide-react';
 import ClientSearchSelect from '@/components/ClientSearchSelect';
+import TherapistOption from '@/components/TherapistOption';
 import { useUpdateStandalonePayment } from '@/hooks/usePayments';
 
 /** A standalone payment (no appointment_id) being edited, as loaded from the finance tables. */
@@ -25,6 +27,7 @@ export interface EditablePayment {
   amount: number;
   description: string | null;
   client_id: string | null;
+  therapist_id: string | null;
   method: string;
   payment_date: string;
 }
@@ -42,11 +45,13 @@ export default function PaymentForm({ open, onClose, editingPayment }: PaymentFo
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [clientId, setClientId] = useState<string>('none');
+  const [therapistId, setTherapistId] = useState<string>('none');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'cheque' | 'insurance'>('cash');
   const [paymentDate, setPaymentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data: clients } = useClients();
+  const { data: therapists } = useTherapists();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currency } = useClinicSettings();
@@ -58,12 +63,14 @@ export default function PaymentForm({ open, onClose, editingPayment }: PaymentFo
       setAmount(String(editingPayment.amount));
       setDescription(editingPayment.description || '');
       setClientId(editingPayment.client_id || 'none');
+      setTherapistId(editingPayment.therapist_id || 'none');
       setPaymentMethod(editingPayment.method as any);
       setPaymentDate(format(new Date(editingPayment.payment_date), 'yyyy-MM-dd'));
     } else {
       setAmount('');
       setDescription('');
       setClientId('none');
+      setTherapistId('none');
       setPaymentMethod('cash');
       setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
     }
@@ -121,6 +128,7 @@ export default function PaymentForm({ open, onClose, editingPayment }: PaymentFo
           amount: numAmount,
           description,
           client_id: clientId === 'none' ? null : clientId,
+          therapist_id: therapistId === 'none' ? null : therapistId,
           method: paymentMethod,
           payment_date: d.toISOString(),
         });
@@ -134,6 +142,7 @@ export default function PaymentForm({ open, onClose, editingPayment }: PaymentFo
           amount: numAmount,
           description,
           client_id: clientId === 'none' ? null : clientId,
+          therapist_id: therapistId === 'none' ? null : therapistId,
           clinic_id: clinicId,
           method: paymentMethod,
           payment_date: d.toISOString(),
@@ -162,6 +171,7 @@ export default function PaymentForm({ open, onClose, editingPayment }: PaymentFo
       queryClient.invalidateQueries({ queryKey: ['client-appointments-history'] });
       queryClient.invalidateQueries({ queryKey: ['daily-payments'] });
       queryClient.invalidateQueries({ queryKey: ['monthly-payments'] });
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
       queryClient.invalidateQueries({ queryKey: ['payroll'] });
     } catch (error) {
       console.error('Error recording payment:', error);
@@ -217,13 +227,40 @@ export default function PaymentForm({ open, onClose, editingPayment }: PaymentFo
             <Label htmlFor="client">{t('finance.clientOptional')}</Label>
             <ClientSearchSelect
               value={clientId}
-              onValueChange={setClientId}
+              onValueChange={(value) => {
+                setClientId(value);
+                if (value !== 'none') setTherapistId('none');
+              }}
               clients={clients || []}
               allowNone
               noneValue="none"
               noneLabel={t('finance.noClient')}
               placeholder={t('finance.selectClient')}
             />
+          </div>
+
+          {/* Therapist (Optional) */}
+          <div className="space-y-2">
+            <Label htmlFor="therapist">{t('finance.therapist')}</Label>
+            <Select
+              value={therapistId}
+              onValueChange={(value) => {
+                setTherapistId(value);
+                if (value !== 'none') setClientId('none');
+              }}
+            >
+              <SelectTrigger className="bg-input border-border text-foreground">
+                <SelectValue placeholder={t('finance.noTherapist')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{t('finance.noTherapist')}</SelectItem>
+                {(therapists || []).map((th) => (
+                  <SelectItem key={th.id} value={th.id}>
+                    <TherapistOption therapist={th} />
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Payment Method */}

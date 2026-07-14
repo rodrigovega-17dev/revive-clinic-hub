@@ -1058,6 +1058,7 @@ export type Database = {
           refund_amount: number | null
           refunded_at: string | null
           shift_id: string | null
+          therapist_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -1079,6 +1080,7 @@ export type Database = {
           refund_amount?: number | null
           refunded_at?: string | null
           shift_id?: string | null
+          therapist_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -1100,6 +1102,7 @@ export type Database = {
           refund_amount?: number | null
           refunded_at?: string | null
           shift_id?: string | null
+          therapist_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -1136,6 +1139,13 @@ export type Database = {
             columns: ["shift_id"]
             isOneToOne: false
             referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_therapist_id_fkey"
+            columns: ["therapist_id"]
+            isOneToOne: false
+            referencedRelation: "therapists"
             referencedColumns: ["id"]
           },
         ]
