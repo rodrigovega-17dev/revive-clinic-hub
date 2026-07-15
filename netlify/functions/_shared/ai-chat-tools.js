@@ -440,25 +440,25 @@ const clampRetentionPercent = (value) => {
 
 const normalizeCompensationType = (value) => (value === 'fixed_per_session' ? 'fixed_per_session' : 'percentage');
 
+// Therapist payroll is based on the value of the session itself (its assigned price), never
+// on how much was actually collected for it — a discount at checkout, a partial/installment
+// payment, or even a stray $0 payment record must not silently change what the therapist is
+// owed. totalCollected/totalIva are the real cash and tax figures (used for revenue/IVA
+// reporting elsewhere) and are unaffected by this.
 const summarizeAppointmentPayments = (appointment) => {
+  const preIvaRevenue = Number(appointment.payment_amount || 0);
   const paymentRows = (appointment.payments || []).filter((p) => Number(p?.amount || 0) > 0);
   if (paymentRows.length === 0) {
-    const fallback = Number(appointment.payment_amount || 0);
-    return { totalCollected: fallback, preIvaRevenue: fallback, totalIva: 0 };
+    return { totalCollected: preIvaRevenue, preIvaRevenue, totalIva: 0 };
   }
-  return paymentRows.reduce(
-    (acc, payment) => {
-      const total = Number(payment.amount || 0);
-      const iva = Number(payment.iva_amount || 0);
-      const preIva = payment.facturado && iva > 0 ? Math.max(total - iva, 0) : total;
-      return {
-        totalCollected: acc.totalCollected + total,
-        preIvaRevenue: acc.preIvaRevenue + preIva,
-        totalIva: acc.totalIva + iva,
-      };
-    },
-    { totalCollected: 0, preIvaRevenue: 0, totalIva: 0 },
+  const collected = paymentRows.reduce(
+    (acc, payment) => ({
+      totalCollected: acc.totalCollected + Number(payment.amount || 0),
+      totalIva: acc.totalIva + Number(payment.iva_amount || 0),
+    }),
+    { totalCollected: 0, totalIva: 0 },
   );
+  return { totalCollected: collected.totalCollected, preIvaRevenue, totalIva: collected.totalIva };
 };
 
 /** Appointment payroll terms come from its frozen snapshot once one exists, else the therapist's live config. */
