@@ -27,7 +27,7 @@ import { useTherapists } from '@/hooks/useTherapists';
 import { useTreatments } from '@/hooks/useTreatments';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Calendar, User, Clock, DollarSign, CreditCard, CalendarDays, ExternalLink, AlertTriangle, CheckCircle, FileText, Upload, MessageCircle, ChevronDown, Undo2 } from 'lucide-react';
+import { Loader2, Calendar, User, Clock, DollarSign, CreditCard, CalendarDays, ExternalLink, AlertTriangle, CheckCircle, FileText, Upload, MessageCircle, ChevronDown, Undo2, Lock } from 'lucide-react';
 import { getStatusDotColor } from '@/lib/appointment-status';
 import { format } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
@@ -40,6 +40,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useClinicSettings } from '@/hooks/useClinic';
 import { useAuth } from '@/hooks/useAuth';
+import { useSecurity } from '@/hooks/useSecurity';
 import PaymentForm from './PaymentForm';
 import { facturapiService } from '@/integrations/facturapi/service';
 import { useUpdateClient } from '@/hooks/useClients';
@@ -89,6 +90,11 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const [swapDialogStep, setSwapDialogStep] = useState<1 | 2>(1);
   const [isSwapping, setIsSwapping] = useState(false);
+  const [completedEditUnlocked, setCompletedEditUnlocked] = useState(false);
+  const [completedPinDialogOpen, setCompletedPinDialogOpen] = useState(false);
+  const [completedPin, setCompletedPin] = useState('');
+  const [completedPinError, setCompletedPinError] = useState<string | null>(null);
+  const [verifyingCompletedPin, setVerifyingCompletedPin] = useState(false);
   
   // Extract date and time for availability check
   const [rescheduleDate, rescheduleTime] = rescheduleData.start_time.split('T');
@@ -114,6 +120,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const deleteAppointmentMutation = useDeleteAppointment();
   const { currency, timezone } = useClinicSettings();
   const { clinicId } = useAuth();
+  const { securitySettings, verifyFinancePin } = useSecurity();
   const { data: clientBalance } = useClientBalance(appointment?.client_id || null);
   const [requestingCfdi, setRequestingCfdi] = useState(false);
   const [showInlineFiscalForm, setShowInlineFiscalForm] = useState(false);
@@ -473,6 +480,38 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       });
     } finally {
       setIsSwapping(false);
+    }
+  };
+
+  // Completed appointments are locked from editing by default; a clinic that has set up a
+  // finance PIN (Settings > Security) can unlock editing for this one session by entering it.
+  const hasFinancePinConfigured = !!(securitySettings?.finance_pin_hash && securitySettings?.finance_pin_salt);
+  const canEditSchedule =
+    apt?.status !== 'cancelled' &&
+    apt?.status !== 'in_progress' &&
+    (apt?.status !== 'completed' || completedEditUnlocked);
+
+  const handleUnlockCompletedEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (completedPin.length !== 4) {
+      setCompletedPinError(t('security.financePinMustBe4Digits'));
+      return;
+    }
+    setCompletedPinError(null);
+    setVerifyingCompletedPin(true);
+    try {
+      const ok = await verifyFinancePin(completedPin);
+      if (ok) {
+        setCompletedEditUnlocked(true);
+        setCompletedPinDialogOpen(false);
+        setCompletedPin('');
+      } else {
+        setCompletedPinError(t('security.financePinWrong'));
+      }
+    } catch {
+      setCompletedPinError(t('security.financePinWrong'));
+    } finally {
+      setVerifyingCompletedPin(false);
     }
   };
 
@@ -1285,7 +1324,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
           </TabsContent>
 
           <TabsContent value="reschedule" className="space-y-4">
-            {apt.status !== 'cancelled' && apt.status !== 'completed' && apt.status !== 'in_progress' ? (
+            {canEditSchedule ? (
               <Card className="bg-muted/20 border-border">
                 <CardHeader>
                   <CardTitle className="text-lg text-foreground">{t('appointments.rescheduleAppointment')}</CardTitle>
@@ -1490,6 +1529,27 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   </Button>
                 </CardContent>
               </Card>
+            ) : apt.status === 'completed' ? (
+              <Card className="bg-muted/20 border-border">
+                <CardContent className="pt-6 text-center space-y-3">
+                  <div className="text-lg font-medium text-foreground">
+                    {t('appointments.reschedulingNotAvailable')}
+                  </div>
+                  <div className="text-muted-foreground">
+                    {t('appointments.completedCannotReschedule')}
+                  </div>
+                  {hasFinancePinConfigured ? (
+                    <Button variant="outline" onClick={() => setCompletedPinDialogOpen(true)}>
+                      <Lock className="mr-2 h-4 w-4" />
+                      {t('appointments.unlockEditWithPin')}
+                    </Button>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">
+                      {t('appointments.completedEditNoPinConfigured')}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             ) : (
               <Card className="bg-muted/20 border-border">
                 <CardContent className="pt-6 text-center">
@@ -1497,10 +1557,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                     {t('appointments.reschedulingNotAvailable')}
                   </div>
                   <div className="text-muted-foreground">
-                    {apt.status === 'completed' 
-                      ? t('appointments.completedCannotReschedule')
-                      : t('appointments.cancelledCannotReschedule')
-                    }
+                    {t('appointments.cancelledCannotReschedule')}
                   </div>
                 </CardContent>
               </Card>
@@ -1649,6 +1706,56 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
         )}
       </AlertDialogContent>
     </AlertDialog>
+    <Dialog
+      open={completedPinDialogOpen}
+      onOpenChange={(next) => {
+        if (!next) {
+          setCompletedPin('');
+          setCompletedPinError(null);
+        }
+        setCompletedPinDialogOpen(next);
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Lock className="h-5 w-5" />
+            {t('appointments.unlockEditWithPin')}
+          </DialogTitle>
+          <DialogDescription>{t('appointments.completedEditPinRequired')}</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleUnlockCompletedEdit} className="space-y-4">
+          {completedPinError && (
+            <Alert variant="destructive">
+              <AlertDescription>{completedPinError}</AlertDescription>
+            </Alert>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="completed-edit-pin">{t('security.financePinCode')}</Label>
+            <Input
+              id="completed-edit-pin"
+              type="password"
+              inputMode="numeric"
+              maxLength={4}
+              value={completedPin}
+              onChange={(e) => setCompletedPin(e.target.value.replace(/\D/g, ''))}
+              placeholder="••••"
+              required
+              autoFocus
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setCompletedPinDialogOpen(false)} disabled={verifyingCompletedPin}>
+              {t('common.cancel')}
+            </Button>
+            <Button type="submit" disabled={verifyingCompletedPin || completedPin.length !== 4}>
+              {verifyingCompletedPin && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {t('security.financePinUnlock')}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
     </>
   );
 };
