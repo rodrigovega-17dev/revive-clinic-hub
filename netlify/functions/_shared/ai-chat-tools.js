@@ -51,13 +51,48 @@ const clampOffset = (requested) => {
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-const parseDateOrNull = (value, boundary = 'exact') => {
+/** Clinic-local calendar date (YYYY-MM-DD) for a UTC instant — via Intl formatting against the
+ * clinic's actual timezone, never the server's (Netlify Functions run in UTC). */
+const clinicLocalDateStr = (date, timezone) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+
+/**
+ * Converts a clinic-local calendar day (YYYY-MM-DD) to correct UTC instant bounds via an
+ * Intl.DateTimeFormat offset probe (correct for any timezone, not a hardcoded offset). This is
+ * the single source of truth for "what UTC instant is midnight/end-of-day in the clinic" — every
+ * date-only input in this file must go through this, or it silently assumes UTC calendar days,
+ * which is wrong for any clinic outside UTC+0 (e.g. a 6-hour day-boundary error for
+ * America/Mexico_City, misattributing the clinic's evening transactions to the wrong day).
+ */
+const clinicLocalDayBoundsUtc = (dateStr, timezone) => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  // Probe the offset once, at a clean whole-second instant (noon, away from any day
+  // boundary) — probing directly at a .999ms boundary would have the millisecond
+  // truncated by formatToParts' second-only granularity, overshooting by up to ~1s.
+  const guessNoon = Date.UTC(year, month - 1, day, 12, 0, 0, 0);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date(guessNoon)).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+  const asIfUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  const offsetMs = asIfUtc - guessNoon;
+  return {
+    startUtcIso: new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0) - offsetMs).toISOString(),
+    endUtcIso: new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999) - offsetMs).toISOString(),
+  };
+};
+
+/** Last calendar day-of-month for a given (1-indexed) month, pure calendar math. */
+const lastDayOfMonth = (year, month1Indexed) => new Date(Date.UTC(year, month1Indexed, 0)).getUTCDate();
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+const parseDateOrNull = (value, boundary = 'exact', timezone = 'UTC') => {
   if (!value) return null;
   if (typeof value === 'string' && DATE_ONLY_PATTERN.test(value.trim())) {
-    const [year, month, day] = value.trim().split('-').map((part) => Number(part));
-    if (![year, month, day].every(Number.isFinite)) return null;
-    if (boundary === 'end') return new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
-    return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    const bounds = clinicLocalDayBoundsUtc(value.trim(), timezone);
+    return new Date(boundary === 'end' ? bounds.endUtcIso : bounds.startUtcIso);
   }
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d;
@@ -105,12 +140,15 @@ const buildPaginationMeta = ({ offset, limit, totalMatching, returnedCount }) =>
   };
 };
 
-/** Clamp a [start,end] range to MAX_DATE_RANGE_DAYS, defaulting to the last 90 days. */
-const resolveDateRange = (startDate, endDate) => {
-  let end = parseDateOrNull(endDate, 'end') || new Date();
+/** Clamp a [start,end] range to MAX_DATE_RANGE_DAYS, defaulting to the last 90 days. Also
+ * returns startDateOnly/endDateOnly — the clinic-local calendar-date strings for the boundary
+ * instants — for callers filtering a plain DATE column (e.g. expenses.date, payout_date), where
+ * slicing the UTC ISO instant would be off by a day for any non-UTC clinic. */
+const resolveDateRange = (startDate, endDate, timezone = 'UTC') => {
+  let end = parseDateOrNull(endDate, 'end', timezone) || new Date();
   const defaultStart = new Date(end);
   defaultStart.setDate(defaultStart.getDate() - 90);
-  let start = parseDateOrNull(startDate, 'start') || defaultStart;
+  let start = parseDateOrNull(startDate, 'start', timezone) || defaultStart;
   if (start.getTime() > end.getTime()) {
     const tmp = start;
     start = end;
@@ -123,7 +161,13 @@ const resolveDateRange = (startDate, endDate) => {
     : start;
   const span = classifyRangeSpan(clampedStart, end);
 
-  return { start: clampedStart.toISOString(), end: end.toISOString(), span };
+  return {
+    start: clampedStart.toISOString(),
+    end: end.toISOString(),
+    startDateOnly: clinicLocalDateStr(clampedStart, timezone),
+    endDateOnly: clinicLocalDateStr(end, timezone),
+    span,
+  };
 };
 
 const fullName = (row) => `${row?.first_name || ''} ${row?.last_name || ''}`.trim() || null;
@@ -241,7 +285,7 @@ const describeRetentionEffect = (retentionAmount) => {
  */
 const localDateAndWeekday = (isoTimestamp, timezone) => {
   const d = new Date(isoTimestamp);
-  const date = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  const date = clinicLocalDateStr(d, timezone);
   const weekday = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'long' }).format(d);
   return { date, weekday };
 };
@@ -256,31 +300,6 @@ const localDateTime = (isoTimestamp, timezone) => {
   const { date, weekday } = localDateAndWeekday(isoTimestamp, timezone);
   const time = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(isoTimestamp));
   return { date, weekday, time };
-};
-
-/**
- * Converts a clinic-local calendar day (YYYY-MM-DD) to correct UTC instant bounds via an
- * Intl.DateTimeFormat offset probe (correct for any timezone, not a hardcoded offset).
- * Used only to build the default "today" range for list_appointments — resolveDateRange's
- * own date-only parsing assumes UTC calendar days, which is wrong for non-UTC clinics.
- */
-const clinicLocalDayBoundsUtc = (dateStr, timezone) => {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  // Probe the offset once, at a clean whole-second instant (noon, away from any day
-  // boundary) — probing directly at a .999ms boundary would have the millisecond
-  // truncated by formatToParts' second-only granularity, overshooting by up to ~1s.
-  const guessNoon = Date.UTC(year, month - 1, day, 12, 0, 0, 0);
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone, hourCycle: 'h23',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  }).formatToParts(new Date(guessNoon)).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
-  const asIfUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
-  const offsetMs = asIfUtc - guessNoon;
-  return {
-    startUtcIso: new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0) - offsetMs).toISOString(),
-    endUtcIso: new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999) - offsetMs).toISOString(),
-  };
 };
 
 /**
@@ -460,35 +479,56 @@ const resolveAppointmentPayrollConfig = (appointment, liveConfig) => {
   };
 };
 
-const getPayrollQuarterRange = (periodStartDate) => {
-  const year = periodStartDate.getFullYear();
-  const month = periodStartDate.getMonth();
-  const isFirstHalf = periodStartDate.getDate() <= 15;
-  const periodIndexInYear = month * 2 + (isFirstHalf ? 0 : 1);
+// Port of src/lib/payroll.ts's getPayrollQuarterRange, kept behaviorally in sync (same period/
+// quarter algorithm) — but this server copy MUST take an explicit timezone and derive the
+// input date's calendar components via clinic-local formatting, never raw getters, because
+// Netlify Functions run in UTC while the clinic (almost always) isn't. The client-side original
+// gets away with raw local-Date getters only because it happens to run in the viewer's browser,
+// which is normally physically in the clinic's own timezone.
+const getPayrollQuarterRange = (periodStartDate, timezone = 'UTC') => {
+  const [year, month, day] = clinicLocalDateStr(periodStartDate, timezone).split('-').map(Number);
+  const monthIndex0 = month - 1;
+  const isFirstHalf = day <= 15;
+  const periodIndexInYear = monthIndex0 * 2 + (isFirstHalf ? 0 : 1);
   const quarterIndex = Math.floor(periodIndexInYear / 6);
   const quarterStartIndex = quarterIndex * 6;
   const quarterEndIndex = quarterStartIndex + 5;
-  const startMonth = Math.floor(quarterStartIndex / 2);
+  const startMonth0 = Math.floor(quarterStartIndex / 2);
   const startIsFirstHalf = quarterStartIndex % 2 === 0;
-  const endMonth = Math.floor(quarterEndIndex / 2);
+  const endMonth0 = Math.floor(quarterEndIndex / 2);
   const endIsFirstHalf = quarterEndIndex % 2 === 0;
-  const startDate = startIsFirstHalf ? new Date(year, startMonth, 1) : new Date(year, startMonth, 16);
-  const endDate = endIsFirstHalf ? new Date(year, endMonth, 15) : new Date(year, endMonth + 1, 0);
-  return { startDate, endDate };
+
+  const startDateStr = `${year}-${pad2(startMonth0 + 1)}-${startIsFirstHalf ? '01' : '16'}`;
+  const endDay = endIsFirstHalf ? 15 : lastDayOfMonth(year, endMonth0 + 1);
+  const endDateStr = `${year}-${pad2(endMonth0 + 1)}-${pad2(endDay)}`;
+
+  return {
+    startDate: new Date(clinicLocalDayBoundsUtc(startDateStr, timezone).startUtcIso),
+    endDate: new Date(clinicLocalDayBoundsUtc(endDateStr, timezone).endUtcIso),
+  };
 };
 
 /** Today's semi-monthly pay period (1st-15th or 16th-end of month), used when no dates are given. */
-const resolveCurrentPayPeriod = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  if (now.getDate() <= 15) return { startDate: new Date(year, month, 1), endDate: new Date(year, month, 15) };
-  return { startDate: new Date(year, month, 16), endDate: new Date(year, month + 1, 0) };
+const resolveCurrentPayPeriod = (timezone = 'UTC') => {
+  const [year, month, day] = clinicLocalDateStr(new Date(), timezone).split('-').map(Number);
+  if (day <= 15) {
+    return {
+      startDate: new Date(clinicLocalDayBoundsUtc(`${year}-${pad2(month)}-01`, timezone).startUtcIso),
+      endDate: new Date(clinicLocalDayBoundsUtc(`${year}-${pad2(month)}-15`, timezone).endUtcIso),
+    };
+  }
+  return {
+    startDate: new Date(clinicLocalDayBoundsUtc(`${year}-${pad2(month)}-16`, timezone).startUtcIso),
+    endDate: new Date(clinicLocalDayBoundsUtc(`${year}-${pad2(month)}-${pad2(lastDayOfMonth(year, month))}`, timezone).endUtcIso),
+  };
 };
 
-const startOfDayIso = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).toISOString();
-const endOfDayIso = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).toISOString();
-const toDateOnly = (d) => d.toISOString().slice(0, 10);
+// Re-derive the clinic-local calendar day a Date instant falls on, then convert that day back to
+// UTC bounds — correct regardless of how the Date was originally constructed (server-local
+// getters would silently read it as a UTC calendar day, which is wrong for a non-UTC clinic).
+const startOfDayIso = (d, timezone = 'UTC') => clinicLocalDayBoundsUtc(clinicLocalDateStr(d, timezone), timezone).startUtcIso;
+const endOfDayIso = (d, timezone = 'UTC') => clinicLocalDayBoundsUtc(clinicLocalDateStr(d, timezone), timezone).endUtcIso;
+const toDateOnly = (d, timezone = 'UTC') => clinicLocalDateStr(d, timezone);
 
 const computeTherapistPayroll = ({ periodSessions, periodPreIvaRevenue, quarterSessions, config, payInFull = false }) => {
   const compensationType = normalizeCompensationType(config.compensationType);
@@ -1047,7 +1087,7 @@ const toolHandlers = {
     const timezone = clinicTimezone || 'UTC';
     const clientId = input?.client_id;
     if (!clientId) return { error: 'client_id is required' };
-    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date);
+    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date, timezone);
     const { limit, offset, policy } = resolvePagination({
       requestedLimit: input?.limit,
       requestedOffset: input?.offset,
@@ -1136,9 +1176,10 @@ const toolHandlers = {
     };
   },
 
-  get_financial_summary: async (supabase, clinicId, input) => {
+  get_financial_summary: async (supabase, clinicId, input, clinicTimezone) => {
+    const timezone = clinicTimezone || 'UTC';
     if (!input?.start_date || !input?.end_date) return { error: 'start_date and end_date are required' };
-    const { start, end } = resolveDateRange(input.start_date, input.end_date);
+    const { start, end, startDateOnly, endDateOnly } = resolveDateRange(input.start_date, input.end_date, timezone);
 
     const [{ data: payments, error: paymentsError }, { data: expenses, error: expensesError }] = await Promise.all([
       supabase
@@ -1151,8 +1192,8 @@ const toolHandlers = {
         .from('expenses')
         .select('amount, category, payment_method')
         .eq('clinic_id', clinicId)
-        .gte('date', start.slice(0, 10))
-        .lte('date', end.slice(0, 10)),
+        .gte('date', startDateOnly)
+        .lte('date', endDateOnly),
     ]);
     if (paymentsError) return { error: paymentsError.message };
     if (expensesError) return { error: expensesError.message };
@@ -1238,8 +1279,8 @@ const toolHandlers = {
     };
   },
 
-  list_payments: async (supabase, clinicId, input) => {
-    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date);
+  list_payments: async (supabase, clinicId, input, clinicTimezone) => {
+    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date, clinicTimezone || 'UTC');
     const { limit, offset, policy } = resolvePagination({
       requestedLimit: input?.limit,
       requestedOffset: input?.offset,
@@ -1293,8 +1334,8 @@ const toolHandlers = {
     };
   },
 
-  list_expenses: async (supabase, clinicId, input) => {
-    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date);
+  list_expenses: async (supabase, clinicId, input, clinicTimezone) => {
+    const { start, end, span, startDateOnly, endDateOnly } = resolveDateRange(input?.start_date, input?.end_date, clinicTimezone || 'UTC');
     const { limit, offset, policy } = resolvePagination({
       requestedLimit: input?.limit,
       requestedOffset: input?.offset,
@@ -1308,8 +1349,8 @@ const toolHandlers = {
       .from('expenses')
       .select('id, amount, description, category, date, payment_method, therapists(first_name, last_name), suppliers(name), profiles:recorded_by(first_name, last_name)')
       .eq('clinic_id', clinicId)
-      .gte('date', start.slice(0, 10))
-      .lte('date', end.slice(0, 10))
+      .gte('date', startDateOnly)
+      .lte('date', endDateOnly)
       .order('date', { ascending: false })
       .range(offset, offset + limit - 1);
     if (input?.category) query = query.eq('category', input.category);
@@ -1341,17 +1382,18 @@ const toolHandlers = {
     };
   },
 
-  get_payroll_summary: async (supabase, clinicId, input) => {
+  get_payroll_summary: async (supabase, clinicId, input, clinicTimezone) => {
+    const timezone = clinicTimezone || 'UTC';
     let startDate;
     let endDate;
     if (input?.start_date && input?.end_date) {
-      const parsedStart = parseDateOrNull(input.start_date);
-      const parsedEnd = parseDateOrNull(input.end_date);
+      const parsedStart = parseDateOrNull(input.start_date, 'start', timezone);
+      const parsedEnd = parseDateOrNull(input.end_date, 'end', timezone);
       if (!parsedStart || !parsedEnd) return { error: 'Invalid start_date or end_date' };
       startDate = parsedStart;
       endDate = parsedEnd;
     } else {
-      const current = resolveCurrentPayPeriod();
+      const current = resolveCurrentPayPeriod(timezone);
       startDate = current.startDate;
       endDate = current.endDate;
     }
@@ -1365,7 +1407,7 @@ const toolHandlers = {
       startDate = new Date(endDate.getTime() - maxSpanMs);
     }
 
-    const quarter = getPayrollQuarterRange(startDate);
+    const quarter = getPayrollQuarterRange(startDate, timezone);
 
     let apptQuery = supabase
       .from('appointments')
@@ -1377,8 +1419,8 @@ const toolHandlers = {
       `)
       .eq('clinic_id', clinicId)
       .eq('status', 'completed')
-      .gte('start_time', startOfDayIso(startDate))
-      .lte('start_time', endOfDayIso(endDate));
+      .gte('start_time', startOfDayIso(startDate, timezone))
+      .lte('start_time', endOfDayIso(endDate, timezone));
     if (input?.therapist_id) apptQuery = apptQuery.eq('therapist_id', input.therapist_id);
 
     const { data: appointments, error } = await apptQuery;
@@ -1389,8 +1431,8 @@ const toolHandlers = {
       .select('therapist_id')
       .eq('clinic_id', clinicId)
       .eq('status', 'completed')
-      .gte('start_time', startOfDayIso(quarter.startDate))
-      .lte('start_time', endOfDayIso(quarter.endDate));
+      .gte('start_time', startOfDayIso(quarter.startDate, timezone))
+      .lte('start_time', endOfDayIso(quarter.endDate, timezone));
     if (quarterError) return { error: quarterError.message };
 
     const quarterSessionsByTherapist = {};
@@ -1461,8 +1503,8 @@ const toolHandlers = {
       .select('therapist_id, amount')
       .eq('clinic_id', clinicId)
       .not('therapist_id', 'is', null)
-      .gte('date', toDateOnly(startDate))
-      .lte('date', toDateOnly(endDate));
+      .gte('date', toDateOnly(startDate, timezone))
+      .lte('date', toDateOnly(endDate, timezone));
     if (expenseError) return { error: expenseError.message };
     const expensesByTherapist = {};
     (expenseRows || []).forEach((e) => {
@@ -1474,8 +1516,8 @@ const toolHandlers = {
       .select('therapist_id, amount')
       .eq('clinic_id', clinicId)
       .not('therapist_id', 'is', null)
-      .gte('payment_date', startOfDayIso(startDate))
-      .lte('payment_date', endOfDayIso(endDate));
+      .gte('payment_date', startOfDayIso(startDate, timezone))
+      .lte('payment_date', endOfDayIso(endDate, timezone));
     if (paymentError) return { error: paymentError.message };
     const paymentsByTherapist = {};
     (paymentRows || []).forEach((p) => {
@@ -1514,7 +1556,7 @@ const toolHandlers = {
       : 0;
 
     return {
-      period: { start: toDateOnly(startDate), end: toDateOnly(endDate) },
+      period: { start: toDateOnly(startDate, timezone), end: toDateOnly(endDate, timezone) },
       payroll_rules: PAYROLL_RULES_NOTE,
       paid_in_full_overview: {
         completed_appointments: completedAppointments,
@@ -1526,8 +1568,8 @@ const toolHandlers = {
     };
   },
 
-  list_therapist_payouts: async (supabase, clinicId, input) => {
-    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date);
+  list_therapist_payouts: async (supabase, clinicId, input, clinicTimezone) => {
+    const { start, end, span, startDateOnly, endDateOnly } = resolveDateRange(input?.start_date, input?.end_date, clinicTimezone || 'UTC');
     const { limit, offset, policy } = resolvePagination({
       requestedLimit: input?.limit,
       requestedOffset: input?.offset,
@@ -1541,8 +1583,8 @@ const toolHandlers = {
       .from('therapist_payouts')
       .select('id, therapist_id, period_start, period_end, payout_date, amount, payment_method, status, notes, therapists(first_name, last_name)')
       .eq('clinic_id', clinicId)
-      .gte('payout_date', start.slice(0, 10))
-      .lte('payout_date', end.slice(0, 10))
+      .gte('payout_date', startDateOnly)
+      .lte('payout_date', endDateOnly)
       .order('payout_date', { ascending: false })
       .range(offset, offset + limit - 1);
     if (input?.therapist_id) query = query.eq('therapist_id', input.therapist_id);
@@ -1573,8 +1615,8 @@ const toolHandlers = {
   },
 
   get_appointments_overview: async (supabase, clinicId, input, clinicTimezone) => {
-    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date);
     const timezone = clinicTimezone || 'UTC';
+    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date, timezone);
     const rows = [];
     const targetRows = Math.min(OVERVIEW_HARD_SCAN_MAX, OVERVIEW_TARGET_ROWS_BY_SPAN[span.kind] || OVERVIEW_TARGET_ROWS_BY_SPAN.long);
     const pageSize = Math.min(OVERVIEW_PAGE_SIZE, targetRows);
@@ -1680,12 +1722,12 @@ const toolHandlers = {
     let startDateInput = input?.start_date;
     let endDateInput = input?.end_date;
     if (!startDateInput && !endDateInput) {
-      const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      const todayStr = clinicLocalDateStr(new Date(), timezone);
       const bounds = clinicLocalDayBoundsUtc(todayStr, timezone);
       startDateInput = bounds.startUtcIso;
       endDateInput = bounds.endUtcIso;
     }
-    const { start, end, span } = resolveDateRange(startDateInput, endDateInput);
+    const { start, end, span } = resolveDateRange(startDateInput, endDateInput, timezone);
     const { limit, offset, policy } = resolvePagination({
       requestedLimit: input?.limit,
       requestedOffset: input?.offset,
@@ -1738,8 +1780,8 @@ const toolHandlers = {
   },
 
   get_activity_summary: async (supabase, clinicId, input, clinicTimezone) => {
-    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date);
     const timezone = clinicTimezone || 'UTC';
+    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date, timezone);
     const rows = [];
     const targetRows = Math.min(OVERVIEW_HARD_SCAN_MAX, OVERVIEW_TARGET_ROWS_BY_SPAN[span.kind] || OVERVIEW_TARGET_ROWS_BY_SPAN.long);
     const pageSize = Math.min(OVERVIEW_PAGE_SIZE, targetRows);
@@ -1839,7 +1881,7 @@ const toolHandlers = {
 
   search_activity_log: async (supabase, clinicId, input, clinicTimezone) => {
     const timezone = clinicTimezone || 'UTC';
-    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date);
+    const { start, end, span } = resolveDateRange(input?.start_date, input?.end_date, timezone);
     const { limit, offset, policy } = resolvePagination({
       requestedLimit: input?.limit,
       requestedOffset: input?.offset,
@@ -1953,10 +1995,10 @@ const toolHandlers = {
     };
   },
 
-  get_therapist_summary: async (supabase, clinicId, input) => {
+  get_therapist_summary: async (supabase, clinicId, input, clinicTimezone) => {
     const therapistId = input?.therapist_id;
     if (!therapistId) return { error: 'therapist_id is required' };
-    const { start, end } = resolveDateRange(input?.start_date, input?.end_date);
+    const { start, end } = resolveDateRange(input?.start_date, input?.end_date, clinicTimezone || 'UTC');
 
     const { data: therapist, error: therapistError } = await supabase
       .from('therapists')
