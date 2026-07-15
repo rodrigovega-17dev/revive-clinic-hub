@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar, Clock, User, Phone, Plus } from 'lucide-react';
 import { useAppointmentsByDate, useAppointmentsByWeek, useAppointmentsByMonth } from '@/hooks/useAppointments';
 import { useClients } from '@/hooks/useClients';
+import { useTherapists } from '@/hooks/useTherapists';
 import { format } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 import AppointmentForm from '@/components/AppointmentForm';
@@ -30,6 +31,7 @@ const Appointments = () => {
   const [selectedView, setSelectedView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [searchTerm, setSearchTerm] = useState('');
   const [clientSearchValue, setClientSearchValue] = useState('all');
+  const [therapistFilterId, setTherapistFilterId] = useState('all');
   const [searchParams] = useSearchParams();
   
   const locale = currentLanguage === 'es' ? es : enUS;
@@ -51,6 +53,7 @@ const Appointments = () => {
 
   const appointmentsLoading = (useDaily && dailyLoading) || (useWeekly && weeklyLoading) || (useMonthly && monthlyLoading);
   const { data: clients } = useClients();
+  const { data: therapists = [] } = useTherapists();
 
   // Stats for current view (day / week / month)
   const statsSource = useDaily
@@ -100,16 +103,19 @@ const Appointments = () => {
   };
 
   const filteredGroupedAppointments = useMemo(() => {
-    if (!groupedAppointments || !searchTerm.trim()) {
-      return groupedAppointments || {};
-    }
+    if (!groupedAppointments) return {};
+    if (!searchTerm.trim() && therapistFilterId === 'all') return groupedAppointments;
 
     const normalized = searchTerm.trim().toLowerCase();
     return Object.entries(groupedAppointments).reduce((acc, [therapistId, group]) => {
-      const filtered = group.appointments.filter((appointment: any) => {
-        const clientName = `${appointment.clients?.first_name || ''} ${appointment.clients?.last_name || ''}`.toLowerCase();
-        return clientName.includes(normalized);
-      });
+      if (therapistFilterId !== 'all' && therapistId !== therapistFilterId) return acc;
+
+      const filtered = normalized
+        ? group.appointments.filter((appointment: any) => {
+            const clientName = `${appointment.clients?.first_name || ''} ${appointment.clients?.last_name || ''}`.toLowerCase();
+            return clientName.includes(normalized);
+          })
+        : group.appointments;
 
       if (filtered.length > 0) {
         acc[therapistId] = {
@@ -119,7 +125,7 @@ const Appointments = () => {
       }
       return acc;
     }, {} as Record<string, { therapist: any; appointments: any[] }>);
-  }, [groupedAppointments, searchTerm]);
+  }, [groupedAppointments, searchTerm, therapistFilterId]);
 
   if (appointmentsLoading) {
     return (
@@ -183,6 +189,18 @@ const Appointments = () => {
               noneValue="all"
               noneLabel={t('common.all')}
               placeholder={t('appointments.searchByClient')}
+            />
+          </div>
+          <div className="space-y-2 w-full sm:w-[240px]">
+            <Label className="text-sm text-foreground">{t('appointments.therapist')}</Label>
+            <ClientSearchSelect
+              value={therapistFilterId}
+              onValueChange={setTherapistFilterId}
+              clients={therapists}
+              allowNone
+              noneValue="all"
+              noneLabel={t('common.all')}
+              placeholder={t('appointments.selectTherapist')}
             />
           </div>
         </div>
@@ -250,6 +268,7 @@ const Appointments = () => {
             currentDate={selectedDate}
             onDateSelect={handleMonthlyDateSelect}
             searchTerm={searchTerm}
+            therapistId={therapistFilterId === 'all' ? undefined : therapistFilterId}
           />
         </TabsContent>
 
@@ -257,6 +276,7 @@ const Appointments = () => {
           <MonthlyAppointmentsView
             currentDate={selectedDate}
             onDateSelect={handleMonthlyDateSelect}
+            therapistId={therapistFilterId === 'all' ? undefined : therapistFilterId}
             searchTerm={searchTerm}
           />
         </TabsContent>

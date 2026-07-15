@@ -18,6 +18,7 @@ interface WeeklyAppointmentsViewProps {
   currentDate: Date;
   onDateSelect: (date: Date) => void;
   searchTerm?: string;
+  therapistId?: string;
 }
 
 interface Appointment {
@@ -26,6 +27,7 @@ interface Appointment {
   end_time: string;
   status: string;
   notes?: string;
+  therapist_id?: string;
   clients?: {
     first_name: string;
     last_name: string;
@@ -157,7 +159,7 @@ function computePositionedAppointments(dayAppointments: Appointment[]): Position
   return [...positionedAllDay, ...positioned];
 }
 
-const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: WeeklyAppointmentsViewProps) => {
+const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm, therapistId }: WeeklyAppointmentsViewProps) => {
   const { t } = useTranslation();
   const { currentLanguage } = useLanguage();
   const { clinicId } = useAuth();
@@ -231,12 +233,14 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
 
   const normalizedSearch = searchTerm?.trim().toLowerCase() || '';
   const filteredAppointments = useMemo(() => {
-    if (!appointments || !normalizedSearch) return appointments || [];
+    if (!appointments) return [];
     return appointments.filter((apt) => {
+      if (therapistId && apt.therapist_id !== therapistId) return false;
+      if (!normalizedSearch) return true;
       const clientName = `${apt.clients?.first_name || ''} ${apt.clients?.last_name || ''}`.toLowerCase();
       return clientName.includes(normalizedSearch);
     });
-  }, [appointments, normalizedSearch]);
+  }, [appointments, normalizedSearch, therapistId]);
 
   // Group appointments by day and compute positions
   const appointmentsByDay = useMemo(() => {

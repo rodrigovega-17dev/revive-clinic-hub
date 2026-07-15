@@ -25,12 +25,14 @@ interface MonthlyAppointmentsViewProps {
   currentDate: Date;
   onDateSelect: (date: Date) => void;
   searchTerm?: string;
+  therapistId?: string;
 }
 
 const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
   currentDate,
   onDateSelect,
-  searchTerm
+  searchTerm,
+  therapistId,
 }) => {
   const { t } = useTranslation();
   const { currentLanguage } = useLanguage();
@@ -46,9 +48,12 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
   const normalizedSearch = searchTerm?.trim().toLowerCase() || '';
 
   const filteredAppointmentsByDate = useMemo(() => {
-    if (!appointmentsByDate || !normalizedSearch) return appointmentsByDate || {};
+    if (!appointmentsByDate) return {};
+    if (!normalizedSearch && !therapistId) return appointmentsByDate;
     return Object.entries(appointmentsByDate).reduce((acc, [dateKey, appointments]) => {
       const filtered = (appointments as any[]).filter((appointment) => {
+        if (therapistId && appointment.therapist_id !== therapistId) return false;
+        if (!normalizedSearch) return true;
         const clientName = `${appointment.clients?.first_name || ''} ${appointment.clients?.last_name || ''}`.toLowerCase();
         return clientName.includes(normalizedSearch);
       });
@@ -57,7 +62,7 @@ const MonthlyAppointmentsView: React.FC<MonthlyAppointmentsViewProps> = ({
       }
       return acc;
     }, {} as Record<string, any[]>);
-  }, [appointmentsByDate, normalizedSearch]);
+  }, [appointmentsByDate, normalizedSearch, therapistId]);
 
   const locale = currentLanguage === 'es' ? es : enUS;
 
