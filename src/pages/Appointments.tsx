@@ -55,12 +55,20 @@ const Appointments = () => {
   const { data: clients } = useClients();
   const { data: therapists = [] } = useTherapists();
 
-  // Stats for current view (day / week / month)
+  // Keeps the KPI numbers below in sync with whichever client/therapist filters are active.
+  const appointmentMatchesFilters = (appointment: any) => {
+    if (therapistFilterId !== 'all' && appointment.therapist_id !== therapistFilterId) return false;
+    if (!searchTerm.trim()) return true;
+    const clientName = `${appointment.clients?.first_name || ''} ${appointment.clients?.last_name || ''}`.toLowerCase();
+    return clientName.includes(searchTerm.trim().toLowerCase());
+  };
+
+  // Stats for current view (day / week / month), filtered by the active client/therapist filters
   const statsSource = useDaily
-    ? Object.values(groupedAppointments || {}).flatMap((g) => g.appointments)
+    ? Object.values(groupedAppointments || {}).flatMap((g) => g.appointments).filter(appointmentMatchesFilters)
     : useWeekly
-      ? weekAppointments || []
-      : Object.values(monthGrouped || {}).flat();
+      ? (weekAppointments || []).filter(appointmentMatchesFilters)
+      : Object.values(monthGrouped || {}).flat().filter(appointmentMatchesFilters);
   const totalAppointments = statsSource.length;
   const completedToday = statsSource.filter((a) => a.status === 'completed').length;
   const pendingToday = statsSource.filter((a) => a.status === 'scheduled').length;
