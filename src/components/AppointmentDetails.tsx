@@ -86,6 +86,9 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
     treatment_id: appointment?.treatment_id || '',
     payment_amount: appointment?.payment_amount != null ? String(appointment.payment_amount) : '',
   });
+  const [swapDialogOpen, setSwapDialogOpen] = useState(false);
+  const [swapDialogStep, setSwapDialogStep] = useState<1 | 2>(1);
+  const [isSwapping, setIsSwapping] = useState(false);
   
   // Extract date and time for availability check
   const [rescheduleDate, rescheduleTime] = rescheduleData.start_time.split('T');
@@ -408,6 +411,68 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
         description: t('appointments.failedToReschedule'),
         variant: 'destructive',
       });
+    }
+  };
+
+  // A swap only makes sense against exactly one other real appointment for the same
+  // therapist (not an external Google Calendar event, and not while also switching
+  // therapist in this same reschedule) — otherwise "swap with which one?" is ambiguous.
+  const swapCandidate =
+    (!rescheduleData.therapist_id || rescheduleData.therapist_id === apt?.therapist_id) &&
+    availability?.conflicts?.length === 1 &&
+    availability.conflicts[0]?.clients &&
+    availability.conflicts[0]?.source !== 'google'
+      ? availability.conflicts[0]
+      : null;
+
+  const openSwapDialog = () => {
+    setSwapDialogStep(1);
+    setSwapDialogOpen(true);
+  };
+
+  const handleSwapConfirm = async () => {
+    if (!apt || !swapCandidate) return;
+    setIsSwapping(true);
+    try {
+      const aDurationMs = parseInt(rescheduleData.duration) * 60000;
+      const bDurationMs = new Date(swapCandidate.end_time).getTime() - new Date(swapCandidate.start_time).getTime();
+
+      const newAStart = new Date(swapCandidate.start_time);
+      const newAEnd = new Date(newAStart.getTime() + aDurationMs);
+      const newBStart = new Date(apt.start_time);
+      const newBEnd = new Date(newBStart.getTime() + bDurationMs);
+
+      // Move the other appointment out of the way first, then this one into its slot.
+      await updateAppointment.mutateAsync({
+        id: swapCandidate.id,
+        start_time: newBStart.toISOString(),
+        end_time: newBEnd.toISOString(),
+      });
+      await updateAppointment.mutateAsync({
+        id: apt.id,
+        start_time: newAStart.toISOString(),
+        end_time: newAEnd.toISOString(),
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['client-balance'] });
+      queryClient.invalidateQueries({ queryKey: ['all-client-balances'] });
+
+      toast({
+        title: t('appointments.success'),
+        description: t('appointments.swapCompleted'),
+      });
+
+      setSwapDialogOpen(false);
+      onClose();
+    } catch (error) {
+      console.error('Error swapping appointments:', error);
+      toast({
+        title: t('appointments.error'),
+        description: t('appointments.swapFailed'),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSwapping(false);
     }
   };
 
@@ -1349,7 +1414,19 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                           </div>
                         ))}
                       </div>
-                      
+
+                      {swapCandidate && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={openSwapDialog}
+                          className="text-destructive border-destructive/30 hover:bg-destructive/5"
+                        >
+                          {t('appointments.suggestSwap')}
+                        </Button>
+                      )}
+
                       {availability.availableSlots.length > 0 && (
                         <div className="space-y-2">
                           <p className="font-medium text-destructive/80">
@@ -1507,6 +1584,69 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
             {t('appointments.revertPaymentConfirm')}
           </AlertDialogAction>
         </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    <AlertDialog open={swapDialogOpen} onOpenChange={(next) => { if (!isSwapping) setSwapDialogOpen(next); }}>
+      <AlertDialogContent>
+        {swapDialogStep === 1 && swapCandidate && (
+          <>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('appointments.swapDialogTitle')}</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm">
+                  <p>{t('appointments.swapDialogDescription')}</p>
+                  <div className="rounded-md border border-border p-3 space-y-1">
+                    <p className="text-foreground">
+                      <span className="font-medium">{apt?.clients?.first_name} {apt?.clients?.last_name}</span>:{' '}
+                      {format(new Date(apt.start_time), 'PPp', { locale })} → {format(new Date(swapCandidate.start_time), 'p', { locale })}
+                    </p>
+                    <p className="text-foreground">
+                      <span className="font-medium">{swapCandidate.clients?.first_name} {swapCandidate.clients?.last_name}</span>:{' '}
+                      {format(new Date(swapCandidate.start_time), 'PPp', { locale })} → {format(new Date(apt.start_time), 'p', { locale })}
+                    </p>
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setSwapDialogOpen(false)}>
+                {t('common.cancel')}
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  setSwapDialogStep(2);
+                }}
+              >
+                {t('common.continue')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </>
+        )}
+        {swapDialogStep === 2 && (
+          <>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('appointments.swapFinalConfirmTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>{t('appointments.swapFinalConfirmDescription')}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setSwapDialogOpen(false)} disabled={isSwapping}>
+                {t('common.cancel')}
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleSwapConfirm();
+                }}
+                disabled={isSwapping}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isSwapping && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {t('appointments.confirmSwap')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </>
+        )}
       </AlertDialogContent>
     </AlertDialog>
     </>
