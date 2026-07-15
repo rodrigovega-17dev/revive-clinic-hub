@@ -47,9 +47,12 @@ export function useClientBalance(clientId: string | null) {
         (a) => a.payment_status == null || a.payment_status === 'pending'
       ) || [];
 
-      // Charges = amount actually paid toward each completed appointment (any method, including
-      // applied balance credit). Completion alone does not create a charge — only a recorded
-      // payment does, so a positive balance isn't touched until it's actually applied.
+      // Charges = the session's assigned price once any payment has been made toward it —
+      // not just whatever was actually collected. Completion alone still doesn't create a
+      // charge (a session with nothing paid toward it yet stays out of the balance and is
+      // tracked separately as "pending"), but the moment money starts flowing for a session,
+      // the client is charged its full price, so a discount or short payment shows up as
+      // real debt instead of silently reconciling to zero.
       const totalCharges = (completedAppointments || []).reduce((sum, apt) => {
         const paidTowardApt = (payments || [])
           .filter((p) => p.appointment_id === apt.id)
@@ -57,7 +60,8 @@ export function useClientBalance(clientId: string | null) {
             const base = p.facturado ? Number(p.amount || 0) - Number(p.iva_amount || 0) : Number(p.amount || 0);
             return s + Math.abs(base);
           }, 0);
-        return sum + paidTowardApt;
+        if (paidTowardApt <= 0) return sum;
+        return sum + Number(apt.payment_amount || 0);
       }, 0);
       // Money in = base amount received, excluding IVA (tax, not service payment) and excluding
       // method='balance' rows (applied credit, not new money).
@@ -122,7 +126,8 @@ export function useAllClientBalances() {
 
       if (completedError) throw completedError;
 
-      // Calculate balances: totalCharges = only amounts actually paid per appointment (no fallback to payment_amount)
+      // Calculate balances: totalCharges = the session's assigned price once any payment has
+      // been made toward it — see the matching comment in useClientBalance above.
       const clientBalances = clients?.map(client => {
         const clientPayments = payments?.filter(p => p.client_id === client.id) || [];
         const clientCompleted = completedAppointments?.filter(a => a.client_id === client.id) || [];
@@ -137,7 +142,8 @@ export function useAllClientBalances() {
               const base = p.facturado ? Number(p.amount || 0) - Number(p.iva_amount || 0) : Number(p.amount || 0);
               return s + Math.abs(base);
             }, 0);
-          return sum + paidTowardApt;
+          if (paidTowardApt <= 0) return sum;
+          return sum + Number(apt.payment_amount || 0);
         }, 0);
         const totalPayments = clientPayments.reduce((sum, p) => {
           if (p.method === 'balance') return sum;

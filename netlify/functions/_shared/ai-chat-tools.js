@@ -332,8 +332,12 @@ const buildFieldSummary = (schema, values) => {
 
 /**
  * Client balance, computed identically to src/hooks/useClientBalance.ts:
- * balance = money actually received (excluding balance-credit rows) − amounts
- * actually paid toward completed appointments. Completion alone isn't a charge.
+ * balance = money actually received (excluding balance-credit rows) − charges.
+ * A completed appointment only becomes a charge once any payment has been made
+ * toward it — at that point the charge is its full assigned price (payment_amount),
+ * not just whatever was collected, so a discount or short payment shows up as real
+ * debt instead of silently reconciling to zero. Nothing paid yet stays untouched
+ * (tracked separately as "pending"), matching the useClientBalance.ts behavior.
  */
 const computeClientBalance = async (supabase, clinicId, clientId) => {
   const [{ data: payments }, { data: completedAppointments }] = await Promise.all([
@@ -344,20 +348,22 @@ const computeClientBalance = async (supabase, clinicId, clientId) => {
       .eq('clinic_id', clinicId),
     supabase
       .from('appointments')
-      .select('id')
+      .select('id, payment_amount')
       .eq('client_id', clientId)
       .eq('clinic_id', clinicId)
       .eq('status', 'completed'),
   ]);
 
   const paymentRows = payments || [];
-  const completedIds = new Set((completedAppointments || []).map((a) => a.id));
-
   const baseAmount = (p) => (p.facturado ? Number(p.amount || 0) - Number(p.iva_amount || 0) : Number(p.amount || 0));
 
-  const totalCharges = paymentRows
-    .filter((p) => p.appointment_id && completedIds.has(p.appointment_id))
-    .reduce((sum, p) => sum + Math.abs(baseAmount(p)), 0);
+  const totalCharges = (completedAppointments || []).reduce((sum, apt) => {
+    const paidTowardApt = paymentRows
+      .filter((p) => p.appointment_id === apt.id)
+      .reduce((s, p) => s + Math.abs(baseAmount(p)), 0);
+    if (paidTowardApt <= 0) return sum;
+    return sum + Number(apt.payment_amount || 0);
+  }, 0);
 
   const totalPayments = paymentRows
     .filter((p) => p.method !== 'balance')
@@ -383,29 +389,36 @@ const computeClientBalancesBatch = async (supabase, clinicId, clientIds) => {
       .in('client_id', ids),
     supabase
       .from('appointments')
-      .select('id, client_id')
+      .select('id, client_id, payment_amount')
       .eq('clinic_id', clinicId)
       .eq('status', 'completed')
       .in('client_id', ids),
   ]);
 
-  const completedIdsByClient = {};
-  (completedAppointments || []).forEach((a) => {
-    if (!completedIdsByClient[a.client_id]) completedIdsByClient[a.client_id] = new Set();
-    completedIdsByClient[a.client_id].add(a.id);
-  });
-
   const baseAmount = (p) => (p.facturado ? Number(p.amount || 0) - Number(p.iva_amount || 0) : Number(p.amount || 0));
+
+  // Sum paid-toward-appointment once per appointment id (globally unique), so the per-client
+  // loop below stays O(clients + payments + appointments), not O(clients * payments).
+  const paidByAppointment = {};
+  (payments || []).forEach((p) => {
+    if (!p.appointment_id) return;
+    paidByAppointment[p.appointment_id] = (paidByAppointment[p.appointment_id] || 0) + Math.abs(baseAmount(p));
+  });
 
   const totals = {};
   ids.forEach((id) => { totals[id] = { totalPayments: 0, totalCharges: 0 }; });
+
+  (completedAppointments || []).forEach((apt) => {
+    const bucket = totals[apt.client_id];
+    if (!bucket) return;
+    if ((paidByAppointment[apt.id] || 0) > 0) {
+      bucket.totalCharges += Number(apt.payment_amount || 0);
+    }
+  });
+
   (payments || []).forEach((p) => {
     const bucket = totals[p.client_id];
     if (!bucket) return;
-    const completedIds = completedIdsByClient[p.client_id] || new Set();
-    if (p.appointment_id && completedIds.has(p.appointment_id)) {
-      bucket.totalCharges += Math.abs(baseAmount(p));
-    }
     if (p.method !== 'balance') {
       bucket.totalPayments += baseAmount(p);
     }
