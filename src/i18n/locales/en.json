@@ -500,7 +500,9 @@
     "addClient": "Add Patient",
     "registerNewClient": "Register a new patient",
     "recordPayment": "Record Payment",
-    "logNewPayment": "Log a new payment"
+    "logNewPayment": "Log a new payment",
+    "recordExpense": "Record Expense",
+    "logNewExpense": "Log a new expense"
   },
   "appointments": {
     "title": "Appointments",

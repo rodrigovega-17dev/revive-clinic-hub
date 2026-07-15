@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Calendar, Users, DollarSign } from "lucide-react";
+import { Plus, Calendar, Users, DollarSign, Receipt } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -29,6 +29,13 @@ export const QuickActions = () => {
       icon: DollarSign,
       color: "bg-yellow-500 hover:bg-yellow-600",
       onClick: () => navigate("/finance?showPaymentForm=true"),
+    },
+    {
+      title: t('dashboard.recordExpense'),
+      description: t('dashboard.logNewExpense'),
+      icon: Receipt,
+      color: "bg-red-500 hover:bg-red-600",
+      onClick: () => navigate("/finance?showExpenseForm=true"),
     },
   ];
 

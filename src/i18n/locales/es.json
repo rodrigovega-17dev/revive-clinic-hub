@@ -500,7 +500,9 @@
     "addClient": "Agregar Paciente",
     "registerNewClient": "Registrar un nuevo paciente",
     "recordPayment": "Registrar Pago",
-    "logNewPayment": "Registrar un nuevo pago"
+    "logNewPayment": "Registrar un nuevo pago",
+    "recordExpense": "Registrar Gasto",
+    "logNewExpense": "Registrar un nuevo gasto"
   },
   "appointments": {
     "title": "Citas",
