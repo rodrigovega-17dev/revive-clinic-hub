@@ -992,6 +992,12 @@ const Payroll = () => {
                   (() => {
                     const status = getPayoutStatus(therapist.id);
                     const gross = Number(therapist.therapistEarnings || 0);
+                    // Full-pay (100%) sessions are exempt from both the commission rate and
+                    // retention — they pass straight through on top of the commission-based
+                    // gross. Split out here so the tooltip can make that explicit instead of
+                    // presenting one blended "Gross" figure.
+                    const fullPayAmount = Number(therapist.fullPayAmount || 0);
+                    const commissionOnlyGross = gross - fullPayAmount;
                     const retentionAmount = Number(therapist.therapistRetentionAmount || 0);
                     const retentionRate = Number(therapist.therapistRetentionRateApplied || 0);
                     const attributedExpenses = getAttributedExpenses(therapist.id);
@@ -1064,8 +1070,26 @@ const Payroll = () => {
                           </div>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>{t('payroll.grossLabel')}: {formatCurrencyWithClinic(gross)}</p>
-                          <p>{t('payroll.retentionLabel')} ({retentionRate.toFixed(0)}%): {retentionAmount >= 0 ? '−' : '+'}{formatCurrencyWithClinic(Math.abs(retentionAmount))}</p>
+                          {fullPayAmount > 0 ? (
+                            <>
+                              <p>
+                                {t('payroll.grossCommissionLabel')}
+                                {therapist.compensationType === 'percentage' && ` (${Number(therapist.effectiveCommissionPercentage || 0).toFixed(0)}%)`}
+                                : {formatCurrencyWithClinic(commissionOnlyGross)}
+                              </p>
+                              <p>
+                                {t('payroll.retentionLabel')} ({retentionRate.toFixed(0)}%, {t('payroll.retentionCommissionOnlyNote')}): {retentionAmount >= 0 ? '−' : '+'}{formatCurrencyWithClinic(Math.abs(retentionAmount))}
+                              </p>
+                              <p>
+                                {t('payroll.grossFullPayLabel', { count: therapist.fullPayAppointments })}: +{formatCurrencyWithClinic(fullPayAmount)}
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p>{t('payroll.grossLabel')}: {formatCurrencyWithClinic(gross)}</p>
+                              <p>{t('payroll.retentionLabel')} ({retentionRate.toFixed(0)}%): {retentionAmount >= 0 ? '−' : '+'}{formatCurrencyWithClinic(Math.abs(retentionAmount))}</p>
+                            </>
+                          )}
                           {attributedExpenses > 0 && (
                             <p>{t('payroll.expensesShort')}: −{formatCurrencyWithClinic(attributedExpenses)}</p>
                           )}
