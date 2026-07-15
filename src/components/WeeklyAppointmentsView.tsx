@@ -419,7 +419,7 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
                 return (
                   <div
                     key={format(day, 'yyyy-MM-dd')}
-                    className={`p-2 text-center border-r last:border-r-0 border-border font-semibold`}
+                    className={`p-2 text-center border-r-2 last:border-r-0 border-border font-semibold`}
                     style={{
                       backgroundColor: isCurrentDay ? 'var(--weekly-header-current-bg)' : 'var(--weekly-header-bg)',
                       color: isCurrentDay ? '#2563eb' : 'var(--foreground)'
@@ -449,7 +449,7 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
                 return (
                   <div
                     key={dayKey}
-                    className="border-r last:border-r-0 relative border-border"
+                    className="border-r-2 last:border-r-0 relative border-border"
                     style={{ height: `${ALL_DAY_HEIGHT}px` }}
                   >
                     {allDayEvents.map((apt) => {
@@ -520,7 +520,7 @@ const WeeklyAppointmentsView = ({ currentDate, onDateSelect, searchTerm }: Weekl
                 return (
                   <div
                     key={dayKey}
-                    className={`border-r last:border-r-0 relative border-border ${
+                    className={`border-r-2 last:border-r-0 relative border-border ${
                       isCurrentDay ? 'bg-primary/5' : ''
                     }`}
                     style={{
