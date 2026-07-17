@@ -431,13 +431,20 @@ const Payroll = () => {
 
   const getAttributedExpenses = (therapistId: string) => Number(therapistExpenses?.[therapistId] || 0);
   const getAttributedTherapistPayments = (therapistId: string) => Number(therapistPayments?.[therapistId] || 0);
+  // Money is always rounded to the cent here — summing per-appointment retention/commission
+  // percentages across dozens of sessions reliably produces float residue (e.g.
+  // 11318.399999999998 instead of 11318.40). Left unrounded, the payout dialog's pre-filled
+  // "full remaining amount" (displayed rounded to 2 decimals) could fail its own "amount
+  // exceeds remaining balance" check against this unrounded value.
+  const roundToCents = (value: number) => Math.round(value * 100) / 100;
+
   // Final payout = gross earnings − configured retention − therapist-attributed expenses,
   // offset by any standalone payments the therapist made back to the clinic this period
   // (e.g. reimbursing that same expense directly) — floored at zero so an overpayment
   // never becomes a bonus.
   const getNetPayable = (therapist: any) => {
     const netDeduction = Math.max(0, getAttributedExpenses(therapist?.id) - getAttributedTherapistPayments(therapist?.id));
-    return Number(therapist?.therapistEarningsNet || 0) - netDeduction;
+    return roundToCents(Number(therapist?.therapistEarningsNet || 0) - netDeduction);
   };
 
   const payoutsByTherapist = (payoutRecords || []).reduce((acc: Map<string, { total: number }>, payout: any) => {
@@ -452,7 +459,7 @@ const Payroll = () => {
   };
 
   const getRemainingAmount = (therapistId: string, earnings: number) => {
-    return Math.max(0, Number(earnings || 0) - getTotalPaid(therapistId));
+    return roundToCents(Math.max(0, Number(earnings || 0) - getTotalPaid(therapistId)));
   };
 
   const handlePrintPayrollReport = () => {
@@ -565,7 +572,9 @@ const Payroll = () => {
       return;
     }
 
-    if (numericAmount > payoutRemaining) {
+    // 1-cent tolerance: payoutRemaining is already rounded to cents at the source, but this
+    // guards against float drift in whatever the user actually typed into the amount field.
+    if (numericAmount > payoutRemaining + 0.01) {
       toast({
         title: t('payroll.invalidPayout'),
         description: t('payroll.invalidPayoutOver'),
