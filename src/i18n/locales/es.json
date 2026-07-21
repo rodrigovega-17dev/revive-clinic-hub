@@ -1067,6 +1067,8 @@
     "taxes": "Impuestos/SAT",
     "payrollContributions": "Aportaciones Patronales",
     "professionalServices": "Servicios Profesionales",
+    "imss": "IMSS",
+    "payrollPercentage": "Porcentaje Nómina",
     "general": "General",
     "noTherapist": "Sin terapeuta",
     "describeExpense": "Describe el gasto...",

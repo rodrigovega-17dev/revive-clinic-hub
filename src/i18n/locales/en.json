@@ -1071,6 +1071,8 @@
     "taxes": "Taxes/SAT",
     "payrollContributions": "Payroll Contributions",
     "professionalServices": "Professional Services",
+    "imss": "IMSS",
+    "payrollPercentage": "Payroll Percentage",
     "general": "General",
     "noTherapist": "No therapist",
     "describeExpense": "Describe the expense...",

@@ -78,6 +78,8 @@ const ExpenseForm = ({ open, onClose, editingExpense }: ExpenseFormProps) => {
     { value: 'taxes', label: t('finance.taxes') },
     { value: 'payroll_contributions', label: t('finance.payrollContributions') },
     { value: 'professional_services', label: t('finance.professionalServices') },
+    { value: 'imss', label: t('finance.imss') },
+    { value: 'payroll_percentage', label: t('finance.payrollPercentage') },
     { value: 'general', label: t('finance.general') }
   ];
 

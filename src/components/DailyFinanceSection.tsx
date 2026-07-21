@@ -329,6 +329,8 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
       case 'taxes': return t('finance.taxes');
       case 'payroll_contributions': return t('finance.payrollContributions');
       case 'professional_services': return t('finance.professionalServices');
+      case 'imss': return t('finance.imss');
+      case 'payroll_percentage': return t('finance.payrollPercentage');
       case 'general': return t('finance.general');
       default: return category;
     }
