@@ -28,7 +28,13 @@ const MARKDOWN_CLASSNAMES = cn(
   'prose-ul:my-1 prose-ol:my-1 prose-li:my-0',
   'prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground',
   'prose-a:text-primary prose-code:text-foreground prose-blockquote:text-foreground',
-  'prose-table:my-2'
+  'prose-table:my-2',
+  // Tailwind Typography's default code-block background is a fixed dark slate regardless of
+  // light/dark mode, while prose-code:text-foreground above makes the text follow the app's
+  // own foreground color — dark in light mode. Pin the block background to the same
+  // theme-aware token family as the text so they're always a readable, correctly paired
+  // combination in both themes, instead of relying on the plugin's fixed default.
+  'prose-pre:bg-muted prose-pre:text-foreground prose-pre:border prose-pre:border-border'
 );
 
 interface ChatMessageListProps {
