@@ -23,8 +23,8 @@ const DatePicker = ({ value, onChange, label, id, required, min }: DatePickerPro
   const locale = currentLanguage === 'es' ? es : enUS;
 
   const selectedDate = value ? new Date(value + 'T00:00:00') : undefined;
-  const today = new Date();
-  const minDate = min ? new Date(min + 'T00:00:00') : today;
+  // No default floor — callers that actually need to block past dates pass `min` explicitly.
+  const minDate = min ? new Date(min + 'T00:00:00') : undefined;
 
   return (
     <div>
@@ -51,7 +51,7 @@ const DatePicker = ({ value, onChange, label, id, required, min }: DatePickerPro
             mode="single"
             selected={selectedDate}
             onSelect={(date) => date && onChange(format(date, 'yyyy-MM-dd'))}
-            disabled={(date) => date < minDate}
+            disabled={minDate ? (date) => date < minDate : undefined}
             locale={locale}
             initialFocus
           />
