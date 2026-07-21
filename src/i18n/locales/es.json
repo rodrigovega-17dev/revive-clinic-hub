@@ -1069,6 +1069,9 @@
     "professionalServices": "Servicios Profesionales",
     "imss": "IMSS",
     "payrollPercentage": "Porcentaje Nómina",
+    "payrollExpenseCategory": "Nómina",
+    "payrollHiddenLabel": "Pago de nómina (detalles ocultos)",
+    "payrollHiddenAmount": "••••••",
     "general": "General",
     "noTherapist": "Sin terapeuta",
     "describeExpense": "Describe el gasto...",
@@ -1556,7 +1559,10 @@
     "financePinDisableTitle": "Desactivar código de acceso",
     "financePinDisableDescription": "Ingresa tu contraseña actual para desactivar el código de 4 dígitos en Terapeutas, Nómina y Chat IA.",
     "financePinDisableConfirm": "Desactivar código",
-    "financePinDisabledSuccess": "Código de acceso desactivado. Terapeutas, Nómina y Chat IA ya no requieren código."
+    "financePinDisabledSuccess": "Código de acceso desactivado. Terapeutas, Nómina y Chat IA ya no requieren código.",
+    "maskPayrollExpensesLabel": "Ocultar detalles de gastos de nómina en Finanzas",
+    "maskPayrollExpensesDescription": "Los gastos de pagos de nómina seguirán apareciendo en Finanzas (vista diaria, mensual y reportes impresos), pero su descripción y monto estarán ocultos.",
+    "maskPayrollExpensesRequiresPinNote": "Solo aplica mientras el código de acceso de arriba esté activado."
   },
   "subscription": {
     "title": "Suscripción",

@@ -1199,6 +1199,7 @@ export type Database = {
           finance_pin_salt: string | null
           id: string
           login_notifications: boolean | null
+          mask_payroll_expenses: boolean | null
           max_login_attempts: number | null
           password_expiry_days: number | null
           session_timeout_minutes: number | null
@@ -1215,6 +1216,7 @@ export type Database = {
           finance_pin_salt?: string | null
           id?: string
           login_notifications?: boolean | null
+          mask_payroll_expenses?: boolean | null
           max_login_attempts?: number | null
           password_expiry_days?: number | null
           session_timeout_minutes?: number | null
@@ -1231,6 +1233,7 @@ export type Database = {
           finance_pin_salt?: string | null
           id?: string
           login_notifications?: boolean | null
+          mask_payroll_expenses?: boolean | null
           max_login_attempts?: number | null
           password_expiry_days?: number | null
           session_timeout_minutes?: number | null

@@ -1073,6 +1073,9 @@
     "professionalServices": "Professional Services",
     "imss": "IMSS",
     "payrollPercentage": "Payroll Percentage",
+    "payrollExpenseCategory": "Payroll",
+    "payrollHiddenLabel": "Payroll payout (details hidden)",
+    "payrollHiddenAmount": "••••••",
     "general": "General",
     "noTherapist": "No therapist",
     "describeExpense": "Describe the expense...",
@@ -1556,7 +1559,10 @@
     "financePinDisableTitle": "Disable access code",
     "financePinDisableDescription": "Enter your current password to turn off the 4-digit code for Therapists, Payroll, and AI Chat.",
     "financePinDisableConfirm": "Disable code",
-    "financePinDisabledSuccess": "Access code disabled. Therapists, Payroll, and AI Chat no longer require a code."
+    "financePinDisabledSuccess": "Access code disabled. Therapists, Payroll, and AI Chat no longer require a code.",
+    "maskPayrollExpensesLabel": "Hide payroll expense details in Finance",
+    "maskPayrollExpensesDescription": "Payout expenses will still appear in Finance (daily, monthly, and printed reports), but their description and amount will be hidden.",
+    "maskPayrollExpensesRequiresPinNote": "Only applies while the access code above is enabled."
   },
   "subscription": {
     "title": "Subscription",

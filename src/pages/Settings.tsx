@@ -1160,6 +1160,31 @@ const Settings = (): JSX.Element => {
                       {t('security.financePinChangeButton')}
                     </Button>
                   )}
+                  <div className="flex items-center justify-between pt-2 border-t border-border">
+                    <div className="flex-1 pr-4">
+                      <Label
+                        htmlFor="mask-payroll-expenses"
+                        className={securitySettings?.finance_pin_required ? 'cursor-pointer' : 'cursor-not-allowed text-muted-foreground'}
+                      >
+                        {t('security.maskPayrollExpensesLabel')}
+                      </Label>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {securitySettings?.finance_pin_required
+                          ? t('security.maskPayrollExpensesDescription')
+                          : t('security.maskPayrollExpensesRequiresPinNote')}
+                      </p>
+                    </div>
+                    <Switch
+                      id="mask-payroll-expenses"
+                      disabled={!securitySettings?.finance_pin_required}
+                      checked={securitySettings?.mask_payroll_expenses ?? false}
+                      onCheckedChange={(checked) => {
+                        const p = updateSecuritySettings({ mask_payroll_expenses: checked });
+                        if (p) void p.then(() => refetchSecurity());
+                        else refetchSecurity();
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
 

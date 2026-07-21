@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/lib/utils';
 import { useClinic, useClinicSettings } from '@/hooks/useClinic';
-import { DollarSign, TrendingUp, Minus, Receipt, Printer, Pencil, Trash2 } from 'lucide-react';
+import { DollarSign, TrendingUp, Minus, Receipt, Printer, Pencil, Trash2, Lock } from 'lucide-react';
 import { openFinanceReport, FinanceReportTable } from '@/lib/finance-report';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
@@ -29,6 +29,7 @@ import PaymentForm, { type EditablePayment } from './PaymentForm';
 import ExpenseForm, { type EditableExpense } from './ExpenseForm';
 import { useDeleteStandalonePayment } from '@/hooks/usePayments';
 import { useDeleteExpense } from '@/hooks/useExpenses';
+import { useSecurity } from '@/hooks/useSecurity';
 
 const MonthlyFinanceSection = () => {
   const { t } = useTranslation();
@@ -38,6 +39,9 @@ const MonthlyFinanceSection = () => {
   const { currency, timezone } = useClinicSettings();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { securitySettings } = useSecurity();
+  const shouldMaskPayrollExpenses = !!(securitySettings?.finance_pin_required && securitySettings?.mask_payroll_expenses);
+  const isPayrollExpense = (expense: any) => expense?.category === 'Payroll';
   const [selectedPeriod, setSelectedPeriod] = useState<'current' | 'previous' | 'custom'>('current');
   const [searchTerm, setSearchTerm] = useState('');
   const [issuingGlobalCfdi, setIssuingGlobalCfdi] = useState(false);
@@ -240,6 +244,7 @@ const MonthlyFinanceSection = () => {
       case 'professional_services': return t('finance.professionalServices');
       case 'imss': return t('finance.imss');
       case 'payroll_percentage': return t('finance.payrollPercentage');
+      case 'Payroll': return t('finance.payrollExpenseCategory');
       case 'general': return t('finance.general');
       default: return category;
     }
@@ -300,10 +305,11 @@ const MonthlyFinanceSection = () => {
       emptyText: t('finance.noExpensesYet'),
       rows: reportExpenses.map((expense) => [
         formatReportDateTime(expense.created_at || expense.date),
-        expense.description || '-',
+        shouldMaskPayrollExpenses && isPayrollExpense(expense) ? t('finance.payrollHiddenLabel') : (expense.description || '-'),
         getExpenseCategoryText(expense.category || 'general'),
-        formatCurrencyWithClinic(expense.amount),
+        shouldMaskPayrollExpenses && isPayrollExpense(expense) ? t('finance.payrollHiddenAmount') : formatCurrencyWithClinic(expense.amount),
       ]),
+      mutedRows: reportExpenses.map((expense) => shouldMaskPayrollExpenses && isPayrollExpense(expense)),
       footer: [t('finance.totalExpenses'), '', '', formatCurrencyWithClinic(totalExpenses)],
     };
 
@@ -601,13 +607,22 @@ const MonthlyFinanceSection = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {expenses.map((expense) => (
+                {expenses.map((expense) => {
+                  const isMaskedPayroll = shouldMaskPayrollExpenses && isPayrollExpense(expense);
+                  return (
                   <TableRow key={expense.id} className="hover:bg-muted/50 border-border">
                     <TableCell className="text-foreground">
                       {format(new Date(expense.date), 'MMM d, yyyy', { locale })}
                     </TableCell>
                     <TableCell className="text-foreground">
-                      {expense.description}
+                      {isMaskedPayroll ? (
+                        <span className="inline-flex items-center gap-1.5 text-muted-foreground italic">
+                          <Lock className="h-3.5 w-3.5" />
+                          {t('finance.payrollHiddenLabel')}
+                        </span>
+                      ) : (
+                        expense.description
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">
@@ -615,19 +630,21 @@ const MonthlyFinanceSection = () => {
                       </Badge>
                     </TableCell>
                     <TableCell className="font-medium text-red-600">
-                      {formatCurrencyWithClinic(expense.amount)}
+                      {isMaskedPayroll ? t('finance.payrollHiddenAmount') : formatCurrencyWithClinic(expense.amount)}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => setEditingExpense(expense as unknown as EditableExpense)}
-                          title={t('common.edit')}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
+                        {!isMaskedPayroll && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setEditingExpense(expense as unknown as EditableExpense)}
+                            title={t('common.edit')}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -640,7 +657,8 @@ const MonthlyFinanceSection = () => {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           ) : (

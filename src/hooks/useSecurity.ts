@@ -51,6 +51,7 @@ export const useSecurity = () => {
             finance_pin_required: false,
             finance_pin_salt: null,
             finance_pin_hash: null,
+            mask_payroll_expenses: false,
           };
 
           const { data: newSettings, error: createError } = await supabase

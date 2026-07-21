@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Eye, ArrowLeftRight, Shield, Printer, Landmark, Pencil, Trash2 } from 'lucide-react';
+import { Calendar, DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Eye, ArrowLeftRight, Shield, Printer, Landmark, Pencil, Trash2, Lock } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format, startOfDay, endOfDay, subDays } from 'date-fns';
@@ -12,6 +12,7 @@ import { es, enUS } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useClinic, useClinicSettings } from '@/hooks/useClinic';
+import { useSecurity } from '@/hooks/useSecurity';
 import { useLanguage } from '@/hooks/useLanguage';
 import { openFinanceReport, FinanceReportTable } from '@/lib/finance-report';
 import DateFilter from '@/components/DateFilter';
@@ -33,6 +34,12 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
   const { currency, timezone } = useClinicSettings();
   const { currentLanguage } = useLanguage();
   const locale = currentLanguage === 'es' ? es : enUS;
+  const { securitySettings } = useSecurity();
+  // Only meaningful while the finance PIN itself is required — Finance isn't PIN-gated, so
+  // this is what keeps payout amounts out of view here even though the page is reachable
+  // without the code.
+  const shouldMaskPayrollExpenses = !!(securitySettings?.finance_pin_required && securitySettings?.mask_payroll_expenses);
+  const isPayrollExpense = (expense: any) => expense?.category === 'Payroll';
   const [showAllPayments, setShowAllPayments] = useState(false);
   const [editingPayment, setEditingPayment] = useState<EditablePayment | null>(null);
   const [editingExpense, setEditingExpense] = useState<EditableExpense | null>(null);
@@ -250,11 +257,12 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
       emptyText: t('finance.noExpensesToday'),
       rows: (expenses || []).map((e) => [
         formatReportTime(e.created_at),
-        e.description || '-',
+        shouldMaskPayrollExpenses && isPayrollExpense(e) ? t('finance.payrollHiddenLabel') : (e.description || '-'),
         getExpenseCategoryText(e.category || 'general'),
         getPaymentMethodText(e.payment_method || 'cash'),
-        formatCurrencyWithClinic(e.amount),
+        shouldMaskPayrollExpenses && isPayrollExpense(e) ? t('finance.payrollHiddenAmount') : formatCurrencyWithClinic(e.amount),
       ]),
+      mutedRows: (expenses || []).map((e) => shouldMaskPayrollExpenses && isPayrollExpense(e)),
       footer: [t('finance.expensesCash'), '', '', '', formatCurrencyWithClinic(totalCashExpenses)],
     };
 
@@ -331,6 +339,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
       case 'professional_services': return t('finance.professionalServices');
       case 'imss': return t('finance.imss');
       case 'payroll_percentage': return t('finance.payrollPercentage');
+      case 'Payroll': return t('finance.payrollExpenseCategory');
       case 'general': return t('finance.general');
       default: return category;
     }
@@ -578,9 +587,20 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {expenses.map((expense) => (
+                {expenses.map((expense) => {
+                  const isMaskedPayroll = shouldMaskPayrollExpenses && isPayrollExpense(expense);
+                  return (
                   <TableRow key={expense.id} className="hover:bg-muted/50 border-border">
-                    <TableCell className="text-foreground">{expense.description}</TableCell>
+                    <TableCell className="text-foreground">
+                      {isMaskedPayroll ? (
+                        <span className="inline-flex items-center gap-1.5 text-muted-foreground italic">
+                          <Lock className="h-3.5 w-3.5" />
+                          {t('finance.payrollHiddenLabel')}
+                        </span>
+                      ) : (
+                        expense.description
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary">
                         {getExpenseCategoryText(expense.category || 'general')}
@@ -591,7 +611,7 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                     </TableCell>
                     <TableCell>
                       <span className="font-medium text-red-600">
-                        -{formatCurrencyWithClinic(expense.amount)}
+                        {isMaskedPayroll ? t('finance.payrollHiddenAmount') : `-${formatCurrencyWithClinic(expense.amount)}`}
                       </span>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
@@ -604,15 +624,17 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => setEditingExpense(expense as unknown as EditableExpense)}
-                          title={t('common.edit')}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
+                        {!isMaskedPayroll && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setEditingExpense(expense as unknown as EditableExpense)}
+                            title={t('common.edit')}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -625,7 +647,8 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           ) : (
