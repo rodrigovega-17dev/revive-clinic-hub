@@ -43,7 +43,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useSecurity } from '@/hooks/useSecurity';
 import PaymentForm from './PaymentForm';
 import { facturapiService } from '@/integrations/facturapi/service';
-import { useUpdateClient } from '@/hooks/useClients';
+import { useClients, useUpdateClient } from '@/hooks/useClients';
+import ClientSearchSelect from '@/components/ClientSearchSelect';
 import { TAX_REGIMES, CFDI_USES, isValidRfcFormat } from '@/lib/cfdi-catalogs';
 import { useClinicFacturapiConfig } from '@/hooks/useClinicFacturapiConfig';
 import { CfdiUploadModal } from './CfdiUploadModal';
@@ -83,6 +84,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
     duration: appointment ?
       Math.round((new Date(appointment.end_time).getTime() - new Date(appointment.start_time).getTime()) / 60000).toString() :
       '60',
+    client_id: appointment?.client_id || '',
     therapist_id: appointment?.therapist_id || '',
     treatment_id: appointment?.treatment_id || '',
     payment_amount: appointment?.payment_amount != null ? String(appointment.payment_amount) : '',
@@ -114,6 +116,7 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
   const updateAppointment = useUpdateAppointment();
   const { data: therapists } = useTherapists();
   const { data: treatments } = useTreatments();
+  const { data: clients } = useClients();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isAuthenticated, syncAppointment } = useClinicGoogleCalendar();
@@ -390,17 +393,28 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       const startTime = new Date(rescheduleData.start_time);
       const durationMinutes = parseInt(rescheduleData.duration);
       const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
+      const previousClientId = apt.client_id;
+      const nextClientId = rescheduleData.client_id || apt.client_id;
 
       await updateAppointment.mutateAsync({
         id: apt.id,
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
+        client_id: nextClientId,
         therapist_id: rescheduleData.therapist_id || apt.therapist_id,
         treatment_id: rescheduleData.treatment_id || apt.treatment_id,
         payment_amount: rescheduleData.payment_amount === ''
           ? apt.payment_amount
           : Number(rescheduleData.payment_amount),
       });
+
+      // useUpdateAppointment only refreshes the NEW client's history/pending lists — if the
+      // client changed, the previous client's popup would otherwise keep showing this
+      // appointment until something else happens to refetch it.
+      if (previousClientId && previousClientId !== nextClientId && clinicId) {
+        queryClient.invalidateQueries({ queryKey: ['client-appointments-history', previousClientId, clinicId] });
+        queryClient.invalidateQueries({ queryKey: ['client-pending-appointments', previousClientId, clinicId] });
+      }
 
       queryClient.invalidateQueries({ queryKey: ['client-balance'] });
       queryClient.invalidateQueries({ queryKey: ['all-client-balances'] });
@@ -1330,6 +1344,16 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   <CardTitle className="text-lg text-foreground">{t('appointments.rescheduleAppointment')}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_client" className="text-foreground">{t('appointments.client')}</Label>
+                    <ClientSearchSelect
+                      value={rescheduleData.client_id}
+                      onValueChange={(value) => setRescheduleData(prev => ({ ...prev, client_id: value }))}
+                      clients={clients || []}
+                      placeholder={t('common.selectClient')}
+                    />
+                  </div>
+
                   <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="new_datetime" className="text-foreground">{t('appointments.newDateTime')}</Label>
