@@ -178,6 +178,7 @@ const PAYROLL_RULES_NOTE = {
   retention_negative: 'Negative retention_rate/retention_amount is an additive adjustment (bonus) that increases therapist payout.',
   reinvestment: 'reinvestment_percentage is voluntary, therapist-initiated percentage POINTS subtracted from commission_percentage before it is applied to revenue (not a % of the commission amount, e.g. 35% commission with 5-point reinvestment nets 30%). Unlike retention, the reinvested amount DOES flow into clinic_earnings — it is a real transfer to the clinic, not money withheld/set aside for the therapist. Never conflate reinvestment_amount with retention_amount.',
   therapist_payment_offset: 'attributed_therapist_payments is the sum of standalone payments (income) linked directly to this therapist for the period — e.g. them reimbursing the clinic in cash for an expense already attributed to them via attributed_expenses. It offsets that expense deduction dollar-for-dollar in net_payable, floored at zero: if payments >= expenses, no deduction at all, but an overpayment never becomes a bonus (net_payable is never increased above net_earnings by this mechanism). A payment can link to a client OR a therapist, never both.',
+  incentive_window: 'The volume incentive threshold (incentive_threshold_sessions) is counted per PAY PERIOD (fortnight), NOT per month, quarter, or year, and is never cumulative across periods — every new pay period resets the count to zero. incentive_window_sessions is that count for whichever period get_payroll_summary was queried over, and incentive_applied is whether it met/exceeded incentive_threshold_sessions in that same window. If get_payroll_summary is called with a custom start_date/end_date wider than one pay period, incentive_window_sessions and incentive_applied reflect that wider queried range instead — they always describe sessions counted within the exact window being reported on, not the therapist\'s real fortnightly payroll period.',
 };
 
 const normalizeSearchText = (value) => String(value || '')
@@ -729,7 +730,7 @@ const toolDefinitions = [
   },
   {
     name: 'get_payroll_summary',
-    description: 'Computed payroll for one or all therapists over a pay period (defaults to the current semi-monthly period): gross earnings, retention withheld, reinvestment_amount (voluntarily given back to the clinic, if any), net earnings, therapist-attributed expenses, attributed_therapist_payments (standalone payments the therapist made back to the clinic, offsetting those expenses — see payroll_rules.therapist_payment_offset), final net payable, and paid-in-full appointment metrics. Note: pay_therapist_in_full means therapist gets 100% pre-IVA revenue for that appointment (compensation rule), not that the client fully paid their balance. Negative retention increases payout.',
+    description: 'Computed payroll for one or all therapists over a pay period (defaults to the current semi-monthly period): gross earnings, retention withheld, reinvestment_amount (voluntarily given back to the clinic, if any), net earnings, therapist-attributed expenses, attributed_therapist_payments (standalone payments the therapist made back to the clinic, offsetting those expenses — see payroll_rules.therapist_payment_offset), final net payable, paid-in-full appointment metrics, and incentive_window_sessions/incentive_applied (whether the volume incentive threshold was met WITHIN THE QUERIED PERIOD — see payroll_rules.incentive_window, it resets every pay period, never cumulative). Note: pay_therapist_in_full means therapist gets 100% pre-IVA revenue for that appointment (compensation rule), not that the client fully paid their balance. Negative retention increases payout.',
     input_schema: {
       type: 'object',
       properties: {
@@ -828,7 +829,7 @@ const toolDefinitions = [
   },
   {
     name: 'get_therapist_compensation_config',
-    description: 'Each therapist\'s actual live compensation policy: compensation type, commission percentage or fixed session amount, retention rate, incentive threshold/bonus, and reinvestment percentage/effective rate (commission_percentage_after_reinvestment). Use this for direct policy questions like "what is Carlos\'s commission rate" or "what triggers Sebastián\'s incentive bonus" — get_payroll_summary only returns computed dollar RESULTS for a period, never these raw settings. Omit therapist_id to get every therapist\'s config at once.',
+    description: 'Each therapist\'s actual live compensation policy: compensation type, commission percentage or fixed session amount, retention rate, incentive threshold/bonus (counted per pay period/fortnight, never cumulative — see payroll_rules.incentive_window), and reinvestment percentage/effective rate (commission_percentage_after_reinvestment). Use this for direct policy questions like "what is Carlos\'s commission rate" or "what triggers Sebastián\'s incentive bonus" — get_payroll_summary only returns computed dollar RESULTS for a period, never these raw settings. Omit therapist_id to get every therapist\'s config at once.',
     input_schema: {
       type: 'object',
       properties: {
@@ -1452,6 +1453,7 @@ const toolHandlers = {
           id: therapistId,
           name: fullName(therapist),
           compensation_type: normalizeCompensationType(liveConfig.compensationType),
+          liveConfig,
           total_appointments: 0,
           pay_in_full_appointments: 0,
           total_revenue_pre_iva: 0,
@@ -1510,13 +1512,28 @@ const toolHandlers = {
           ? Number(((s.pay_in_full_appointments / s.total_appointments) * 100).toFixed(1))
           : 0;
         const retentionEffect = describeRetentionEffect(s.retention_amount);
+        // Whether the volume incentive is active reflects the therapist's current live
+        // settings (like compensation_type/commission elsewhere), not a frozen snapshot —
+        // and is evaluated against sessions in THIS queried period only (see payroll_rules.
+        // incentive_window: the threshold is not cumulative across periods).
+        const { liveConfig, ...rest } = s;
+        const display = computeTherapistPayroll({
+          periodSessions: 0,
+          periodPreIvaRevenue: 0,
+          incentiveWindowSessions: s.total_appointments,
+          config: liveConfig,
+        });
         return {
-          ...s,
+          ...rest,
           pay_in_full_percentage: payInFullPercentage,
           retention_effect: retentionEffect,
           attributed_expenses: attributedExpenses,
           attributed_therapist_payments: attributedTherapistPayments,
           net_payable: s.net_earnings - netDeduction,
+          incentive_enabled: !!liveConfig.incentiveEnabled,
+          incentive_threshold_sessions: liveConfig.incentiveEnabled ? Number(liveConfig.incentiveThresholdSessions || 0) : null,
+          incentive_window_sessions: s.total_appointments,
+          incentive_applied: display.incentiveApplied,
         };
       })
       .slice(0, 20);
