@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { User, Phone, Mail, MapPin, DollarSign, CheckCircle, AlertCircle, History, FileText, Upload, MessageCircle } from 'lucide-react';
+import { User, Phone, Mail, MapPin, DollarSign, CheckCircle, AlertCircle, History, FileText, Upload, MessageCircle, Eye } from 'lucide-react';
 import { useClientBalance } from '@/hooks/useClientBalance';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,6 +21,7 @@ import { getCfdiFileUrl } from '@/hooks/useCfdiFileUrl';
 import { CfdiUploadModal } from '@/components/CfdiUploadModal';
 import { DocumentSection } from '@/components/DocumentSection';
 import BalanceAdjustmentForm from '@/components/BalanceAdjustmentForm';
+import AppointmentDetails from '@/components/AppointmentDetails';
 import { openWhatsApp } from '@/lib/whatsapp';
 
 type Client = Tables<'clients'>;
@@ -108,6 +109,9 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
         .from('appointments')
         .select(`
           id,
+          client_id,
+          therapist_id,
+          treatment_id,
           start_time,
           end_time,
           payment_amount,
@@ -547,6 +551,7 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
                         <TableHead>{t('clients.therapist')}</TableHead>
                         <TableHead>{t('clients.amount')}</TableHead>
                         <TableHead>{t('clients.status')}</TableHead>
+                        <TableHead className="text-right">{t('common.actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -579,6 +584,20 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
                                 </Badge>
                               )}
                             </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              title={t('common.view')}
+                              onClick={() => {
+                                setSelectedAppointment(apt);
+                                setIsAppointmentDetailsOpen(true);
+                              }}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -726,6 +745,19 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
       open={showBalanceAdjustment}
       onClose={() => setShowBalanceAdjustment(false)}
     />
+    {/* Opened from the Appointments History tab. Rendered conditionally so each appointment
+        gets a fresh mount — AppointmentDetails seeds its edit form from props via useState,
+        which would otherwise keep the first-opened appointment's values. */}
+    {selectedAppointment && (
+      <AppointmentDetails
+        appointment={selectedAppointment}
+        open={isAppointmentDetailsOpen}
+        onClose={() => {
+          setIsAppointmentDetailsOpen(false);
+          setSelectedAppointment(null);
+        }}
+      />
+    )}
     </>
   );
 } 
