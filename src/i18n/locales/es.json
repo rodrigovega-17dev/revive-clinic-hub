@@ -937,7 +937,7 @@
     "invalidReinvestmentPercentage": "Ingresa un porcentaje de reinversión válido entre 0 y 100.",
     "reinvestmentExceedsCommission": "El porcentaje de reinversión no puede superar el porcentaje de comisión.",
     "incentiveEnabled": "Activar Incentivo por Volumen",
-    "incentiveThresholdSessions": "Umbral de Sesiones por Cuarto",
+    "incentiveThresholdSessions": "Umbral de Sesiones por Quincena",
     "incentivePercentageBonus": "Bono de Comisión (puntos porcentuales)",
     "incentiveFixedBonus": "Bono Fijo Adicional por Sesión",
     "invalidCommissionPercentage": "Ingresa un porcentaje de comisión válido entre 0 y 100.",

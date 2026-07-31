@@ -4,7 +4,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import {
   computeTherapistPayroll,
-  getPayrollQuarterRange,
   summarizeAppointmentPayments,
   resolveAppointmentPayrollConfig,
   type TherapistCompensationConfig,
@@ -222,20 +221,13 @@ export function useDataExport() {
         .gte('start_time', periodStart.toISOString())
         .lte('start_time', periodEnd.toISOString());
 
-      const quarterRange = getPayrollQuarterRange(periodStart);
-      const { data: quarterAppointments } = await supabase
-        .from('appointments')
-        .select('therapist_id')
-        .eq('clinic_id', clinicId)
-        .eq('status', 'completed')
-        .gte('start_time', quarterRange.startDate.toISOString())
-        .lte('start_time', quarterRange.endDate.toISOString());
-
-      const quarterSessionsByTherapist = (quarterAppointments || []).reduce((acc: Record<string, number>, appointment: any) => {
+      // Volume-incentive counting window is this pay period (fortnight), already covered by
+      // the completed-appointments query above — no extra round trip needed.
+      const incentiveWindowSessionsByTherapist = (appointments || []).reduce((acc: Record<string, number>, appointment: any) => {
         const therapistId = String(appointment.therapist_id);
         acc[therapistId] = (acc[therapistId] || 0) + 1;
         return acc;
-      }, {});
+      }, {} as Record<string, number>);
 
       // Each appointment's payroll terms come from its frozen snapshot if one exists (i.e. it
       // was already covered by a payout), otherwise from the therapist's current live config —
@@ -244,7 +236,7 @@ export function useDataExport() {
       (appointments || []).forEach((apt: any) => {
         const tid = apt.therapist_id;
         const therapist = apt.therapists || {};
-        const quarterSessions = quarterSessionsByTherapist[tid] || 0;
+        const incentiveWindowSessions = incentiveWindowSessionsByTherapist[tid] || 0;
 
         const liveConfig: TherapistCompensationConfig = {
           compensationType: therapist.compensation_type,
@@ -268,7 +260,7 @@ export function useDataExport() {
         const computed = computeTherapistPayroll({
           periodSessions: 1,
           periodPreIvaRevenue: summary.preIvaRevenue,
-          quarterSessions,
+          incentiveWindowSessions,
           config: appointmentConfig,
         });
 
@@ -276,7 +268,7 @@ export function useDataExport() {
           therapistStats[tid] = {
             name: `${therapist.first_name ?? ''} ${therapist.last_name ?? ''}`.trim(),
             liveConfig,
-            quarterSessions,
+            incentiveWindowSessions,
             sessions: 0,
             revenue: 0,
             revenueBeforeIva: 0,
@@ -305,7 +297,7 @@ export function useDataExport() {
         const display = computeTherapistPayroll({
           periodSessions: 0,
           periodPreIvaRevenue: 0,
-          quarterSessions: s.quarterSessions,
+          incentiveWindowSessions: s.incentiveWindowSessions,
           config: s.liveConfig,
         });
         s.compensationType = display.compensationType;

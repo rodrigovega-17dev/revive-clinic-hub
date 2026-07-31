@@ -938,7 +938,7 @@
     "invalidReinvestmentPercentage": "Enter a valid reinvestment percentage between 0 and 100.",
     "reinvestmentExceedsCommission": "Reinvestment percentage can't exceed the commission percentage.",
     "incentiveEnabled": "Enable Volume Incentive",
-    "incentiveThresholdSessions": "Quarter Threshold Sessions",
+    "incentiveThresholdSessions": "Fortnight Threshold Sessions",
     "incentivePercentageBonus": "Commission Bonus (percentage points)",
     "incentiveFixedBonus": "Added Fixed Bonus Per Session",
     "invalidCommissionPercentage": "Enter a valid commission percentage between 0 and 100.",

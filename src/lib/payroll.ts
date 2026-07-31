@@ -28,7 +28,10 @@ export type TherapistCompensationConfig = {
 export type PayrollComputationInput = {
   periodSessions: number;
   periodPreIvaRevenue: number;
-  quarterSessions: number;
+  /** Completed sessions counted across the incentive window — the pay period (fortnight) the
+   * appointment falls in — and compared against incentiveThresholdSessions. Named for the rule
+   * rather than the span so it can't silently drift out of sync with it again. */
+  incentiveWindowSessions: number;
   config: TherapistCompensationConfig;
   /** When true, bypass commission/fixed compensation and pay the therapist 100% of
    * periodPreIvaRevenue instead (retention, if enabled, still applies). */
@@ -158,32 +161,10 @@ export const buildPayrollSnapshotColumns = (liveConfig: TherapistCompensationCon
   payroll_snapshot_at: new Date().toISOString(),
 });
 
-export const getPayrollQuarterRange = (periodStartDate: Date) => {
-  const year = periodStartDate.getFullYear();
-  const month = periodStartDate.getMonth();
-  const isFirstHalf = periodStartDate.getDate() <= 15;
-
-  const periodIndexInYear = month * 2 + (isFirstHalf ? 0 : 1);
-  const quarterIndex = Math.floor(periodIndexInYear / 6);
-
-  const quarterStartIndex = quarterIndex * 6;
-  const quarterEndIndex = quarterStartIndex + 5;
-
-  const startMonth = Math.floor(quarterStartIndex / 2);
-  const startIsFirstHalf = quarterStartIndex % 2 === 0;
-  const endMonth = Math.floor(quarterEndIndex / 2);
-  const endIsFirstHalf = quarterEndIndex % 2 === 0;
-
-  const startDate = startIsFirstHalf ? new Date(year, startMonth, 1) : new Date(year, startMonth, 16);
-  const endDate = endIsFirstHalf ? new Date(year, endMonth, 15) : new Date(year, endMonth + 1, 0);
-
-  return { startDate, endDate };
-};
-
 export const computeTherapistPayroll = ({
   periodSessions,
   periodPreIvaRevenue,
-  quarterSessions,
+  incentiveWindowSessions,
   config,
   payInFull = false,
 }: PayrollComputationInput): PayrollComputationResult => {
@@ -198,8 +179,11 @@ export const computeTherapistPayroll = ({
   const incentivePercentageBonus = clampPercent(Number(config.incentivePercentageBonus || 0));
   const incentiveFixedBonus = Math.max(Number(config.incentiveFixedBonus || 0), 0);
 
+  // Volume incentive is earned per pay period (fortnight): hit the session threshold within the
+  // period and the bonus applies to that same period's sessions. It does not accumulate across
+  // periods, so each fortnight starts the count over.
   const incentiveApplied =
-    incentiveEnabled && incentiveThresholdSessions > 0 && quarterSessions >= incentiveThresholdSessions;
+    incentiveEnabled && incentiveThresholdSessions > 0 && incentiveWindowSessions >= incentiveThresholdSessions;
 
   // Reinvestment is scoped to percentage compensation — there's no "rate" to reduce for a
   // flat per-session fee.

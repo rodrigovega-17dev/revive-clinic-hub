@@ -28,7 +28,6 @@ import { getCfdiFileUrl } from '@/hooks/useCfdiFileUrl';
 import { openFinanceReport, type FinanceReportTable } from '@/lib/finance-report';
 import {
   computeTherapistPayroll,
-  getPayrollQuarterRange,
   summarizeAppointmentPayments,
   resolveAppointmentPayrollConfig,
   buildPayrollSnapshotColumns,
@@ -139,11 +138,10 @@ const Payroll = () => {
   const currentPeriod = periods.find(p => p.value === selectedPeriod) || periods[0];
   const todayStart = startOfDay(new Date());
   const isPastPeriod = endOfDay(currentPeriod.endDate) < todayStart;
-  const currentQuarter = useMemo(() => getPayrollQuarterRange(currentPeriod.startDate), [currentPeriod.startDate]);
 
   // Fetch payroll data
   const { data: payrollData, isLoading } = useQuery({
-    queryKey: ['payroll', currentPeriod.startDate, currentPeriod.endDate, currentQuarter.startDate, currentQuarter.endDate, clinicId],
+    queryKey: ['payroll', currentPeriod.startDate, currentPeriod.endDate, clinicId],
     queryFn: async () => {
       if (!clinicId) return {
         therapistStats: [],
@@ -212,21 +210,13 @@ const Payroll = () => {
 
       if (error) throw error;
 
-      const { data: quarterAppointments, error: quarterError } = await supabase
-        .from('appointments')
-        .select('therapist_id')
-        .eq('clinic_id', clinicId)
-        .eq('status', 'completed')
-        .gte('start_time', startOfDay(currentQuarter.startDate).toISOString())
-        .lte('start_time', endOfDay(currentQuarter.endDate).toISOString());
-
-      if (quarterError) throw quarterError;
-
-      const quarterSessionsByTherapist = (quarterAppointments || []).reduce((acc: Record<string, number>, appointment) => {
+      // Volume-incentive counting window is this pay period (fortnight), which the query above
+      // already fetched — completed sessions, bounded to the period — so no extra round trip.
+      const incentiveWindowSessionsByTherapist = (appointments || []).reduce((acc: Record<string, number>, appointment) => {
         const therapistId = String(appointment.therapist_id);
         acc[therapistId] = (acc[therapistId] || 0) + 1;
         return acc;
-      }, {});
+      }, {} as Record<string, number>);
 
       // Calculate payroll data by therapist. Each appointment's payroll terms come from its
       // frozen snapshot if one exists (i.e. it was already covered by a payout), otherwise
@@ -236,7 +226,7 @@ const Payroll = () => {
         const therapistId = appointment.therapist_id;
         const therapist = appointment.therapists;
         const therapistName = `${therapist?.first_name || ''} ${therapist?.last_name || ''}`.trim();
-        const quarterSessions = quarterSessionsByTherapist[therapistId] || 0;
+        const incentiveWindowSessions = incentiveWindowSessionsByTherapist[therapistId] || 0;
 
         const liveConfig: TherapistCompensationConfig = {
           compensationType: therapist?.compensation_type,
@@ -261,7 +251,7 @@ const Payroll = () => {
         const computed = computeTherapistPayroll({
           periodSessions: 1,
           periodPreIvaRevenue: paymentSummary.preIvaRevenue,
-          quarterSessions,
+          incentiveWindowSessions,
           config: appointmentConfig,
           payInFull,
         });
@@ -271,7 +261,7 @@ const Payroll = () => {
             id: therapistId,
             name: therapistName,
             liveConfig,
-            quarterSessions,
+            incentiveWindowSessions,
             totalAppointments: 0,
             totalRevenue: 0,
             totalRevenueBeforeIVA: 0,
@@ -317,7 +307,7 @@ const Payroll = () => {
         const display = computeTherapistPayroll({
           periodSessions: 0,
           periodPreIvaRevenue: 0,
-          quarterSessions: stats.quarterSessions,
+          incentiveWindowSessions: stats.incentiveWindowSessions,
           config: stats.liveConfig,
         });
 

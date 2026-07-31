@@ -492,35 +492,6 @@ const resolveAppointmentPayrollConfig = (appointment, liveConfig) => {
   };
 };
 
-// Port of src/lib/payroll.ts's getPayrollQuarterRange, kept behaviorally in sync (same period/
-// quarter algorithm) — but this server copy MUST take an explicit timezone and derive the
-// input date's calendar components via clinic-local formatting, never raw getters, because
-// Netlify Functions run in UTC while the clinic (almost always) isn't. The client-side original
-// gets away with raw local-Date getters only because it happens to run in the viewer's browser,
-// which is normally physically in the clinic's own timezone.
-const getPayrollQuarterRange = (periodStartDate, timezone = 'UTC') => {
-  const [year, month, day] = clinicLocalDateStr(periodStartDate, timezone).split('-').map(Number);
-  const monthIndex0 = month - 1;
-  const isFirstHalf = day <= 15;
-  const periodIndexInYear = monthIndex0 * 2 + (isFirstHalf ? 0 : 1);
-  const quarterIndex = Math.floor(periodIndexInYear / 6);
-  const quarterStartIndex = quarterIndex * 6;
-  const quarterEndIndex = quarterStartIndex + 5;
-  const startMonth0 = Math.floor(quarterStartIndex / 2);
-  const startIsFirstHalf = quarterStartIndex % 2 === 0;
-  const endMonth0 = Math.floor(quarterEndIndex / 2);
-  const endIsFirstHalf = quarterEndIndex % 2 === 0;
-
-  const startDateStr = `${year}-${pad2(startMonth0 + 1)}-${startIsFirstHalf ? '01' : '16'}`;
-  const endDay = endIsFirstHalf ? 15 : lastDayOfMonth(year, endMonth0 + 1);
-  const endDateStr = `${year}-${pad2(endMonth0 + 1)}-${pad2(endDay)}`;
-
-  return {
-    startDate: new Date(clinicLocalDayBoundsUtc(startDateStr, timezone).startUtcIso),
-    endDate: new Date(clinicLocalDayBoundsUtc(endDateStr, timezone).endUtcIso),
-  };
-};
-
 /** Today's semi-monthly pay period (1st-15th or 16th-end of month), used when no dates are given. */
 const resolveCurrentPayPeriod = (timezone = 'UTC') => {
   const [year, month, day] = clinicLocalDateStr(new Date(), timezone).split('-').map(Number);
@@ -543,7 +514,7 @@ const startOfDayIso = (d, timezone = 'UTC') => clinicLocalDayBoundsUtc(clinicLoc
 const endOfDayIso = (d, timezone = 'UTC') => clinicLocalDayBoundsUtc(clinicLocalDateStr(d, timezone), timezone).endUtcIso;
 const toDateOnly = (d, timezone = 'UTC') => clinicLocalDateStr(d, timezone);
 
-const computeTherapistPayroll = ({ periodSessions, periodPreIvaRevenue, quarterSessions, config, payInFull = false }) => {
+const computeTherapistPayroll = ({ periodSessions, periodPreIvaRevenue, incentiveWindowSessions, config, payInFull = false }) => {
   const compensationType = normalizeCompensationType(config.compensationType);
   const baseCommission = clampPercent(Number(config.commissionPercentage || 0));
   const baseFixedSessionAmount = Math.max(Number(config.fixedSessionAmount || 0), 0);
@@ -555,7 +526,7 @@ const computeTherapistPayroll = ({ periodSessions, periodPreIvaRevenue, quarterS
   const incentiveFixedBonus = Math.max(Number(config.incentiveFixedBonus || 0), 0);
 
   const incentiveApplied =
-    incentiveEnabled && incentiveThresholdSessions > 0 && quarterSessions >= incentiveThresholdSessions;
+    incentiveEnabled && incentiveThresholdSessions > 0 && incentiveWindowSessions >= incentiveThresholdSessions;
 
   // Reinvestment is scoped to percentage compensation — there's no "rate" to reduce for a
   // flat per-session fee.
@@ -1420,8 +1391,6 @@ const toolHandlers = {
       startDate = new Date(endDate.getTime() - maxSpanMs);
     }
 
-    const quarter = getPayrollQuarterRange(startDate, timezone);
-
     let apptQuery = supabase
       .from('appointments')
       .select(`
@@ -1439,25 +1408,18 @@ const toolHandlers = {
     const { data: appointments, error } = await apptQuery;
     if (error) return { error: error.message };
 
-    const { data: quarterAppointments, error: quarterError } = await supabase
-      .from('appointments')
-      .select('therapist_id')
-      .eq('clinic_id', clinicId)
-      .eq('status', 'completed')
-      .gte('start_time', startOfDayIso(quarter.startDate, timezone))
-      .lte('start_time', endOfDayIso(quarter.endDate, timezone));
-    if (quarterError) return { error: quarterError.message };
-
-    const quarterSessionsByTherapist = {};
-    (quarterAppointments || []).forEach((a) => {
-      quarterSessionsByTherapist[a.therapist_id] = (quarterSessionsByTherapist[a.therapist_id] || 0) + 1;
+    // Volume-incentive counting window is the pay period (fortnight) itself, which the query
+    // above already covers — completed appointments bounded to the requested range.
+    const incentiveWindowSessionsByTherapist = {};
+    (appointments || []).forEach((a) => {
+      incentiveWindowSessionsByTherapist[a.therapist_id] = (incentiveWindowSessionsByTherapist[a.therapist_id] || 0) + 1;
     });
 
     const statsByTherapist = {};
     (appointments || []).forEach((appointment) => {
       const therapistId = appointment.therapist_id;
       const therapist = appointment.therapists;
-      const quarterSessions = quarterSessionsByTherapist[therapistId] || 0;
+      const incentiveWindowSessions = incentiveWindowSessionsByTherapist[therapistId] || 0;
       const liveConfig = {
         compensationType: therapist?.compensation_type,
         commissionPercentage: therapist?.commission_percentage,
@@ -1480,7 +1442,7 @@ const toolHandlers = {
       const computed = computeTherapistPayroll({
         periodSessions: 1,
         periodPreIvaRevenue: paymentSummary.preIvaRevenue,
-        quarterSessions,
+        incentiveWindowSessions,
         config: appointmentConfig,
         payInFull,
       });
