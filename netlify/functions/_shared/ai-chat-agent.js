@@ -5,8 +5,21 @@ const MAX_ITERATIONS = 8;
 const MAX_AGENT_RUNTIME_MS = 210000;
 const MAX_TOOL_RESULT_CHARS = 12000;
 const MAX_DYNAMIC_RULES_CHARS = 1800;
-const MAX_OUTPUT_TOKENS = 4096;
+// Long multi-section reports (tables, bold, numbers) tokenize poorly — roughly 2.4 chars per
+// token in Spanish markdown — so the old 4096 ceiling cut answers off around 10k characters,
+// mid-sentence. The model supports far more than this; only tokens actually produced are billed,
+// so raising the cap costs nothing on the short answers that make up most traffic.
+const MAX_OUTPUT_TOKENS = 16384;
 const MAX_REMEMBERED_FACTS_CHARS = 2000;
+
+/** Appended when the model runs out of output budget, so a cut-off answer is never presented as
+ * complete. Bilingual because the reply language follows whatever the staff member wrote in. */
+const TRUNCATION_NOTICE = [
+  '',
+  '---',
+  '_⚠️ La respuesta se cortó por límite de longitud. Pídeme que continúe para ver el resto._',
+  '_⚠️ This response hit the length limit and was cut off. Ask me to continue for the rest._',
+].join('\n');
 
 const pickClinicSettingsForAi = (settings) => {
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return null;
@@ -160,7 +173,14 @@ const runAgentLoop = async ({
     });
 
     if (response.stop_reason !== 'tool_use') {
-      return { text: extractText(response), toolCallLog };
+      // 'end_turn' means it finished naturally; 'max_tokens' means it ran out of room and the
+      // text stops mid-thought. Without this branch both were saved and rendered identically,
+      // so a truncated answer looked complete.
+      const text = extractText(response);
+      return {
+        text: response.stop_reason === 'max_tokens' ? `${text}${TRUNCATION_NOTICE}` : text,
+        toolCallLog,
+      };
     }
 
     messages = [...messages, { role: 'assistant', content: response.content }];

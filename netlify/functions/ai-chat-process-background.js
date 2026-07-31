@@ -21,7 +21,12 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const anthropic = anthropicApiKey ? new Anthropic({ apiKey: anthropicApiKey, timeout: 120000, maxRetries: 2 }) : null;
 
 const HISTORY_REPLAY_LIMIT = 24;
-const MAX_HISTORY_MESSAGE_CHARS = 4000;
+// Was 4000, which silently cut a long report down to ~40% of itself when replayed as context,
+// so the assistant "forgot" most of its own answer on the very next follow-up question.
+const MAX_HISTORY_MESSAGE_CHARS = 12000;
+// Per-message headroom alone isn't enough: 24 messages at the cap above would be a huge, slow,
+// expensive prompt. This bounds the whole replayed history, dropping oldest turns first.
+const MAX_HISTORY_TOTAL_CHARS = 60000;
 
 const jsonResponse = (statusCode, body) => ({
   statusCode,
@@ -57,10 +62,28 @@ const loadRecentMessages = async (conversationId) => {
     .order('created_at', { ascending: false })
     .limit(HISTORY_REPLAY_LIMIT);
   if (error) throw new Error('Failed to load conversation history');
-  return (data || []).reverse().map((m) => ({
-    role: m.role,
-    content: String(m.content || '').slice(0, MAX_HISTORY_MESSAGE_CHARS),
-  }));
+
+  // Rows arrive newest-first. Spend the budget in that order so the most recent turns always
+  // survive, then flip back to chronological order for the model.
+  const kept = [];
+  let remaining = MAX_HISTORY_TOTAL_CHARS;
+  for (const m of data || []) {
+    const content = String(m.content || '').slice(0, MAX_HISTORY_MESSAGE_CHARS);
+    // The newest row is the message being answered right now — keep it even if it alone
+    // exceeds the budget, or there'd be nothing to respond to.
+    if (kept.length > 0 && content.length > remaining) break;
+    kept.push({ role: m.role, content });
+    remaining -= content.length;
+  }
+  kept.reverse();
+
+  // The API rejects a history that opens on an assistant turn. Trimming — by message count or
+  // by the budget above — can land exactly there mid-conversation, so drop any leading
+  // assistant turns. The newest row is always the just-inserted user message, so this always
+  // terminates with a valid user-first history.
+  while (kept.length > 1 && kept[0].role !== 'user') kept.shift();
+
+  return kept;
 };
 
 const insertMessage = async (conversationId, clinicId, userId, role, content, toolCalls) => {
