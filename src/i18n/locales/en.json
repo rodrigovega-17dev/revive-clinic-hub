@@ -312,12 +312,13 @@
     "clearFailed": "Failed to clear the chat. Please try again.",
     "model": "Model",
     "modelHaiku": "Haiku (fast)",
+    "modelSonnet": "Sonnet (balanced)",
     "modelOpus": "Opus (deep reasoning)",
     "effort": "Effort",
     "effortLow": "Low",
     "effortMedium": "Medium",
     "effortHigh": "High",
-    "effortOnlyAppliesToOpus": "Effort only applies to the Opus model",
+    "effortNotSupportedOnHaiku": "Effort isn't supported on the Haiku model",
     "settingsUpdateFailed": "Failed to update AI chat settings. Please try again."
   },
   "activityLog": {

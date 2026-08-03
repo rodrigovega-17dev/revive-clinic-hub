@@ -1,8 +1,12 @@
 const { toolDefinitions, toolHandlers } = require('./ai-chat-tools');
 
 const MODEL_HAIKU = 'claude-haiku-4-5-20251001';
+const MODEL_SONNET = 'claude-sonnet-5';
 const MODEL_OPUS = 'claude-opus-5';
-const ALLOWED_MODELS = [MODEL_HAIKU, MODEL_OPUS];
+const ALLOWED_MODELS = [MODEL_HAIKU, MODEL_SONNET, MODEL_OPUS];
+// Sonnet 5 and Opus 5 both support output_config.effort (adaptive thinking, full low-max
+// ladder); Haiku 4.5 does not and would 400 if it were sent.
+const MODELS_SUPPORTING_EFFORT = [MODEL_SONNET, MODEL_OPUS];
 const DEFAULT_MODEL = MODEL_HAIKU;
 const ALLOWED_EFFORTS = ['low', 'medium', 'high'];
 const DEFAULT_EFFORT = 'medium';
@@ -184,9 +188,8 @@ const runAgentLoop = async ({
       tools: toolDefinitions,
     };
     // Haiku 4.5 doesn't support output_config.effort (400s if sent) and has no adaptive-thinking
-    // toggle worth exposing, so this is Opus-only — matching what the chat UI's effort selector
-    // actually controls.
-    if (resolvedModel === MODEL_OPUS) {
+    // toggle worth exposing; Sonnet 5 and Opus 5 both do.
+    if (MODELS_SUPPORTING_EFFORT.includes(resolvedModel)) {
       requestParams.output_config = { effort: resolvedEffort };
     }
 

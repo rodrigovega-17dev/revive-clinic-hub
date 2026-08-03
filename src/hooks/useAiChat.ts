@@ -45,7 +45,7 @@ export const useAiChatMessages = (conversationId: string | null | undefined) => 
   });
 };
 
-export type AiChatModel = 'claude-haiku-4-5-20251001' | 'claude-opus-5';
+export type AiChatModel = 'claude-haiku-4-5-20251001' | 'claude-sonnet-5' | 'claude-opus-5';
 export type AiChatEffort = 'low' | 'medium' | 'high';
 
 /**

@@ -11,15 +11,18 @@ interface AiChatSettingsProps {
   disabled?: boolean;
 }
 
+// Haiku has no output_config.effort support; Sonnet 5 and Opus 5 both do.
+const MODELS_SUPPORTING_EFFORT: AiChatModel[] = ['claude-sonnet-5', 'claude-opus-5'];
+
 const AiChatSettings = ({ model, effort, onModelChange, onEffortChange, disabled }: AiChatSettingsProps) => {
   const { t } = useTranslation();
-  const isOpus = model === 'claude-opus-5';
+  const supportsEffort = MODELS_SUPPORTING_EFFORT.includes(model);
 
   const effortSelect = (
     <Select
       value={effort}
       onValueChange={(value) => onEffortChange(value as AiChatEffort)}
-      disabled={disabled || !isOpus}
+      disabled={disabled || !supportsEffort}
     >
       <SelectTrigger className="h-8 w-[140px] text-xs bg-input border-border text-foreground">
         <SelectValue />
@@ -40,18 +43,19 @@ const AiChatSettings = ({ model, effort, onModelChange, onEffortChange, disabled
         </SelectTrigger>
         <SelectContent className="bg-popover border-border">
           <SelectItem value="claude-haiku-4-5-20251001">{t('aiChat.modelHaiku')}</SelectItem>
+          <SelectItem value="claude-sonnet-5">{t('aiChat.modelSonnet')}</SelectItem>
           <SelectItem value="claude-opus-5">{t('aiChat.modelOpus')}</SelectItem>
         </SelectContent>
       </Select>
 
-      {isOpus ? (
+      {supportsEffort ? (
         effortSelect
       ) : (
         <Tooltip>
           <TooltipTrigger asChild>
             <span>{effortSelect}</span>
           </TooltipTrigger>
-          <TooltipContent>{t('aiChat.effortOnlyAppliesToOpus')}</TooltipContent>
+          <TooltipContent>{t('aiChat.effortNotSupportedOnHaiku')}</TooltipContent>
         </Tooltip>
       )}
     </div>

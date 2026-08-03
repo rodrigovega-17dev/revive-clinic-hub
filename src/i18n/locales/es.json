@@ -312,12 +312,13 @@
     "clearFailed": "No se pudo borrar el chat. Intenta de nuevo.",
     "model": "Modelo",
     "modelHaiku": "Haiku (rápido)",
+    "modelSonnet": "Sonnet (equilibrado)",
     "modelOpus": "Opus (razonamiento profundo)",
     "effort": "Esfuerzo",
     "effortLow": "Bajo",
     "effortMedium": "Medio",
     "effortHigh": "Alto",
-    "effortOnlyAppliesToOpus": "El esfuerzo solo aplica al modelo Opus",
+    "effortNotSupportedOnHaiku": "El esfuerzo no está disponible en el modelo Haiku",
     "settingsUpdateFailed": "No se pudo actualizar la configuración del chat IA. Intenta de nuevo."
   },
   "activityLog": {
