@@ -1,6 +1,11 @@
 const { toolDefinitions, toolHandlers } = require('./ai-chat-tools');
 
-const MODEL = 'claude-haiku-4-5-20251001';
+const MODEL_HAIKU = 'claude-haiku-4-5-20251001';
+const MODEL_OPUS = 'claude-opus-5';
+const ALLOWED_MODELS = [MODEL_HAIKU, MODEL_OPUS];
+const DEFAULT_MODEL = MODEL_HAIKU;
+const ALLOWED_EFFORTS = ['low', 'medium', 'high'];
+const DEFAULT_EFFORT = 'medium';
 const MAX_ITERATIONS = 8;
 const MAX_AGENT_RUNTIME_MS = 210000;
 const MAX_TOOL_RESULT_CHARS = 12000;
@@ -143,8 +148,15 @@ const runAgentLoop = async ({
   dynamicRulesSnapshot,
   rememberedFacts,
   userId,
+  model,
+  effort,
   onProgress,
 }) => {
+  // Effort only has an effect on Opus (Haiku doesn't support output_config.effort and would
+  // 400 if we sent it), so it's conditionally attached to the request below, not validated
+  // away here — an effort value picked while on Haiku is preserved for if the user switches.
+  const resolvedModel = ALLOWED_MODELS.includes(model) ? model : DEFAULT_MODEL;
+  const resolvedEffort = ALLOWED_EFFORTS.includes(effort) ? effort : DEFAULT_EFFORT;
   let messages = historyMessages;
   const toolCallLog = [];
   const todayLocal = new Intl.DateTimeFormat('en-CA', {
@@ -164,13 +176,28 @@ const runAgentLoop = async ({
       };
     }
 
-    const response = await anthropic.messages.create({
-      model: MODEL,
+    const requestParams = {
+      model: resolvedModel,
       max_tokens: MAX_OUTPUT_TOKENS,
       system: buildSystemPrompt(clinicName, clinicTimezone, todayLocal, dynamicRulesSnapshot, rememberedFacts),
       messages,
       tools: toolDefinitions,
-    });
+    };
+    // Haiku 4.5 doesn't support output_config.effort (400s if sent) and has no adaptive-thinking
+    // toggle worth exposing, so this is Opus-only — matching what the chat UI's effort selector
+    // actually controls.
+    if (resolvedModel === MODEL_OPUS) {
+      requestParams.output_config = { effort: resolvedEffort };
+    }
+
+    const response = await anthropic.messages.create(requestParams);
+
+    if (response.stop_reason === 'refusal') {
+      return {
+        text: 'I can\'t help with that request — it triggered a safety restriction. Try rephrasing, or ask about something else.',
+        toolCallLog,
+      };
+    }
 
     if (response.stop_reason !== 'tool_use') {
       // 'end_turn' means it finished naturally; 'max_tokens' means it ran out of room and the

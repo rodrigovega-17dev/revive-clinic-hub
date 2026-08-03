@@ -309,7 +309,16 @@
     "clearChat": "Borrar chat",
     "clearChatConfirmTitle": "¿Borrar esta conversación?",
     "clearChatConfirmDescription": "Esto elimina todo tu historial de chat con la IA. Esta acción no se puede deshacer.",
-    "clearFailed": "No se pudo borrar el chat. Intenta de nuevo."
+    "clearFailed": "No se pudo borrar el chat. Intenta de nuevo.",
+    "model": "Modelo",
+    "modelHaiku": "Haiku (rápido)",
+    "modelOpus": "Opus (razonamiento profundo)",
+    "effort": "Esfuerzo",
+    "effortLow": "Bajo",
+    "effortMedium": "Medio",
+    "effortHigh": "Alto",
+    "effortOnlyAppliesToOpus": "El esfuerzo solo aplica al modelo Opus",
+    "settingsUpdateFailed": "No se pudo actualizar la configuración del chat IA. Intenta de nuevo."
   },
   "activityLog": {
     "title": "Registro de Actividad",

@@ -208,6 +208,8 @@ exports.handler = async (event) => {
       dynamicRulesSnapshot,
       rememberedFacts: rememberedFacts || [],
       userId: user.id,
+      model: job.ai_model,
+      effort: job.ai_effort,
       onProgress: (toolName) => updateJobProgress(job.id, toolName),
     });
 

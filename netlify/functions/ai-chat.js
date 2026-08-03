@@ -59,7 +59,7 @@ const getClinicIdForUser = async (userId) => {
 const resolveOrCreateConversation = async (clinicId, userId) => {
   const { data: existing } = await supabase
     .from('ai_conversations')
-    .select('id')
+    .select('id, ai_model, ai_effort')
     .eq('clinic_id', clinicId)
     .eq('user_id', userId)
     .maybeSingle();
@@ -68,7 +68,7 @@ const resolveOrCreateConversation = async (clinicId, userId) => {
   const { data: created, error } = await supabase
     .from('ai_conversations')
     .insert({ clinic_id: clinicId, user_id: userId })
-    .select('id')
+    .select('id, ai_model, ai_effort')
     .single();
   if (error) throw new Error('Failed to create conversation');
   return created;
@@ -142,7 +142,7 @@ const failStaleJob = async ({ jobId, conversationId, clinicId, userId }) => {
     .eq('id', jobId);
 };
 
-const enqueueJob = async ({ conversationId, clinicId, userId, requestMessageId }) => {
+const enqueueJob = async ({ conversationId, clinicId, userId, requestMessageId, aiModel, aiEffort }) => {
   const { data, error } = await supabase
     .from('ai_chat_jobs')
     .insert({
@@ -152,6 +152,10 @@ const enqueueJob = async ({ conversationId, clinicId, userId, requestMessageId }
       request_message_id: requestMessageId,
       status: 'queued',
       updated_at: new Date().toISOString(),
+      // Snapshotted from the conversation's current selection, not read live by the worker, so
+      // the user toggling the model/effort mid-flight can't change an already-queued run.
+      ai_model: aiModel,
+      ai_effort: aiEffort,
     })
     .select('id, status')
     .single();
@@ -249,6 +253,8 @@ exports.handler = async (event) => {
       clinicId,
       userId: user.id,
       requestMessageId: userMessage.id,
+      aiModel: conversation.ai_model,
+      aiEffort: conversation.ai_effort,
     });
     await supabase
       .from('ai_conversations')

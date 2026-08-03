@@ -45,6 +45,48 @@ export const useAiChatMessages = (conversationId: string | null | undefined) => 
   });
 };
 
+export type AiChatModel = 'claude-haiku-4-5-20251001' | 'claude-opus-5';
+export type AiChatEffort = 'low' | 'medium' | 'high';
+
+/**
+ * Updates the persisted model/effort selection shown in the chat UI. Mirrors
+ * resolveOrCreateConversation's get-or-create logic (ai-chat.js) since a conversation row may
+ * not exist yet the first time someone changes these settings, before ever sending a message.
+ */
+export const useUpdateAiChatSettings = () => {
+  const queryClient = useQueryClient();
+  const { clinicId, user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (settings: { aiModel: AiChatModel; aiEffort: AiChatEffort }) => {
+      if (!clinicId || !user?.id) throw new Error('Not authenticated');
+
+      const { data: existing } = await supabase
+        .from('ai_conversations')
+        .select('id')
+        .eq('clinic_id', clinicId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (existing) {
+        const { error } = await supabase
+          .from('ai_conversations')
+          .update({ ai_model: settings.aiModel, ai_effort: settings.aiEffort })
+          .eq('id', existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('ai_conversations')
+          .insert({ clinic_id: clinicId, user_id: user.id, ai_model: settings.aiModel, ai_effort: settings.aiEffort });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ai-conversation', clinicId, user?.id] });
+    },
+  });
+};
+
 export const useSendAiChatMessage = () => {
   const queryClient = useQueryClient();
   const { clinicId, user } = useAuth();

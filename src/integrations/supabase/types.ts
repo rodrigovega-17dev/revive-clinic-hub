@@ -63,6 +63,8 @@ export type Database = {
       }
       ai_chat_jobs: {
         Row: {
+          ai_effort: string
+          ai_model: string
           clinic_id: string
           conversation_id: string
           created_at: string
@@ -79,6 +81,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          ai_effort?: string
+          ai_model?: string
           clinic_id: string
           conversation_id: string
           created_at?: string
@@ -95,6 +99,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          ai_effort?: string
+          ai_model?: string
           clinic_id?: string
           conversation_id?: string
           created_at?: string
@@ -230,6 +236,8 @@ export type Database = {
       }
       ai_conversations: {
         Row: {
+          ai_effort: string
+          ai_model: string
           clinic_id: string
           created_at: string
           id: string
@@ -237,6 +245,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          ai_effort?: string
+          ai_model?: string
           clinic_id: string
           created_at?: string
           id?: string
@@ -244,6 +254,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          ai_effort?: string
+          ai_model?: string
           clinic_id?: string
           created_at?: string
           id?: string
