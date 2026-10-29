@@ -52,7 +52,9 @@ export function useClientBalance(clientId: string | null) {
       // charge (a session with nothing paid toward it yet stays out of the balance and is
       // tracked separately as "pending"), but the moment money starts flowing for a session,
       // the client is charged its full price, so a discount or short payment shows up as
-      // real debt instead of silently reconciling to zero.
+      // real debt instead of silently reconciling to zero. When more than the base price was
+      // actually paid (e.g. a balance payment that absorbed IVA for a factura), charge that
+      // higher amount instead — otherwise the extra never leaves the displayed balance.
       const totalCharges = (completedAppointments || []).reduce((sum, apt) => {
         const paidTowardApt = (payments || [])
           .filter((p) => p.appointment_id === apt.id)
@@ -61,7 +63,7 @@ export function useClientBalance(clientId: string | null) {
             return s + Math.abs(base);
           }, 0);
         if (paidTowardApt <= 0) return sum;
-        return sum + Number(apt.payment_amount || 0);
+        return sum + Math.max(Number(apt.payment_amount || 0), paidTowardApt);
       }, 0);
       // Money in = base amount received, excluding IVA (tax, not service payment) and excluding
       // method='balance' rows (applied credit, not new money).
@@ -143,7 +145,7 @@ export function useAllClientBalances() {
               return s + Math.abs(base);
             }, 0);
           if (paidTowardApt <= 0) return sum;
-          return sum + Number(apt.payment_amount || 0);
+          return sum + Math.max(Number(apt.payment_amount || 0), paidTowardApt);
         }, 0);
         const totalPayments = clientPayments.reduce((sum, p) => {
           if (p.method === 'balance') return sum;
