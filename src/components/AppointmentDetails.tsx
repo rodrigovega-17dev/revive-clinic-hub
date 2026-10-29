@@ -214,10 +214,18 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       day: 'numeric',
     });
   const availableCredit = Math.max(0, Number(clientBalance?.balance || 0));
-  const maxApplicableCredit = Math.min(availableCredit, appointmentAmount);
+  // What the client owes for this session — the taxed total when a factura is required,
+  // so balance can cover the full amount instead of stopping at the untaxed base price.
+  const grossAmount = requiereFactura ? appointmentAmount * 1.16 : appointmentAmount;
+  const maxApplicableCredit = Math.min(availableCredit, grossAmount);
   const appliedCredit = useBalanceCredit ? maxApplicableCredit : 0;
-  const amountDue = Math.max(0, appointmentAmount - appliedCredit);
-  const effectiveAmount = useBalanceCredit ? amountDue : paymentData.amount;
+  // Remaining amount to collect via card/cash, tax-inclusive.
+  const amountDue = Math.max(0, grossAmount - appliedCredit);
+  // Credit is treated as already-settled money (its own IVA, if any, belongs to the advance
+  // payment that created it), so only the leftover amountDue needs IVA split back out of it.
+  const effectiveAmount = useBalanceCredit
+    ? (requiereFactura ? amountDue / 1.16 : amountDue)
+    : paymentData.amount;
   // IVA (16%) only when the payment requires an invoice (factura); added on top of the base.
   const ivaAmount = requiereFactura ? effectiveAmount * 0.16 : 0;
   const totalWithIva = effectiveAmount + ivaAmount;
