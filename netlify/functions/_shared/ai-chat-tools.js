@@ -369,6 +369,7 @@ const computeClientBalancesBatch = async (supabase, clinicId, clientIds) => {
       balance: Number(row.balance),
       totalPayments: Number(row.total_payments),
       totalCharges: Number(row.total_charges),
+      unpaidSessions: Number(row.pending_payments),
     };
   });
   return balances;
@@ -376,7 +377,7 @@ const computeClientBalancesBatch = async (supabase, clinicId, clientIds) => {
 
 const computeClientBalance = async (supabase, clinicId, clientId) => {
   const balances = await computeClientBalancesBatch(supabase, clinicId, [clientId]);
-  return balances[clientId] || { balance: 0, totalPayments: 0, totalCharges: 0 };
+  return balances[clientId] || { balance: 0, totalPayments: 0, totalCharges: 0, unpaidSessions: 0 };
 };
 
 /**
@@ -605,7 +606,7 @@ const toolDefinitions = [
   },
   {
     name: 'get_client_details',
-    description: 'Full profile for one patient — contact info, default charge amount, pay-in-full flag, emergency contact, invoicing (RFC/tax regime/CFDI) fields, and current balance (positive = credit, negative = owed).',
+    description: 'Full profile for one patient — contact info, default charge amount, pay-in-full flag, emergency contact, invoicing (RFC/tax regime/CFDI) fields, and current balance (positive = credit, negative = owed) with balance_breakdown (payments received, charges, and how much of the charges are completed sessions still unpaid). Use the breakdown to explain or reconcile a balance; unpaid sessions are already inside it.',
     input_schema: {
       type: 'object',
       properties: { client_id: { type: 'string', description: 'The patient id, from search_clients.' } },
@@ -1041,6 +1042,12 @@ const toolHandlers = {
       cfdi_use: client.cfdi_use,
       balance: balance.balance,
       balance_note: balance.balance >= 0 ? 'positive = credit in their favor' : 'negative = amount they owe',
+      balance_breakdown: {
+        payments_received: balance.totalPayments,
+        charges: balance.totalCharges,
+        of_which_unpaid_completed_sessions: balance.unpaidSessions,
+        note: 'balance = payments_received − charges. payments_received is net of IVA and already subtracts prior-debt adjustments; charges include every completed session, and of_which_unpaid_completed_sessions is the part of charges not paid yet — already inside the balance, not extra.',
+      },
     };
   },
 
