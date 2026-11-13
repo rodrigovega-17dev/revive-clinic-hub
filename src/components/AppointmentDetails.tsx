@@ -215,7 +215,10 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
     });
   // Money is stored as-is, so round to cents here: 1600 * 1.16 is 1855.9999999999998 in JS.
   const toCents = (value: number) => Math.round(value * 100) / 100;
-  const availableCredit = Math.max(0, Number(clientBalance?.balance || 0));
+  // A completed session that isn't paid is already charged in the balance, so the credit that
+  // can go toward it is the balance plus its own price.
+  const chargedInBalance = apt?.status === 'completed' ? appointmentAmount : 0;
+  const availableCredit = Math.max(0, Number(clientBalance?.balance || 0) + chargedInBalance);
   // What the client owes for this session — the taxed total when a factura is required,
   // so balance can cover the full amount instead of stopping at the untaxed base price.
   const grossAmount = toCents(requiereFactura ? appointmentAmount * 1.16 : appointmentAmount);
@@ -300,7 +303,8 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       const { data } = await updateAppointment.mutateAsync({
         id: appointment.id,
         payment_status: 'paid',
-        payment_method: amountDue > 0 ? paymentData.method : 'balance',
+        // Nothing collected and no credit applied means a courtesy session: no method to show.
+        payment_method: amountDue > 0 ? paymentData.method : appliedCredit > 0 ? 'balance' : null,
         payment_date: paymentDate,
         pay_therapist_in_full: payTherapistInFull,
       });
@@ -389,6 +393,16 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       toast({
         title: t('appointments.error'),
         description: t('appointments.pleaseSelectNewDateTime'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Moving a paid session to another client would leave its payments on the old one.
+    if (apt.payment_status === 'paid' && rescheduleData.client_id && rescheduleData.client_id !== apt.client_id) {
+      toast({
+        title: t('appointments.error'),
+        description: t('appointments.revertPaymentBeforeClientChange'),
         variant: 'destructive',
       });
       return;
@@ -637,7 +651,9 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       console.error('Error deleting appointment:', error);
       toast({
         title: t('appointments.error'),
-        description: t('appointments.failedToDelete'),
+        description: (error as Error)?.message === 'appointment_paid'
+          ? t('appointments.revertPaymentBeforeDelete')
+          : t('appointments.failedToDelete'),
         variant: 'destructive',
       });
     }
@@ -910,13 +926,18 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
             <div className="flex flex-wrap justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
                 {apt.status === 'cancelled' ? (
-                  <Button
-                    variant="destructive"
-                    onClick={handleDeleteAppointment}
-                    disabled={updateAppointment.isPending}
-                  >
-                    {t('appointments.deleteAppointment')}
-                  </Button>
+                  <div className="flex flex-col gap-1">
+                    <Button
+                      variant="destructive"
+                      onClick={handleDeleteAppointment}
+                      disabled={updateAppointment.isPending || apt.payment_status === 'paid'}
+                    >
+                      {t('appointments.deleteAppointment')}
+                    </Button>
+                    {apt.payment_status === 'paid' && (
+                      <p className="text-xs text-muted-foreground">{t('appointments.revertPaymentBeforeDelete')}</p>
+                    )}
+                  </div>
                 ) : apt.status === 'completed' ? (
                   <div className="flex items-center space-x-2">
                     <CheckCircle className="h-5 w-5 text-green-600" />
@@ -1221,7 +1242,9 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                   </div>
                   <div className="text-muted-foreground mb-4">
                     {apt.payment_status === 'paid'
-                      ? `${t('appointments.paidVia')} ${getPaymentMethodText(apt.payment_method)} ${t('appointments.on')} ${formatClinicDate(apt.payment_date, {
+                      ? `${apt.payment_method
+                          ? `${t('appointments.paidVia')} ${getPaymentMethodText(apt.payment_method)}`
+                          : t('appointments.paid')} ${t('appointments.on')} ${formatClinicDate(apt.payment_date, {
                           year: 'numeric',
                           month: 'short',
                           day: 'numeric',
@@ -1366,7 +1389,11 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
                       onValueChange={(value) => setRescheduleData(prev => ({ ...prev, client_id: value }))}
                       clients={clients || []}
                       placeholder={t('common.selectClient')}
+                      disabled={apt.payment_status === 'paid'}
                     />
+                    {apt.payment_status === 'paid' && (
+                      <p className="text-xs text-muted-foreground">{t('appointments.revertPaymentBeforeClientChange')}</p>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-3 gap-4">

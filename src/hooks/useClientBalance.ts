@@ -11,7 +11,7 @@ interface ClientBalance {
 }
 
 // Balance rules live in the get_client_balances DB function (see its migration):
-// money in (excl. IVA and applied credit) − charges for paid completed sessions.
+// money in (excl. IVA and applied credit) − charges for completed sessions, paid or not.
 // Positive = credit in the client's favor, negative = amount owed.
 export function useClientBalance(clientId: string | null) {
   const { clinicId } = useAuth();

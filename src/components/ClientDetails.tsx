@@ -405,6 +405,9 @@ export default function ClientDetails({ client, open, onClose, onEdit }: ClientD
                     <p className="text-2xl font-bold text-foreground">
                       {formatCurrencyWithClinic(pendingPaymentsAmount)}
                     </p>
+                    {pendingPaymentsAmount > 0 && (
+                      <p className="mt-1 text-xs text-muted-foreground">{t('clients.pendingIncludedInBalance')}</p>
+                    )}
                   </div>
                   <div className="text-center">
                     <p className="text-sm text-muted-foreground">{t('clients.currentBalance')}</p>

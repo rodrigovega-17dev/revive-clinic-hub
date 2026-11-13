@@ -309,6 +309,18 @@ export const useDeleteAppointment = () => {
 
   return useMutation({
     mutationFn: async (appointment: any) => {
+      // Deleting a paid session would orphan its payments into unexplained client credit, so the
+      // payment has to be reverted first. Re-checked here against fresh data, not the cached row.
+      const [{ data: current, error: currentError }, { count: paymentCount, error: paymentsError }] = await Promise.all([
+        supabase.from('appointments').select('payment_status').eq('id', appointment.id).single(),
+        supabase.from('payments').select('id', { count: 'exact', head: true }).eq('appointment_id', appointment.id),
+      ]);
+      if (currentError) throw currentError;
+      if (paymentsError) throw paymentsError;
+      if (current?.payment_status === 'paid' || (paymentCount ?? 0) > 0) {
+        throw new Error('appointment_paid');
+      }
+
       // Delete from Google Calendar first if event exists
       if (appointment.google_calendar_event_id) {
         try {

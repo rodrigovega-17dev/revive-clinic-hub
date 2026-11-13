@@ -349,10 +349,10 @@ const fetchAllRows = async (queryPage, pageSize = 1000) => {
  * Client balances come from the get_client_balances DB function — the same one
  * src/hooks/useClientBalance.ts uses — so the chat can never disagree with the app.
  * balance = money actually received (excluding balance-credit rows and IVA) − charges,
- * where a completed appointment becomes a charge (its assigned price, plus any credit applied
- * beyond what was still owed, e.g. IVA for a factura) once any payment has been made toward
- * it. Real overpayments stay as credit. Unpaid completed sessions are tracked separately as
- * "pending". Positive = credit in their favor, negative = owed.
+ * where every completed appointment is a charge: its assigned price, plus any credit applied
+ * beyond what was still owed (e.g. IVA for a factura). Unpaid completed sessions are charged at
+ * full price; one marked paid with nothing collected is a courtesy session and charges nothing.
+ * Real overpayments stay as credit. Positive = credit in their favor, negative = owed.
  */
 const computeClientBalancesBatch = async (supabase, clinicId, clientIds) => {
   const ids = [...new Set(clientIds)].filter(Boolean);
