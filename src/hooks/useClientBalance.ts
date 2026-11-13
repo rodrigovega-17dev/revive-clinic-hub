@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 import { useAuth } from './useAuth';
 
 interface ClientBalance {
@@ -9,86 +10,31 @@ interface ClientBalance {
   lastPaymentDate: string | null;
 }
 
+// Balance rules live in the get_client_balances DB function (see its migration):
+// money in (excl. IVA and applied credit) − charges for paid completed sessions.
+// Positive = credit in the client's favor, negative = amount owed.
 export function useClientBalance(clientId: string | null) {
   const { clinicId } = useAuth();
-  
+
   return useQuery({
     queryKey: ['client-balance', clientId, clinicId],
     queryFn: async (): Promise<ClientBalance> => {
       if (!clientId || !clinicId) {
-        return {
-          totalPayments: 0,
-          pendingPayments: 0,
-          balance: 0,
-          lastPaymentDate: null,
-        };
+        return { totalPayments: 0, pendingPayments: 0, balance: 0, lastPaymentDate: null };
       }
 
-      // Get all payments made by this client
-      const { data: payments, error: paymentsError } = await supabase
-        .from('payments')
-        .select('amount, payment_date, appointment_id, method, iva_amount, facturado')
-        .eq('client_id', clientId)
-        .eq('clinic_id', clinicId);
+      const { data, error } = await supabase.rpc('get_client_balances', {
+        p_clinic_id: clinicId,
+        p_client_ids: [clientId],
+      });
+      if (error) throw error;
 
-      if (paymentsError) throw paymentsError;
-
-      // All completed appointments (charges for services delivered)
-      const { data: completedAppointments, error: completedError } = await supabase
-        .from('appointments')
-        .select('id, payment_amount, payment_status')
-        .eq('client_id', clientId)
-        .eq('clinic_id', clinicId)
-        .eq('status', 'completed');
-
-      if (completedError) throw completedError;
-
-      const pendingAppointments = completedAppointments?.filter(
-        (a) => a.payment_status == null || a.payment_status === 'pending'
-      ) || [];
-
-      // Charges = the session's assigned price once any payment has been made toward it —
-      // not just whatever was actually collected. Completion alone still doesn't create a
-      // charge (a session with nothing paid toward it yet stays out of the balance and is
-      // tracked separately as "pending"), but the moment money starts flowing for a session,
-      // the client is charged its full price, so a discount or short payment shows up as
-      // real debt instead of silently reconciling to zero. When more than the base price was
-      // actually paid (e.g. a balance payment that absorbed IVA for a factura), charge that
-      // higher amount instead — otherwise the extra never leaves the displayed balance.
-      const totalCharges = (completedAppointments || []).reduce((sum, apt) => {
-        const paidTowardApt = (payments || [])
-          .filter((p) => p.appointment_id === apt.id)
-          .reduce((s, p) => {
-            const base = p.facturado ? Number(p.amount || 0) - Number(p.iva_amount || 0) : Number(p.amount || 0);
-            return s + Math.abs(base);
-          }, 0);
-        if (paidTowardApt <= 0) return sum;
-        return sum + Math.max(Number(apt.payment_amount || 0), paidTowardApt);
-      }, 0);
-      // Money in = base amount received, excluding IVA (tax, not service payment) and excluding
-      // method='balance' rows (applied credit, not new money).
-      const totalPayments = (payments || []).reduce((sum, p) => {
-        if (p.method === 'balance') return sum;
-        const base = p.facturado ? Number(p.amount || 0) - Number(p.iva_amount || 0) : Number(p.amount || 0);
-        return sum + base;
-      }, 0);
-      const pendingPayments = pendingAppointments.reduce((sum, apt) => sum + (apt.payment_amount || 0), 0);
-
-      // Balance = money in − charges. Underpay → negative (owes); overpay → positive (credit).
-      const balance = totalPayments - totalCharges;
-      
-      const lastPaymentDate = payments && payments.length > 0 
-        ? payments.reduce((latest, payment) => 
-            payment.payment_date > latest ? payment.payment_date : latest, 
-            payments[0].payment_date
-          )
-        : null;
-
+      const row = data?.[0];
       return {
-        totalPayments,
-        pendingPayments,
-        balance,
-        lastPaymentDate,
+        totalPayments: Number(row?.total_payments ?? 0),
+        pendingPayments: Number(row?.pending_payments ?? 0),
+        balance: Number(row?.balance ?? 0),
+        lastPaymentDate: row?.last_payment_date ?? null,
       };
     },
     enabled: !!clientId && !!clinicId,
@@ -97,75 +43,26 @@ export function useClientBalance(clientId: string | null) {
 
 export function useAllClientBalances() {
   const { clinicId } = useAuth();
-  
+
   return useQuery({
     queryKey: ['all-client-balances', clinicId],
     queryFn: async () => {
       if (!clinicId) return [];
 
-      // Get all clients
-      const { data: clients, error: clientsError } = await supabase
-        .from('clients')
-        .select('id, first_name, last_name')
-        .eq('clinic_id', clinicId);
+      const rows = await fetchAllRows((from, to) =>
+        supabase
+          .rpc('get_client_balances', { p_clinic_id: clinicId })
+          .order('client_id')
+          .range(from, to)
+      );
 
-      if (clientsError) throw clientsError;
-
-      // Get all payments
-      const { data: payments, error: paymentsError } = await supabase
-        .from('payments')
-        .select('client_id, amount, payment_date, appointment_id, method, iva_amount, facturado')
-        .eq('clinic_id', clinicId);
-
-      if (paymentsError) throw paymentsError;
-
-      // All completed appointments (for total charges per client)
-      const { data: completedAppointments, error: completedError } = await supabase
-        .from('appointments')
-        .select('id, client_id, payment_amount, payment_status')
-        .eq('clinic_id', clinicId)
-        .eq('status', 'completed');
-
-      if (completedError) throw completedError;
-
-      // Calculate balances: totalCharges = the session's assigned price once any payment has
-      // been made toward it — see the matching comment in useClientBalance above.
-      const clientBalances = clients?.map(client => {
-        const clientPayments = payments?.filter(p => p.client_id === client.id) || [];
-        const clientCompleted = completedAppointments?.filter(a => a.client_id === client.id) || [];
-        const clientPending = clientCompleted.filter(
-          (a) => a.payment_status == null || a.payment_status === 'pending'
-        );
-
-        const totalCharges = clientCompleted.reduce((sum, apt) => {
-          const paidTowardApt = clientPayments
-            .filter((p) => p.appointment_id === apt.id)
-            .reduce((s, p) => {
-              const base = p.facturado ? Number(p.amount || 0) - Number(p.iva_amount || 0) : Number(p.amount || 0);
-              return s + Math.abs(base);
-            }, 0);
-          if (paidTowardApt <= 0) return sum;
-          return sum + Math.max(Number(apt.payment_amount || 0), paidTowardApt);
-        }, 0);
-        const totalPayments = clientPayments.reduce((sum, p) => {
-          if (p.method === 'balance') return sum;
-          const base = p.facturado ? Number(p.amount || 0) - Number(p.iva_amount || 0) : Number(p.amount || 0);
-          return sum + base;
-        }, 0);
-        const pendingPayments = clientPending.reduce((sum, a) => sum + (a.payment_amount || 0), 0);
-        const balance = totalPayments - totalCharges;
-
-        return {
-          clientId: client.id,
-          clientName: `${client.first_name} ${client.last_name}`,
-          totalPayments,
-          pendingPayments,
-          balance,
-        };
-      }) || [];
-
-      return clientBalances;
+      return rows.map((row) => ({
+        clientId: row.client_id,
+        totalPayments: Number(row.total_payments),
+        pendingPayments: Number(row.pending_payments),
+        balance: Number(row.balance),
+      }));
     },
     enabled: !!clinicId,
   });
-} 
+}

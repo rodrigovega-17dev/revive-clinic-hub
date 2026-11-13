@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format, startOfDay, endOfDay, subDays } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/utils';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 import { useAuth } from '@/hooks/useAuth';
 import { useClinic, useClinicSettings } from '@/hooks/useClinic';
 import { useSecurity } from '@/hooks/useSecurity';
@@ -83,49 +84,50 @@ const DailyFinanceSection = ({ selectedDate, onDateChange }: DailyFinanceSection
     queryFn: async () => {
       if (!clinicId) return [];
 
-      let query = supabase
-        .from('payments')
-        .select(`
-          *,
-          clients (
-            first_name,
-            last_name
-          ),
-          therapists (
-            first_name,
-            last_name,
-            calendar_color_id
-          ),
-          appointments (
-            start_time,
+      // "Show all" spans every payment of the clinic, so it has to page past the 1000-row cap.
+      const pageQuery = (from: number, to: number) => {
+        let query = supabase
+          .from('payments')
+          .select(`
+            *,
+            clients (
+              first_name,
+              last_name
+            ),
             therapists (
               first_name,
               last_name,
-              calendar_color_id,
-              email
+              calendar_color_id
+            ),
+            appointments (
+              start_time,
+              therapists (
+                first_name,
+                last_name,
+                calendar_color_id,
+                email
+              )
             )
-          )
-        `)
-        .eq('clinic_id', clinicId)
-        .order('payment_date', { ascending: false });
+          `)
+          .eq('clinic_id', clinicId)
+          .order('payment_date', { ascending: false })
+          .order('id');
 
-      if (!showAllPayments) {
-        const startDate = startOfDay(selectedDate);
-        const endDate = endOfDay(selectedDate);
-        
-        query = query
-          .gte('payment_date', startDate.toISOString())
-          .lte('payment_date', endDate.toISOString());
-      }
-      
-      const { data, error } = await query;
+        if (!showAllPayments) {
+          query = query
+            .gte('payment_date', startOfDay(selectedDate).toISOString())
+            .lte('payment_date', endOfDay(selectedDate).toISOString());
+        }
 
-      if (error) {
+        return query.range(from, to);
+      };
+
+      try {
+        return await fetchAllRows(pageQuery);
+      } catch (error) {
         console.error('Error fetching payments:', error);
         throw error;
       }
-
-      return data || [];
     },
     enabled: !!clinicId,
   });

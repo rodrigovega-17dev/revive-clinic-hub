@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 import { useToast } from '@/hooks/use-toast';
 import {
   computeTherapistPayroll,
@@ -47,18 +48,20 @@ export function useDataExport() {
   const exportClientsToCsv = async (clinicId: string) => {
     setIsExporting('clients');
     try {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('first_name, last_name, email, phone, birth_date, rfc, address, created_at')
-        .eq('clinic_id', clinicId)
-        .eq('is_active', true)
-        .eq('archived', false)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      const data = await fetchAllRows((from, to) =>
+        supabase
+          .from('clients')
+          .select('first_name, last_name, email, phone, birth_date, rfc, address, created_at')
+          .eq('clinic_id', clinicId)
+          .eq('is_active', true)
+          .eq('archived', false)
+          .order('created_at', { ascending: false })
+          .order('id')
+          .range(from, to)
+      );
 
       const columns = ['first_name', 'last_name', 'email', 'phone', 'birth_date', 'rfc', 'address', 'created_at'] as const;
-      const rows = (data || []).map((r) => ({ ...r }) as Record<string, unknown>);
+      const rows = data.map((r) => ({ ...r }) as Record<string, unknown>);
       const csv = toCsv(rows, columns as (keyof typeof rows[0])[]);
       const date = new Date().toISOString().slice(0, 10);
       downloadFile(csv, `clientes_${date}.csv`);
@@ -73,24 +76,26 @@ export function useDataExport() {
   const exportAppointmentsToCsv = async (clinicId: string) => {
     setIsExporting('appointments');
     try {
-      const { data, error } = await supabase
-        .from('appointments')
-        .select(`
-          start_time,
-          end_time,
-          status,
-          payment_amount,
-          notes,
-          clients (first_name, last_name),
-          therapists (first_name, last_name),
-          treatments (name)
-        `)
-        .eq('clinic_id', clinicId)
-        .order('start_time', { ascending: false });
+      const data = await fetchAllRows((from, to) =>
+        supabase
+          .from('appointments')
+          .select(`
+            start_time,
+            end_time,
+            status,
+            payment_amount,
+            notes,
+            clients (first_name, last_name),
+            therapists (first_name, last_name),
+            treatments (name)
+          `)
+          .eq('clinic_id', clinicId)
+          .order('start_time', { ascending: false })
+          .order('id')
+          .range(from, to)
+      );
 
-      if (error) throw error;
-
-      const rows = (data || []).map((a: any) => ({
+      const rows = data.map((a: any) => ({
         client_name: a.clients ? `${a.clients.first_name ?? ''} ${a.clients.last_name ?? ''}`.trim() : '',
         therapist_name: a.therapists ? `${a.therapists.first_name ?? ''} ${a.therapists.last_name ?? ''}`.trim() : '',
         treatment_name: a.treatments?.name ?? '',
@@ -116,22 +121,24 @@ export function useDataExport() {
   const exportPaymentsToCsv = async (clinicId: string) => {
     setIsExporting('payments');
     try {
-      const { data, error } = await supabase
-        .from('payments')
-        .select(`
-          amount,
-          payment_date,
-          method,
-          appointment_id,
-          clients (first_name, last_name),
-          appointments (start_time)
-        `)
-        .eq('clinic_id', clinicId)
-        .order('payment_date', { ascending: false });
+      const data = await fetchAllRows((from, to) =>
+        supabase
+          .from('payments')
+          .select(`
+            amount,
+            payment_date,
+            method,
+            appointment_id,
+            clients (first_name, last_name),
+            appointments (start_time)
+          `)
+          .eq('clinic_id', clinicId)
+          .order('payment_date', { ascending: false })
+          .order('id')
+          .range(from, to)
+      );
 
-      if (error) throw error;
-
-      const rows = (data || []).map((p: any) => ({
+      const rows = data.map((p: any) => ({
         client_name: p.clients ? `${p.clients.first_name ?? ''} ${p.clients.last_name ?? ''}`.trim() : '',
         amount: p.amount ?? '',
         payment_date: p.payment_date ?? '',
@@ -154,16 +161,18 @@ export function useDataExport() {
   const exportExpensesToCsv = async (clinicId: string) => {
     setIsExporting('expenses');
     try {
-      const { data, error } = await supabase
-        .from('expenses')
-        .select('description, amount, date, category, created_at')
-        .eq('clinic_id', clinicId)
-        .order('date', { ascending: false });
-
-      if (error) throw error;
+      const data = await fetchAllRows((from, to) =>
+        supabase
+          .from('expenses')
+          .select('description, amount, date, category, created_at')
+          .eq('clinic_id', clinicId)
+          .order('date', { ascending: false })
+          .order('id')
+          .range(from, to)
+      );
 
       const columns = ['description', 'amount', 'date', 'category', 'created_at'] as const;
-      const rows = (data || []).map((r) => ({ ...r }) as Record<string, unknown>);
+      const rows = data.map((r) => ({ ...r }) as Record<string, unknown>);
       const csv = toCsv(rows, columns);
       const date = new Date().toISOString().slice(0, 10);
       downloadFile(csv, `gastos_${date}.csv`);

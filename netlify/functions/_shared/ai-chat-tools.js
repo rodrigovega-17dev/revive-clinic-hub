@@ -331,106 +331,51 @@ const buildFieldSummary = (schema, values) => {
   return summary;
 };
 
-/**
- * Client balance, computed identically to src/hooks/useClientBalance.ts:
- * balance = money actually received (excluding balance-credit rows) − charges.
- * A completed appointment only becomes a charge once any payment has been made
- * toward it — at that point the charge is its full assigned price (payment_amount),
- * not just whatever was collected, so a discount or short payment shows up as real
- * debt instead of silently reconciling to zero. Nothing paid yet stays untouched
- * (tracked separately as "pending"), matching the useClientBalance.ts behavior.
- */
-const computeClientBalance = async (supabase, clinicId, clientId) => {
-  const [{ data: payments }, { data: completedAppointments }] = await Promise.all([
-    supabase
-      .from('payments')
-      .select('amount, appointment_id, method, iva_amount, facturado')
-      .eq('client_id', clientId)
-      .eq('clinic_id', clinicId),
-    supabase
-      .from('appointments')
-      .select('id, payment_amount')
-      .eq('client_id', clientId)
-      .eq('clinic_id', clinicId)
-      .eq('status', 'completed'),
-  ]);
-
-  const paymentRows = payments || [];
-  const baseAmount = (p) => (p.facturado ? Number(p.amount || 0) - Number(p.iva_amount || 0) : Number(p.amount || 0));
-
-  const totalCharges = (completedAppointments || []).reduce((sum, apt) => {
-    const paidTowardApt = paymentRows
-      .filter((p) => p.appointment_id === apt.id)
-      .reduce((s, p) => s + Math.abs(baseAmount(p)), 0);
-    if (paidTowardApt <= 0) return sum;
-    return sum + Number(apt.payment_amount || 0);
-  }, 0);
-
-  const totalPayments = paymentRows
-    .filter((p) => p.method !== 'balance')
-    .reduce((sum, p) => sum + baseAmount(p), 0);
-
-  return { balance: totalPayments - totalCharges, totalPayments, totalCharges };
+// PostgREST silently caps every response at 1000 rows, so any query that can return more must
+// be paged, ordered by a unique column. Mirrors src/lib/fetchAllRows.ts: advance by what came
+// back and stop only on an empty page, so a lower server cap can't truncate silently.
+const fetchAllRows = async (queryPage, pageSize = 1000) => {
+  const rows = [];
+  for (let from = 0; ;) {
+    const { data, error } = await queryPage(from, from + pageSize - 1);
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) return rows;
+    rows.push(...data);
+    from += data.length;
+  }
 };
 
 /**
- * Same formula as computeClientBalance, but for many clients in 2 queries total
- * instead of 2*N — used by search_clients so a broad search doesn't need a
- * separate get_client_details round trip per candidate just to see who owes money.
+ * Client balances come from the get_client_balances DB function — the same one
+ * src/hooks/useClientBalance.ts uses — so the chat can never disagree with the app.
+ * balance = money actually received (excluding balance-credit rows and IVA) − charges,
+ * where a completed appointment becomes a charge (its assigned price, or what was paid
+ * toward it if more) once any payment has been made toward it. Unpaid completed sessions
+ * are tracked separately as "pending". Positive = credit in their favor, negative = owed.
  */
 const computeClientBalancesBatch = async (supabase, clinicId, clientIds) => {
   const ids = [...new Set(clientIds)].filter(Boolean);
   if (ids.length === 0) return {};
 
-  const [{ data: payments }, { data: completedAppointments }] = await Promise.all([
-    supabase
-      .from('payments')
-      .select('client_id, amount, appointment_id, method, iva_amount, facturado')
-      .eq('clinic_id', clinicId)
-      .in('client_id', ids),
-    supabase
-      .from('appointments')
-      .select('id, client_id, payment_amount')
-      .eq('clinic_id', clinicId)
-      .eq('status', 'completed')
-      .in('client_id', ids),
-  ]);
-
-  const baseAmount = (p) => (p.facturado ? Number(p.amount || 0) - Number(p.iva_amount || 0) : Number(p.amount || 0));
-
-  // Sum paid-toward-appointment once per appointment id (globally unique), so the per-client
-  // loop below stays O(clients + payments + appointments), not O(clients * payments).
-  const paidByAppointment = {};
-  (payments || []).forEach((p) => {
-    if (!p.appointment_id) return;
-    paidByAppointment[p.appointment_id] = (paidByAppointment[p.appointment_id] || 0) + Math.abs(baseAmount(p));
-  });
-
-  const totals = {};
-  ids.forEach((id) => { totals[id] = { totalPayments: 0, totalCharges: 0 }; });
-
-  (completedAppointments || []).forEach((apt) => {
-    const bucket = totals[apt.client_id];
-    if (!bucket) return;
-    if ((paidByAppointment[apt.id] || 0) > 0) {
-      bucket.totalCharges += Number(apt.payment_amount || 0);
-    }
-  });
-
-  (payments || []).forEach((p) => {
-    const bucket = totals[p.client_id];
-    if (!bucket) return;
-    if (p.method !== 'balance') {
-      bucket.totalPayments += baseAmount(p);
-    }
-  });
+  const rows = await fetchAllRows((from, to) => supabase
+    .rpc('get_client_balances', { p_clinic_id: clinicId, p_client_ids: ids })
+    .order('client_id')
+    .range(from, to));
 
   const balances = {};
-  ids.forEach((id) => {
-    const { totalPayments, totalCharges } = totals[id];
-    balances[id] = { balance: totalPayments - totalCharges, totalPayments, totalCharges };
+  rows.forEach((row) => {
+    balances[row.client_id] = {
+      balance: Number(row.balance),
+      totalPayments: Number(row.total_payments),
+      totalCharges: Number(row.total_charges),
+    };
   });
   return balances;
+};
+
+const computeClientBalance = async (supabase, clinicId, clientId) => {
+  const balances = await computeClientBalancesBatch(supabase, clinicId, [clientId]);
+  return balances[clientId] || { balance: 0, totalPayments: 0, totalCharges: 0 };
 };
 
 /**
@@ -1182,22 +1127,25 @@ const toolHandlers = {
     if (!input?.start_date || !input?.end_date) return { error: 'start_date and end_date are required' };
     const { start, end, startDateOnly, endDateOnly } = resolveDateRange(input.start_date, input.end_date, timezone);
 
-    const [{ data: payments, error: paymentsError }, { data: expenses, error: expensesError }] = await Promise.all([
-      supabase
+    // Ranges can span up to a year, well past the 1000-row response cap, so page through both.
+    const [payments, expenses] = await Promise.all([
+      fetchAllRows((from, to) => supabase
         .from('payments')
         .select('amount, method')
         .eq('clinic_id', clinicId)
         .gte('payment_date', start)
-        .lte('payment_date', end),
-      supabase
+        .lte('payment_date', end)
+        .order('id')
+        .range(from, to)),
+      fetchAllRows((from, to) => supabase
         .from('expenses')
         .select('amount, category, payment_method')
         .eq('clinic_id', clinicId)
         .gte('date', startDateOnly)
-        .lte('date', endDateOnly),
+        .lte('date', endDateOnly)
+        .order('id')
+        .range(from, to)),
     ]);
-    if (paymentsError) return { error: paymentsError.message };
-    if (expensesError) return { error: expensesError.message };
 
     const isTangibleRevenue = (method) => method !== 'balance' && method !== 'adjustment';
     const totalRevenue = (payments || [])
@@ -1414,22 +1362,23 @@ const toolHandlers = {
     const spansMultiplePeriods =
       payPeriodKeyForDateStr(toDateOnly(startDate, timezone)) !== payPeriodKeyForDateStr(toDateOnly(endDate, timezone));
 
-    let apptQuery = supabase
-      .from('appointments')
-      .select(`
-        therapist_id, payment_amount, pay_therapist_in_full, start_time,
-        therapists ( id, first_name, last_name, compensation_type, commission_percentage, fixed_session_amount, retention_enabled, retention_rate, incentive_enabled, incentive_threshold_sessions, incentive_percentage_bonus, incentive_fixed_bonus, reinvestment_enabled, reinvestment_percentage ),
-        payments ( amount, facturado, iva_amount ),
-        payroll_compensation_type, payroll_commission_percentage, payroll_fixed_session_amount, payroll_retention_enabled, payroll_retention_rate, payroll_incentive_enabled, payroll_incentive_threshold_sessions, payroll_incentive_percentage_bonus, payroll_incentive_fixed_bonus, payroll_reinvestment_enabled, payroll_reinvestment_percentage, payroll_snapshot_at
-      `)
-      .eq('clinic_id', clinicId)
-      .eq('status', 'completed')
-      .gte('start_time', startOfDayIso(startDate, timezone))
-      .lte('start_time', endOfDayIso(endDate, timezone));
-    if (input?.therapist_id) apptQuery = apptQuery.eq('therapist_id', input.therapist_id);
-
-    const { data: appointments, error } = await apptQuery;
-    if (error) return { error: error.message };
+    // A month/quarter/year range can exceed the 1000-row response cap, so page through it.
+    const appointments = await fetchAllRows((from, to) => {
+      let apptQuery = supabase
+        .from('appointments')
+        .select(`
+          therapist_id, payment_amount, pay_therapist_in_full, start_time,
+          therapists ( id, first_name, last_name, compensation_type, commission_percentage, fixed_session_amount, retention_enabled, retention_rate, incentive_enabled, incentive_threshold_sessions, incentive_percentage_bonus, incentive_fixed_bonus, reinvestment_enabled, reinvestment_percentage ),
+          payments ( amount, facturado, iva_amount ),
+          payroll_compensation_type, payroll_commission_percentage, payroll_fixed_session_amount, payroll_retention_enabled, payroll_retention_rate, payroll_incentive_enabled, payroll_incentive_threshold_sessions, payroll_incentive_percentage_bonus, payroll_incentive_fixed_bonus, payroll_reinvestment_enabled, payroll_reinvestment_percentage, payroll_snapshot_at
+        `)
+        .eq('clinic_id', clinicId)
+        .eq('status', 'completed')
+        .gte('start_time', startOfDayIso(startDate, timezone))
+        .lte('start_time', endOfDayIso(endDate, timezone));
+      if (input?.therapist_id) apptQuery = apptQuery.eq('therapist_id', input.therapist_id);
+      return apptQuery.order('id').range(from, to);
+    });
 
     // Volume-incentive counting window is the pay period (fortnight) itself, which the query
     // above already covers — completed appointments bounded to the requested range.
@@ -2058,14 +2007,16 @@ const toolHandlers = {
       .single();
     if (therapistError || !therapist) return { error: 'Therapist not found' };
 
-    const { data: appointments, error } = await supabase
+    // Up to a year of one therapist's sessions can pass the 1000-row response cap.
+    const appointments = await fetchAllRows((from, to) => supabase
       .from('appointments')
       .select('status, payment_amount')
       .eq('therapist_id', therapistId)
       .eq('clinic_id', clinicId)
       .gte('start_time', start)
-      .lte('start_time', end);
-    if (error) return { error: error.message };
+      .lte('start_time', end)
+      .order('id')
+      .range(from, to));
 
     const byStatus = {};
     let revenue = 0;

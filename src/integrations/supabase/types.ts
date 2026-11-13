@@ -1955,6 +1955,17 @@ export type Database = {
     }
     Functions: {
       generate_backup_codes: { Args: never; Returns: string[] }
+      get_client_balances: {
+        Args: { p_clinic_id: string; p_client_ids?: string[] }
+        Returns: {
+          balance: number
+          client_id: string
+          last_payment_date: string | null
+          pending_payments: number
+          total_charges: number
+          total_payments: number
+        }[]
+      }
       get_user_clinic_id: { Args: never; Returns: string }
       get_user_role: {
         Args: never

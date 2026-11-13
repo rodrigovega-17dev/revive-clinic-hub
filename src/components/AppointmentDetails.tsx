@@ -213,22 +213,29 @@ const AppointmentDetails = ({ appointment, open, onClose }: AppointmentDetailsPr
       month: 'short',
       day: 'numeric',
     });
+  // Money is stored as-is, so round to cents here: 1600 * 1.16 is 1855.9999999999998 in JS.
+  const toCents = (value: number) => Math.round(value * 100) / 100;
   const availableCredit = Math.max(0, Number(clientBalance?.balance || 0));
   // What the client owes for this session — the taxed total when a factura is required,
   // so balance can cover the full amount instead of stopping at the untaxed base price.
-  const grossAmount = requiereFactura ? appointmentAmount * 1.16 : appointmentAmount;
+  const grossAmount = toCents(requiereFactura ? appointmentAmount * 1.16 : appointmentAmount);
   const maxApplicableCredit = Math.min(availableCredit, grossAmount);
   const appliedCredit = useBalanceCredit ? maxApplicableCredit : 0;
   // Remaining amount to collect via card/cash, tax-inclusive.
-  const amountDue = Math.max(0, grossAmount - appliedCredit);
+  const amountDue = toCents(Math.max(0, grossAmount - appliedCredit));
   // Credit is treated as already-settled money (its own IVA, if any, belongs to the advance
   // payment that created it), so only the leftover amountDue needs IVA split back out of it.
   const effectiveAmount = useBalanceCredit
-    ? (requiereFactura ? amountDue / 1.16 : amountDue)
+    ? (requiereFactura ? toCents(amountDue / 1.16) : amountDue)
     : paymentData.amount;
-  // IVA (16%) only when the payment requires an invoice (factura); added on top of the base.
-  const ivaAmount = requiereFactura ? effectiveAmount * 0.16 : 0;
-  const totalWithIva = effectiveAmount + ivaAmount;
+  // IVA (16%) only when the payment requires an invoice (factura). With credit applied it's the
+  // rest of amountDue after its base, so base + IVA always adds back to amountDue to the cent.
+  const ivaAmount = !requiereFactura
+    ? 0
+    : useBalanceCredit
+      ? toCents(amountDue - effectiveAmount)
+      : toCents(effectiveAmount * 0.16);
+  const totalWithIva = toCents(effectiveAmount + ivaAmount);
 
   const getStatusText = (status: string) => {
     switch (status) {
