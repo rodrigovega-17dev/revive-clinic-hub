@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, User, Phone, Mail, Edit, MapPin, DollarSign, Eye, FileText, Archive, ArchiveRestore } from 'lucide-react';
+import { Plus, User, Phone, Mail, Edit, MapPin, DollarSign, Eye, FileText, Archive, ArchiveRestore, Wallet } from 'lucide-react';
 import { useClients, useUpdateClient } from '@/hooks/useClients';
 import { useAllClientBalances } from '@/hooks/useClientBalance';
 import ClientForm from '@/components/ClientForm';
@@ -78,6 +78,20 @@ const Clients = () => {
       map.set(balance.clientId, balance);
     });
     return map;
+  }, [clientBalances]);
+
+  const balanceTotals = useMemo(() => {
+    const totals = { credit: 0, creditClients: 0, receivable: 0, receivableClients: 0 };
+    clientBalances?.forEach(({ balance }) => {
+      if (balance > 0) {
+        totals.credit += balance;
+        totals.creditClients += 1;
+      } else if (balance < 0) {
+        totals.receivable -= balance;
+        totals.receivableClients += 1;
+      }
+    });
+    return totals;
   }, [clientBalances]);
 
   const getAge = (birthDate: string | null) => {
@@ -160,7 +174,7 @@ const Clients = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
@@ -190,11 +204,14 @@ const Clients = () => {
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
-              <FileText className="h-4 w-4 text-amber-400" />
+              <Wallet className="h-4 w-4 text-green-500" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">{t('cfdi.fiscalData')}</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {clients?.filter((c) => hasCfdiData(c)).length || 0}
+                <p className="text-sm font-medium text-muted-foreground">{t('clients.creditInFavor')}</p>
+                <p className={`text-2xl font-bold ${getBalanceColorClass(balanceTotals.credit)}`}>
+                  {formatCurrencyWithClinic(balanceTotals.credit)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {t('clients.balanceClientCount', { count: balanceTotals.creditClients })}
                 </p>
               </div>
             </div>
@@ -204,18 +221,14 @@ const Clients = () => {
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
-              <DollarSign className="h-4 w-4 text-yellow-400" />
+              <DollarSign className="h-4 w-4 text-red-500" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">{t('clients.balance')}</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {(() => {
-                    const totalBalance = clientBalances?.reduce((sum, balance) => sum + balance.balance, 0) || 0;
-                    return (
-                      <span className={getBalanceColorClass(totalBalance)}>
-                        {getBalanceSign(totalBalance)}{formatCurrencyWithClinic(totalBalance)}
-                      </span>
-                    );
-                  })()}
+                <p className="text-sm font-medium text-muted-foreground">{t('clients.receivable')}</p>
+                <p className={`text-2xl font-bold ${getBalanceColorClass(-balanceTotals.receivable)}`}>
+                  {formatCurrencyWithClinic(balanceTotals.receivable)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {t('clients.balanceClientCount', { count: balanceTotals.receivableClients })}
                 </p>
               </div>
             </div>
