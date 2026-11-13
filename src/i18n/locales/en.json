@@ -769,6 +769,8 @@
     "receivable": "Receivable",
     "balanceClientCount_one": "{{count}} patient",
     "balanceClientCount_other": "{{count}} patients",
+    "filterByBalanceHint": "Click to filter the table; click again to clear the filter",
+    "filterActive": "filtering",
     "years": "years",
     "noClientsYet": "No patients yet",
     "tryAdjustingSearch": "Try adjusting your search terms or add a new patient.",

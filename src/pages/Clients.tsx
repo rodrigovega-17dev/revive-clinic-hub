@@ -17,7 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { format, differenceInYears } from 'date-fns';
 import { useSearchParams } from 'react-router-dom';
 import type { Tables } from '@/integrations/supabase/types';
-import { formatCurrency, getBalanceColorClass, getBalanceSign } from '@/lib/utils';
+import { cn, formatCurrency, getBalanceColorClass, getBalanceSign } from '@/lib/utils';
 import { useClinicSettings } from '@/hooks/useClinic';
 import { hasCfdiData } from '@/lib/cfdi-catalogs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -36,6 +36,7 @@ const Clients = () => {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [balanceFilter, setBalanceFilter] = useState<'credit' | 'receivable' | null>(null);
   const [clientSearchValue, setClientSearchValue] = useState('all');
   const { data: clientBalances } = useAllClientBalances();
   const [searchParams] = useSearchParams();
@@ -46,13 +47,27 @@ const Clients = () => {
     return formatCurrency(value, 2, currency);
   };
 
+  // Create a map of client balances for quick lookup
+  const balanceMap = useMemo(() => {
+    const map = new Map();
+    clientBalances?.forEach(balance => {
+      map.set(balance.clientId, balance);
+    });
+    return map;
+  }, [clientBalances]);
+
   // Enhanced search function for clients
   const filteredClients = useMemo(() => {
-    if (!clients || !searchTerm.trim()) return clients || [];
+    const balanceFiltered = (clients || []).filter((client) => {
+      if (!balanceFilter) return true;
+      const balance = balanceMap.get(client.id)?.balance ?? 0;
+      return balanceFilter === 'credit' ? balance > 0 : balance < 0;
+    });
+    if (!searchTerm.trim()) return balanceFiltered;
 
     const searchTerms = searchTerm.toLowerCase().trim().split(/\s+/);
-    
-    return clients.filter(client => {
+
+    return balanceFiltered.filter(client => {
       const searchableText = [
         client.first_name,
         client.last_name,
@@ -69,20 +84,14 @@ const Clients = () => {
         searchableText.split(/\s+/).some(word => word.startsWith(term))
       );
     });
-  }, [clients, searchTerm]);
+  }, [clients, searchTerm, balanceFilter, balanceMap]);
 
-  // Create a map of client balances for quick lookup
-  const balanceMap = useMemo(() => {
-    const map = new Map();
-    clientBalances?.forEach(balance => {
-      map.set(balance.clientId, balance);
-    });
-    return map;
-  }, [clientBalances]);
-
+  // Totals over the same patients the table lists (archived ones only when shown), so a card's
+  // count always matches the rows its filter leaves.
   const balanceTotals = useMemo(() => {
     const totals = { credit: 0, creditClients: 0, receivable: 0, receivableClients: 0 };
-    clientBalances?.forEach(({ balance }) => {
+    clients?.forEach((client) => {
+      const balance = balanceMap.get(client.id)?.balance ?? 0;
       if (balance > 0) {
         totals.credit += balance;
         totals.creditClients += 1;
@@ -92,7 +101,11 @@ const Clients = () => {
       }
     });
     return totals;
-  }, [clientBalances]);
+  }, [clients, balanceMap]);
+
+  const toggleBalanceFilter = (filter: 'credit' | 'receivable') => {
+    setBalanceFilter((current) => (current === filter ? null : filter));
+  };
 
   const getAge = (birthDate: string | null) => {
     if (!birthDate) return null;
@@ -201,8 +214,14 @@ const Clients = () => {
           </CardContent>
         </Card>
 
-        <Card className="bg-card border-border">
-          <CardContent className="pt-6">
+        <Card className={cn('bg-card border-border transition-colors', balanceFilter === 'credit' && 'border-green-500 ring-1 ring-green-500')}>
+          <button
+            type="button"
+            onClick={() => toggleBalanceFilter('credit')}
+            aria-pressed={balanceFilter === 'credit'}
+            title={t('clients.filterByBalanceHint')}
+            className="h-full w-full rounded-lg p-6 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             <div className="flex items-center space-x-2">
               <Wallet className="h-4 w-4 text-green-500" />
               <div>
@@ -212,14 +231,21 @@ const Clients = () => {
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {t('clients.balanceClientCount', { count: balanceTotals.creditClients })}
+                  {balanceFilter === 'credit' && ` · ${t('clients.filterActive')}`}
                 </p>
               </div>
             </div>
-          </CardContent>
+          </button>
         </Card>
 
-        <Card className="bg-card border-border">
-          <CardContent className="pt-6">
+        <Card className={cn('bg-card border-border transition-colors', balanceFilter === 'receivable' && 'border-red-500 ring-1 ring-red-500')}>
+          <button
+            type="button"
+            onClick={() => toggleBalanceFilter('receivable')}
+            aria-pressed={balanceFilter === 'receivable'}
+            title={t('clients.filterByBalanceHint')}
+            className="h-full w-full rounded-lg p-6 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             <div className="flex items-center space-x-2">
               <DollarSign className="h-4 w-4 text-red-500" />
               <div>
@@ -229,10 +255,11 @@ const Clients = () => {
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {t('clients.balanceClientCount', { count: balanceTotals.receivableClients })}
+                  {balanceFilter === 'receivable' && ` · ${t('clients.filterActive')}`}
                 </p>
               </div>
             </div>
-          </CardContent>
+          </button>
         </Card>
       </div>
 
@@ -412,10 +439,10 @@ const Clients = () => {
           <CardContent className="text-center py-12">
             <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-medium text-foreground mb-2">
-              {searchTerm ? t('clients.noClients') : t('clients.noClientsYet')}
+              {searchTerm || balanceFilter ? t('clients.noClients') : t('clients.noClientsYet')}
             </h3>
             <p className="text-muted-foreground mb-4">
-              {searchTerm 
+              {searchTerm || balanceFilter
                 ? t('clients.tryAdjustingSearch')
                 : t('clients.getStartedAdding')
               }

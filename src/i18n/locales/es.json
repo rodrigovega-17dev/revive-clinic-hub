@@ -768,6 +768,8 @@
     "receivable": "Por cobrar",
     "balanceClientCount_one": "{{count}} paciente",
     "balanceClientCount_other": "{{count}} pacientes",
+    "filterByBalanceHint": "Haz clic para filtrar la tabla; vuelve a hacer clic para quitar el filtro",
+    "filterActive": "filtrando",
     "years": "años",
     "noClientsYet": "Aún no hay pacientes",
     "tryAdjustingSearch": "Intenta ajustar los términos de búsqueda o agrega un nuevo paciente.",
