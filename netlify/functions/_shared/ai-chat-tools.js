@@ -589,7 +589,7 @@ const toolDefinitions = [
   },
   {
     name: 'list_clients',
-    description: 'Clinic-wide patient list with server-side filters — by balance status (who owes money vs has credit), active/archived, or the pay-in-full flag — plus sorting and pagination. Use this for "which clients owe money", "list clients with a credit balance", "all active patients", etc. — anything filter-based with no specific name/contact to search by (use search_clients for that instead). Excludes archived clients by default.',
+    description: 'Clinic-wide patient list with server-side filters — by balance status (who owes money vs has credit), active/archived, or the pay-in-full flag — plus sorting and pagination. Use this for "which clients owe money", "list clients with a credit balance", "all active patients", etc. — anything filter-based with no specific name/contact to search by (use search_clients for that instead). Excludes archived clients by default. Returns balance_totals (credit total/count, owed total/count, net) computed over every matching client — use those for any total or count instead of summing rows. A balance includes completed sessions that are still unpaid.',
     input_schema: {
       type: 'object',
       properties: {
@@ -981,8 +981,22 @@ const toolHandlers = {
     const pageRows = enriched.slice(offset, offset + limit);
     const pagination = buildPaginationMeta({ offset, limit, totalMatching, returnedCount: pageRows.length });
 
+    // Summed in cents over every matching client, not just this page, so the model quotes totals
+    // instead of adding up rows by hand (where it has dropped clients before).
+    const sumCents = (rows) => rows.reduce((sum, c) => sum + Math.round(c.balance * 100), 0) / 100;
+    const creditRows = enriched.filter((c) => c.balance > 0);
+    const owedRows = enriched.filter((c) => c.balance < 0);
+
     return {
       total_matching: totalMatching,
+      balance_totals: {
+        note: 'Totals over ALL matching clients (every page). Quote these verbatim; never add up client rows yourself.',
+        net_balance: sumCents(enriched),
+        credit_total: sumCents(creditRows),
+        credit_clients: creditRows.length,
+        owed_total: Math.abs(sumCents(owedRows)),
+        owed_clients: owedRows.length,
+      },
       truncated: scanTruncated,
       pagination,
       warning: scanTruncated

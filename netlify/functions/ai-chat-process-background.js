@@ -213,7 +213,10 @@ exports.handler = async (event) => {
       onProgress: (toolName) => updateJobProgress(job.id, toolName),
     });
 
-    const assistantMessage = await insertMessage(job.conversation_id, clinicId, user.id, 'assistant', text, toolCallLog);
+    // The chat UI loads messages, so they keep only names and inputs; the job row keeps the full
+    // log with each result, for auditing what the assistant actually saw.
+    const toolCallSummary = toolCallLog.map(({ name, input }) => ({ name, input }));
+    const assistantMessage = await insertMessage(job.conversation_id, clinicId, user.id, 'assistant', text, toolCallSummary);
     await completeJob({
       jobId: job.id,
       status: 'succeeded',

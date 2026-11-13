@@ -245,7 +245,8 @@ const runAgentLoop = async ({
         };
       }
 
-      toolCallLog.push({ name: block.name, input: block.input });
+      const logEntry = { name: block.name, input: block.input };
+      toolCallLog.push(logEntry);
       if (onProgress) {
         try {
           await onProgress(block.name);
@@ -260,7 +261,10 @@ const runAgentLoop = async ({
       } catch (err) {
         result = { error: err.message || 'Tool call failed' };
       }
-      toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: safeStringifyToolResult(result) });
+      const content = safeStringifyToolResult(result);
+      // Kept exactly as the model saw it (truncation included) so an odd answer can be audited.
+      logEntry.result = content ? JSON.parse(content) : null;
+      toolResults.push({ type: 'tool_result', tool_use_id: block.id, content });
     }
     messages = [...messages, { role: 'user', content: toolResults }];
   }
