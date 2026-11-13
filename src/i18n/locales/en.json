@@ -311,14 +311,12 @@
     "clearChatConfirmDescription": "This deletes your entire AI chat history. This cannot be undone.",
     "clearFailed": "Failed to clear the chat. Please try again.",
     "model": "Model",
-    "modelHaiku": "Haiku (fast)",
-    "modelSonnet": "Sonnet (balanced)",
-    "modelOpus": "Opus (deep reasoning)",
+    "modelHaiku": "Haiku 5.5 (fast)",
+    "modelSonnet": "Sonnet 5.5 (most capable)",
     "effort": "Effort",
     "effortLow": "Low",
     "effortMedium": "Medium",
     "effortHigh": "High",
-    "effortNotSupportedOnHaiku": "Effort isn't supported on the Haiku model",
     "settingsUpdateFailed": "Failed to update AI chat settings. Please try again."
   },
   "activityLog": {

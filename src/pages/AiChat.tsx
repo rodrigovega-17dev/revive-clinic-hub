@@ -47,7 +47,7 @@ const AiChat = () => {
   const isLoadingHistory = conversationLoading || (!!conversation?.id && messagesLoading);
   const activeJob = jobStatusData?.job || null;
   const isJobRunning = activeJob?.status === 'queued' || activeJob?.status === 'running';
-  const aiModel = (conversation?.ai_model as AiChatModel) || 'claude-haiku-4-5-20251001';
+  const aiModel = (conversation?.ai_model as AiChatModel) || 'claude-haiku-5-5';
   const aiEffort = (conversation?.ai_effort as AiChatEffort) || 'medium';
 
   const handleSettingsChange = (next: { aiModel?: AiChatModel; aiEffort?: AiChatEffort }) => {

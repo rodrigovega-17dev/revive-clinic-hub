@@ -311,14 +311,12 @@
     "clearChatConfirmDescription": "Esto elimina todo tu historial de chat con la IA. Esta acción no se puede deshacer.",
     "clearFailed": "No se pudo borrar el chat. Intenta de nuevo.",
     "model": "Modelo",
-    "modelHaiku": "Haiku (rápido)",
-    "modelSonnet": "Sonnet (equilibrado)",
-    "modelOpus": "Opus (razonamiento profundo)",
+    "modelHaiku": "Haiku 5.5 (rápido)",
+    "modelSonnet": "Sonnet 5.5 (más capaz)",
     "effort": "Esfuerzo",
     "effortLow": "Bajo",
     "effortMedium": "Medio",
     "effortHigh": "Alto",
-    "effortNotSupportedOnHaiku": "El esfuerzo no está disponible en el modelo Haiku",
     "settingsUpdateFailed": "No se pudo actualizar la configuración del chat IA. Intenta de nuevo."
   },
   "activityLog": {
