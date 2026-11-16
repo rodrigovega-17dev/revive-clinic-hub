@@ -1908,7 +1908,9 @@
       "publicDescription": "Public description",
       "bio": "Short bio for the site",
       "photo": "Upload photo",
-      "rotationOrder": "Next in rotation:"
+      "rotationOrder": "Next in rotation:",
+      "removePhoto": "Remove photo",
+      "changePhoto": "Change photo"
     },
     "settings": {
       "siteTitle": "Site",

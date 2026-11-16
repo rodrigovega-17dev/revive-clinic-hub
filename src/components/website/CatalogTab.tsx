@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import {
-  uploadSiteImage, useUpdateWebsiteTherapist, useUpdateWebsiteTreatment, type WebsiteTherapist, type WebsiteTreatment,
+  removeSiteImage, uploadSiteImage, useUpdateWebsiteTherapist, useUpdateWebsiteTreatment, type WebsiteTherapist, type WebsiteTreatment,
 } from '@/hooks/useWebsite';
 
 const fullName = (p: WebsiteTherapist) => [p.first_name, p.last_name].filter(Boolean).join(' ');
@@ -67,7 +67,8 @@ export const CatalogTab = ({ treatments, therapists }: { treatments: WebsiteTrea
           {activeTherapists.map((th) => (
             <div key={th.id} className="grid sm:grid-cols-[1fr_90px_90px] gap-3 px-3 py-3 items-start">
               <div className="flex gap-3 min-w-0">
-                <label className="relative h-14 w-14 shrink-0 rounded-md bg-muted overflow-hidden cursor-pointer grid place-items-center" title={t('website.catalog.photo')}>
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                <label className="relative h-14 w-14 shrink-0 rounded-md bg-muted overflow-hidden cursor-pointer grid place-items-center" title={th.photo_url ? t('website.catalog.changePhoto') : t('website.catalog.photo')}>
                   {th.photo_url ? <img src={th.photo_url} alt="" className="h-full w-full object-cover" /> : <ImagePlus className="h-5 w-5 text-muted-foreground" />}
                   <input
                     id={`th-photo-${th.id}`}
@@ -76,11 +77,28 @@ export const CatalogTab = ({ treatments, therapists }: { treatments: WebsiteTrea
                     className="sr-only"
                     onChange={async (e) => {
                       const f = e.target.files?.[0];
+                      e.target.value = '';
                       if (!f || !clinicId) return;
                       try { updTherapist.mutate({ id: th.id, photo_url: await uploadSiteImage(clinicId, f) }, { onError: onErr }); } catch (err) { onErr(err); }
                     }}
                   />
                 </label>
+                {th.photo_url && (
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-destructive underline"
+                    onClick={() => {
+                      const url = th.photo_url!;
+                      updTherapist.mutate({ id: th.id, photo_url: null }, {
+                        onError: onErr,
+                        onSuccess: () => { void removeSiteImage(url); },
+                      });
+                    }}
+                  >
+                    {t('website.catalog.removePhoto')}
+                  </button>
+                )}
+                </div>
                 <div className="space-y-2 min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{fullName(th)}</span>

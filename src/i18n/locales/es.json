@@ -1908,7 +1908,9 @@
       "publicDescription": "Descripción pública",
       "bio": "Biografía breve para el sitio",
       "photo": "Subir foto",
-      "rotationOrder": "Próximos en turno:"
+      "rotationOrder": "Próximos en turno:",
+      "removePhoto": "Quitar foto",
+      "changePhoto": "Cambiar foto"
     },
     "settings": {
       "siteTitle": "Sitio",

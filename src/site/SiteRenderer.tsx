@@ -480,6 +480,7 @@ const Booking = ({ s, c }: { s: Section; c: Ctx }) => {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!treatment || !slot || mode === 'preview') return;
+    if (form.phone.replace(/\D/g, '').length < 10) { setError(L.errorPhone); return; }
     setSending(true);
     setError(null);
     try {
@@ -494,12 +495,17 @@ const Booking = ({ s, c }: { s: Section; c: Ctx }) => {
         if (code === 'slot_unavailable') { setSlot(null); setSlots((prev) => prev?.filter((x) => x.slot_start !== slot.slot_start) ?? null); setError(L.errorSlot); }
         else if (code === 'rate_limited') setError(L.errorRate);
         else if (code === 'too_many_pending') setError(L.errorPending);
-        else setError(L.errorGeneric);
+        else if (code === 'invalid_phone') setError(L.errorPhone);
+        else if (code === 'invalid_email') setError(L.errorEmail);
+        else if (code === 'invalid_name') setError(L.errorName);
+        else if (code === 'consent_required') setError(L.errorConsent);
+        else if (code === 'treatment_not_found' || code === 'site_not_found') setError(L.errorService);
+        else setError(`${L.errorGeneric} (${code ?? res.status})`);
         return;
       }
       setDone(true);
     } catch {
-      setError(L.errorGeneric);
+      setError(L.errorNetwork);
     } finally {
       setSending(false);
     }
@@ -585,7 +591,7 @@ const Booking = ({ s, c }: { s: Section; c: Ctx }) => {
                 </div>
                 <label>{L.firstName}<input id="cs-first" required autoComplete="given-name" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></label>
                 <label>{L.lastName}<input id="cs-last" required autoComplete="family-name" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></label>
-                <label>{L.phone}<input id="cs-phone" required type="tel" inputMode="tel" autoComplete="tel" pattern="[0-9+()\s-]{10,}" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label>
+                <label>{L.phone}<input id="cs-phone" required type="tel" inputMode="tel" autoComplete="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label>
                 <label>{L.email}<input id="cs-email" type="email" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label>
                 <label className="full">{L.notes}<textarea id="cs-notes" rows={3} maxLength={500} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
                 <label className="cs-hp" aria-hidden="true">Website<input tabIndex={-1} autoComplete="off" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} /></label>

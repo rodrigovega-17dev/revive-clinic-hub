@@ -253,3 +253,12 @@ export const uploadSiteImage = async (clinicId: string, file: File) => {
   if (error) throw error;
   return supabase.storage.from('site-media').getPublicUrl(path).data.publicUrl;
 };
+
+/** Best-effort delete of an image previously uploaded to the site-media bucket. */
+export const removeSiteImage = async (publicUrl: string) => {
+  const marker = '/object/public/site-media/';
+  const i = publicUrl.indexOf(marker);
+  if (i === -1) return;
+  const path = decodeURIComponent(publicUrl.slice(i + marker.length).split('?')[0]);
+  await supabase.storage.from('site-media').remove([path]);
+};
