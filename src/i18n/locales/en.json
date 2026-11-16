@@ -1811,11 +1811,13 @@
         "brutal": "Brutalist"
       },
       "masks": {
-        "none": "Square",
+        "none": "Straight",
         "rounded": "Rounded",
         "arch": "Arch",
         "circle": "Circle",
-        "blob": "Organic"
+        "blob": "Organic",
+        "square": "Square",
+        "full": "Full (no crop)"
       },
       "textures": {
         "none": "None",
@@ -1891,7 +1893,11 @@
       "metaTitle": "Title for Google",
       "metaDescription": "Description for Google",
       "language": "Site language",
-      "footerNote": "Footer note (e.g. privacy notice or license)"
+      "footerNote": "Footer note (e.g. privacy notice or license)",
+      "imageShape": "Image shape",
+      "photoShape": "Photo shape",
+      "themeShape": "Theme default",
+      "fullbleedShapeHint": "In the full-image hero the photo always covers the background."
     },
     "catalog": {
       "treatments": "Services",

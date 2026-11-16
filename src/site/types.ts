@@ -39,6 +39,8 @@ export interface SectionData {
   subtitle?: string;
   body?: string;
   imageUrl?: string;
+  /** Overrides the theme's image mask for this section's images. */
+  imageShape?: ImageMask;
   ctaLabel?: string;
   items?: Testimonial[] | FaqItem[];
 }
@@ -61,7 +63,8 @@ export interface SiteContent {
 }
 
 export type ButtonStyle = 'pill' | 'square' | 'soft' | 'underline' | 'brutal';
-export type ImageMask = 'none' | 'arch' | 'blob' | 'circle' | 'rounded';
+export type ImageMask = 'none' | 'arch' | 'blob' | 'circle' | 'rounded' | 'square' | 'full';
+export const IMAGE_SHAPES: ImageMask[] = ['circle', 'blob', 'square', 'full', 'rounded', 'arch', 'none'];
 export type Texture = 'none' | 'grain' | 'grid' | 'glow' | 'dots';
 
 export interface ThemeColors {

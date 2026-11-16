@@ -1815,7 +1815,9 @@
         "rounded": "Redondeada",
         "arch": "Arco",
         "circle": "Círculo",
-        "blob": "Orgánica"
+        "blob": "Orgánica",
+        "square": "Cuadrada",
+        "full": "Completa (sin recorte)"
       },
       "textures": {
         "none": "Ninguna",
@@ -1891,7 +1893,11 @@
       "metaTitle": "Título para Google",
       "metaDescription": "Descripción para Google",
       "language": "Idioma del sitio",
-      "footerNote": "Nota al pie (p. ej. aviso de privacidad o cédula)"
+      "footerNote": "Nota al pie (p. ej. aviso de privacidad o cédula)",
+      "imageShape": "Forma de la imagen",
+      "photoShape": "Forma de las fotos",
+      "themeShape": "La del theme",
+      "fullbleedShapeHint": "En la portada de imagen completa la foto siempre cubre el fondo."
     },
     "catalog": {
       "treatments": "Servicios",

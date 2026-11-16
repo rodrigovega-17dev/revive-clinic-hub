@@ -12,7 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { uploadSiteImage } from '@/hooks/useWebsite';
 import { cn } from '@/lib/utils';
 import { newSection } from '@/site/defaults';
-import { BLOCK_VARIANTS, SECTION_TYPES, type FaqItem, type Section, type SectionType, type SiteContent, type Testimonial } from '@/site/types';
+import { BLOCK_VARIANTS, IMAGE_SHAPES, SECTION_TYPES, type FaqItem, type ImageMask, type Section, type SectionType, type SiteContent, type Testimonial } from '@/site/types';
 
 interface Props {
   content: SiteContent;
@@ -135,6 +135,19 @@ export const ContentTab = ({ content, onChange }: Props) => {
                           {variants.map((v) => <SelectItem key={v} value={v}>{t(`website.variants.${v}`)}</SelectItem>)}
                         </SelectContent>
                       </Select>
+                    </div>
+                  )}
+                  {(s.type === 'hero' || s.type === 'about' || s.type === 'team') && (
+                    <div className="space-y-1">
+                      <Label>{s.type === 'team' ? t('website.content.photoShape') : t('website.content.imageShape')}</Label>
+                      <Select value={s.data.imageShape ?? '__theme'} onValueChange={(v) => updateData(s, { imageShape: v === '__theme' ? undefined : (v as ImageMask) })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__theme">{t('website.content.themeShape')}</SelectItem>
+                          {IMAGE_SHAPES.map((m) => <SelectItem key={m} value={m}>{t(`website.design.masks.${m}`)}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {s.type === 'hero' && (s.variant || '') === 'fullbleed' && <p className="text-xs text-muted-foreground">{t('website.content.fullbleedShapeHint')}</p>}
                     </div>
                   )}
                   {FIELDS[s.type].map((f) => {

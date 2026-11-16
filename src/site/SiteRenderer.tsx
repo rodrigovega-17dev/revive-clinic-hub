@@ -66,8 +66,8 @@ const Accent = ({ text }: { text?: string }) => {
   return <>{parts.map((p, i) => (i % 2 ? <em key={i}>{p}</em> : <span key={i}>{p}</span>))}</>;
 };
 
-const Media = ({ src, alt, children, className }: { src?: string; alt?: string; children?: ReactNode; className?: string }) => (
-  <div className={`cs-media ${className ?? ''}`}>{src ? <img src={src} alt={alt ?? ''} loading="lazy" /> : children}</div>
+const Media = ({ src, alt, children, className, shape }: { src?: string; alt?: string; children?: ReactNode; className?: string; shape?: string }) => (
+  <div className={`cs-media ${className ?? ''}`} data-shape={shape}>{src ? <img src={src} alt={alt ?? ''} loading="lazy" /> : children}</div>
 );
 
 const Head = ({ s, center }: { s: Section; center?: boolean }) => (
@@ -105,7 +105,7 @@ const Hero = ({ s, c }: { s: Section; c: Ctx }) => {
       <div className="cs-hero-editorial">
         {text}
         <figure style={{ margin: 0 }}>
-          <Media src={d.imageUrl} alt={d.title} />
+          <Media src={d.imageUrl} alt={d.title} shape={d.imageShape || c.theme.mask} />
           <figcaption>{c.site.clinic.address || c.site.clinic.name}</figcaption>
         </figure>
       </div>
@@ -123,7 +123,7 @@ const Hero = ({ s, c }: { s: Section; c: Ctx }) => {
   if (variant === 'fullbleed')
     return (
       <div className="cs-hero-full">
-        <Media src={d.imageUrl} alt={d.title} />
+        <Media src={d.imageUrl} alt={d.title} shape={d.imageShape || c.theme.mask} />
         <div>
           {d.eyebrow && <p className="cs-eyebrow">{d.eyebrow}</p>}
           <h1 className="cs-h cs-h1"><Accent text={d.title} /></h1>
@@ -154,7 +154,7 @@ const Hero = ({ s, c }: { s: Section; c: Ctx }) => {
     <div className="cs-hero-split">
       {text}
       <div className="cs-mediabox">
-        <Media src={d.imageUrl} alt={d.title} />
+        <Media src={d.imageUrl} alt={d.title} shape={d.imageShape || c.theme.mask} />
         {firstBookable && (
           <div className="cs-float">
             <span>{firstBookable.name}</span>
@@ -247,7 +247,7 @@ const About = ({ s, c }: { s: Section; c: Ctx }) => {
     );
   return (
     <div className="cs-about-split">
-      <Media src={s.data.imageUrl} alt={s.data.title} />
+      <Media src={s.data.imageUrl} alt={s.data.title} shape={s.data.imageShape || c.theme.mask} />
       <div>
         {s.data.eyebrow && <p className="cs-eyebrow">{s.data.eyebrow}</p>}
         <h2 className="cs-h cs-h2"><Accent text={s.data.title} /></h2>
@@ -283,7 +283,7 @@ const Team = ({ s, c }: { s: Section; c: Ctx }) => {
       <div className="cs-team-grid">
         {people.map((p) => (
           <div key={p.id}>
-            <Media src={p.photo_url ?? undefined} alt={fullName(p)}>
+            <Media src={p.photo_url ?? undefined} alt={fullName(p)} shape={s.data.imageShape || c.theme.mask}>
               <span className="cs-initials">{initials(p)}</span>
             </Media>
             <h3 className="cs-h cs-h3">{fullName(p)}</h3>

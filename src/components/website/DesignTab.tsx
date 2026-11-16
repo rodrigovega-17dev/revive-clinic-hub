@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { SITE_FONTS, fontStack } from '@/site/fonts';
 import { useSiteFonts } from '@/site/SiteRenderer';
 import { SITE_THEMES, contrastRatio, resolveTheme } from '@/site/themes';
-import { BLOCK_VARIANTS, type ButtonStyle, type ImageMask, type SectionType, type Texture, type ThemeColors, type ThemeOverrides } from '@/site/types';
+import { BLOCK_VARIANTS, IMAGE_SHAPES, type ButtonStyle, type ImageMask, type SectionType, type Texture, type ThemeColors, type ThemeOverrides } from '@/site/types';
 
 interface Props {
   themeKey: string;
@@ -18,7 +18,7 @@ interface Props {
 
 const COLOR_KEYS: (keyof ThemeColors)[] = ['bg', 'surface', 'ink', 'muted', 'accent', 'accentInk', 'line'];
 const BUTTONS: ButtonStyle[] = ['pill', 'soft', 'square', 'underline', 'brutal'];
-const MASKS: ImageMask[] = ['none', 'rounded', 'arch', 'circle', 'blob'];
+const MASKS: ImageMask[] = IMAGE_SHAPES;
 const TEXTURES: Texture[] = ['none', 'grain', 'grid', 'dots', 'glow'];
 const VARIANT_BLOCKS = Object.keys(BLOCK_VARIANTS).filter((k) => BLOCK_VARIANTS[k as SectionType].length > 1) as SectionType[];
 

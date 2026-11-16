@@ -78,10 +78,15 @@
   background: radial-gradient(120% 80% at 75% 15%, color-mix(in srgb, #fff 35%, transparent), transparent 60%),
               linear-gradient(160deg, color-mix(in srgb, var(--s-accent) 55%, var(--s-bg)), color-mix(in srgb, var(--s-accent) 85%, var(--s-ink))); }
 .cs-media img { width: 100%; height: 100%; object-fit: cover; }
-.cs-root[data-mask="arch"] .cs-media { border-radius: 999px 999px 0 0; }
-.cs-root[data-mask="circle"] .cs-media { border-radius: 50%; aspect-ratio: 1; }
-.cs-root[data-mask="blob"] .cs-media { border-radius: 58% 42% 47% 53% / 46% 55% 45% 54%; aspect-ratio: 1; }
-.cs-root[data-mask="rounded"] .cs-media { border-radius: max(12px, var(--s-radius)); }
+/* Image shape: per section (data.imageShape) or the theme's default mask. */
+.cs-root .cs-media[data-shape="arch"] { border-radius: 999px 999px 0 0; }
+.cs-root .cs-media[data-shape="circle"] { border-radius: 50%; aspect-ratio: 1; }
+.cs-root .cs-media[data-shape="blob"] { border-radius: 58% 42% 47% 53% / 46% 55% 45% 54%; aspect-ratio: 1; }
+.cs-root .cs-media[data-shape="rounded"] { border-radius: max(12px, var(--s-radius)); }
+.cs-root .cs-media[data-shape="square"] { border-radius: 0; aspect-ratio: 1; }
+.cs-root .cs-media[data-shape="full"] { border-radius: 0; aspect-ratio: auto; }
+.cs-root .cs-media[data-shape="full"] img { height: auto; object-fit: contain; }
+.cs-root .cs-media[data-shape="full"]:not(:has(img)) { aspect-ratio: 4 / 3; }
 .cs-root[data-btn="brutal"] .cs-media { border: 2px solid var(--s-line); }
 
 /* Nav + footer */
@@ -165,7 +170,6 @@
 /* ---------- TEAM ---------- */
 .cs-team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 24px; }
 .cs-team-grid .cs-media { aspect-ratio: 4 / 5; margin-bottom: 14px; display: grid; place-items: center; }
-.cs-root[data-mask="arch"] .cs-team-grid .cs-media { aspect-ratio: 4 / 5; }
 .cs-initials { font-family: var(--s-font-display); font-size: 48px; color: var(--s-accent-ink); opacity: .85; }
 .cs-team-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 40px; }
 .cs-team-list li { padding: 20px 0; border-top: 1px solid var(--s-line); display: grid; gap: 4px; }
