@@ -26,7 +26,10 @@ import GoogleAuthCallback from "./pages/GoogleAuthCallback";
 import PasswordResetConfirm from "./components/auth/PasswordResetConfirm";
 import TranslationDebugger from "./components/TranslationDebugger";
 import { useTranslation } from "react-i18next";
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
+
+const PublicSite = lazy(() => import("./pages/PublicSite"));
+const Website = lazy(() => import("./pages/Website"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -84,6 +87,8 @@ const App = () => {
               <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
               <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />
               <Route path="/activity" element={<ProtectedRoute><Layout><ActivityLog /></Layout></ProtectedRoute>} />
+              <Route path="/s/:slug" element={<Suspense fallback={null}><PublicSite /></Suspense>} />
+              <Route path="/website" element={<ProtectedRoute><Layout><Suspense fallback={null}><Website /></Suspense></Layout></ProtectedRoute>} />
               <Route path="/ai-chat" element={<ProtectedRoute><Layout><FinancePinGate><AiChat /></FinancePinGate></Layout></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><Layout><ComingSoon title={t('comingSoon.reportsTitle')} description={t('comingSoon.reportsDescription')} /></Layout></ProtectedRoute>} />
               <Route path="/google-auth-callback" element={<GoogleAuthCallback />} />
