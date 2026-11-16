@@ -977,7 +977,11 @@
     "slotMinutes": "Turno (min)",
     "bufferMinutes": "Buffer (min)",
     "invalidScheduleTime": "La hora de inicio debe ser anterior a la hora de fin en los días activos.",
-    "contactSupport": "Contactar Soporte"
+    "contactSupport": "Contactar Soporte",
+    "break": "Descanso",
+    "breakHelp": "El descanso (p. ej. la comida) no se ofrece para citas, ni en el ERP ni en el sitio web.",
+    "clearBreak": "Quitar descanso",
+    "breakInvalid": "El descanso debe estar dentro del horario; no se guardará así."
   },
   "finance": {
     "title": "Finanzas",

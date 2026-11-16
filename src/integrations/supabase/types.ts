@@ -1654,6 +1654,8 @@ export type Database = {
       }
       therapist_schedule_rules: {
         Row: {
+          break_end: string | null
+          break_start: string | null
           buffer_minutes: number
           clinic_id: string
           created_at: string | null
@@ -1667,6 +1669,8 @@ export type Database = {
           weekday: number
         }
         Insert: {
+          break_end?: string | null
+          break_start?: string | null
           buffer_minutes?: number
           clinic_id: string
           created_at?: string | null
@@ -1680,6 +1684,8 @@ export type Database = {
           weekday: number
         }
         Update: {
+          break_end?: string | null
+          break_start?: string | null
           buffer_minutes?: number
           clinic_id?: string
           created_at?: string | null

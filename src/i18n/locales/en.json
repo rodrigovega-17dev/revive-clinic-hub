@@ -977,7 +977,11 @@
     "scheduleEnd": "End",
     "slotMinutes": "Slot (min)",
     "bufferMinutes": "Buffer (min)",
-    "invalidScheduleTime": "Start time must be before end time for active days."
+    "invalidScheduleTime": "Start time must be before end time for active days.",
+    "break": "Break",
+    "breakHelp": "The break (e.g. lunch) is never offered for appointments, in the ERP or on the website.",
+    "clearBreak": "Remove break",
+    "breakInvalid": "The break must be inside working hours; it will not be saved like this."
   },
   "finance": {
     "title": "Finance",

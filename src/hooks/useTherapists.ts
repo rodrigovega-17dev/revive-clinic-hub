@@ -15,6 +15,9 @@ export type TherapistScheduleRuleInput = {
   slot_minutes: number;
   buffer_minutes: number;
   is_active: boolean;
+  /** Daily break (e.g. lunch) as HH:MM; empty string when there is none. */
+  break_start: string;
+  break_end: string;
 };
 
 const DEFAULT_RULES: TherapistScheduleRuleInput[] = Array.from({ length: 7 }, (_, weekday) => ({
@@ -24,6 +27,8 @@ const DEFAULT_RULES: TherapistScheduleRuleInput[] = Array.from({ length: 7 }, (_
   slot_minutes: 60,
   buffer_minutes: 0,
   is_active: true,
+  break_start: '',
+  break_end: '',
 }));
 
 export const createDefaultScheduleRules = () =>
@@ -46,10 +51,16 @@ const sanitizeRuleForDb = (rule: TherapistScheduleRuleInput) => {
     start = '08:00:00';
     end = '18:00:00';
   }
+  // Keep the break only when it is complete, ordered and inside the working window.
+  const bStart = rule.break_start ? normalizeTimeForSave(rule.break_start) : null;
+  const bEnd = rule.break_end ? normalizeTimeForSave(rule.break_end) : null;
+  const validBreak = !!bStart && !!bEnd && bStart < bEnd && bStart >= start && bEnd <= end;
   return {
     ...rule,
     start_time: start,
     end_time: end,
+    break_start: validBreak ? bStart : null,
+    break_end: validBreak ? bEnd : null,
   };
 };
 
@@ -62,6 +73,8 @@ const buildRulesByWeekday = (
     slot_minutes: number;
     buffer_minutes: number;
     is_active: boolean;
+    break_start?: string | null;
+    break_end?: string | null;
   }>,
   therapistId?: string
 ) => {
@@ -83,6 +96,8 @@ const buildRulesByWeekday = (
       slot_minutes: source.slot_minutes ?? defaultRule.slot_minutes,
       buffer_minutes: source.buffer_minutes ?? defaultRule.buffer_minutes,
       is_active: source.is_active ?? defaultRule.is_active,
+      break_start: 'break_start' in source && source.break_start ? source.break_start.slice(0, 5) : '',
+      break_end: 'break_end' in source && source.break_end ? source.break_end.slice(0, 5) : '',
     };
   });
 };
@@ -122,7 +137,7 @@ export const useTherapistScheduleRules = (therapistId?: string) => {
 
       const query = supabase
         .from('therapist_schedule_rules')
-        .select('therapist_id, weekday, start_time, end_time, slot_minutes, buffer_minutes, is_active')
+        .select('therapist_id, weekday, start_time, end_time, slot_minutes, buffer_minutes, is_active, break_start, break_end')
         .eq('clinic_id', clinicId);
 
       const { data, error } = therapistId
@@ -162,6 +177,8 @@ export const useUpsertTherapistScheduleRules = () => {
           slot_minutes: sane.slot_minutes,
           buffer_minutes: sane.buffer_minutes,
           is_active: sane.is_active,
+          break_start: sane.break_start,
+          break_end: sane.break_end,
         };
       });
 

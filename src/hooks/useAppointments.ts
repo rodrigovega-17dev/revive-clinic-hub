@@ -506,7 +506,7 @@ export const useTherapistAvailability = (
       // Load schedule rules (therapist-specific overrides clinic defaults)
       const { data: rules, error: rulesError } = await supabase
         .from('therapist_schedule_rules')
-        .select('therapist_id, weekday, start_time, end_time, slot_minutes, buffer_minutes, is_active')
+        .select('therapist_id, weekday, start_time, end_time, slot_minutes, buffer_minutes, is_active, break_start, break_end')
         .eq('clinic_id', clinicId)
         .eq('is_active', true)
         .or(`therapist_id.eq.${therapistId},therapist_id.is.null`);
@@ -630,6 +630,8 @@ type ScheduleRule = {
   slot_minutes: number;
   buffer_minutes: number;
   is_active: boolean;
+  break_start?: string | null;
+  break_end?: string | null;
 };
 
 const DEFAULT_RULE: ScheduleRule = {
@@ -678,7 +680,17 @@ const isWithinRuleWindow = (start: Date, end: Date, rule: ScheduleRule) => {
   const dayStart = new Date(start.getFullYear(), start.getMonth(), start.getDate(), startHour, startMinute, startSecond);
   const dayEnd = new Date(start.getFullYear(), start.getMonth(), start.getDate(), endHour, endMinute, endSecond);
 
-  return start >= dayStart && end <= dayEnd;
+  return start >= dayStart && end <= dayEnd && !overlapsRuleBreak(start, end, rule);
+};
+
+/** True when [start, end) overlaps the rule's daily break (e.g. lunch). */
+const overlapsRuleBreak = (start: Date, end: Date, rule: ScheduleRule) => {
+  if (!rule.break_start || !rule.break_end) return false;
+  const b1 = parseTimeParts(rule.break_start);
+  const b2 = parseTimeParts(rule.break_end);
+  const breakStart = new Date(start.getFullYear(), start.getMonth(), start.getDate(), b1.hour, b1.minute, b1.second);
+  const breakEnd = new Date(start.getFullYear(), start.getMonth(), start.getDate(), b2.hour, b2.minute, b2.second);
+  return start < breakEnd && end > breakStart;
 };
 
 const hasTimeConflict = ({
@@ -819,6 +831,12 @@ const generateAlternativeSlots = (
         continue;
       }
       
+      // Skip slots that overlap the daily break (lunch)
+      if (overlapsRuleBreak(slotStart, slotEnd, ruleForDay)) {
+        slotStart = new Date(slotStart.getTime() + slotIntervalMinutes * 60000);
+        continue;
+      }
+
       // Skip the requested time
       if (Math.abs(slotStart.getTime() - requestedStart.getTime()) < 60000) {
         slotStart = new Date(slotStart.getTime() + slotIntervalMinutes * 60000);

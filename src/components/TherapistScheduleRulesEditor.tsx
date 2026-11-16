@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -9,6 +10,13 @@ type TherapistScheduleRulesEditorProps = {
   rules: TherapistScheduleRuleInput[];
   onChange: (rules: TherapistScheduleRuleInput[]) => void;
   disabled?: boolean;
+};
+
+/** A break is ignored on save unless both ends are set, ordered and inside the working window. */
+const breakIsInvalid = (rule: TherapistScheduleRuleInput) => {
+  if (!rule.break_start && !rule.break_end) return false;
+  if (!rule.break_start || !rule.break_end) return true;
+  return !(rule.break_start < rule.break_end && rule.break_start >= rule.start_time && rule.break_end <= rule.end_time);
 };
 
 const TherapistScheduleRulesEditor = ({
@@ -47,7 +55,7 @@ const TherapistScheduleRulesEditor = ({
       <div>
         <Label className="text-sm font-medium">{t('therapists.workingHours')}</Label>
         <p className="text-xs text-muted-foreground">
-          {t('therapists.workingHoursDescription')}
+          {t('therapists.workingHoursDescription')} {t('therapists.breakHelp')}
         </p>
       </div>
 
@@ -64,7 +72,7 @@ const TherapistScheduleRulesEditor = ({
         {rules.map((rule) => {
           const isDisabled = disabled || !rule.is_active;
           return (
-            <div key={rule.weekday} className="grid grid-cols-6 gap-2 items-center">
+            <div key={rule.weekday} className="grid grid-cols-6 gap-x-2 gap-y-1 items-center border-b border-border/60 pb-2 last:border-0">
               <div className="text-sm">{dayLabels[rule.weekday]}</div>
               <div className="flex justify-center">
                 <Switch
@@ -115,6 +123,41 @@ const TherapistScheduleRulesEditor = ({
                 }
                 disabled={isDisabled}
               />
+              <div className="col-span-2 text-xs text-muted-foreground pl-1">{t('therapists.break')}</div>
+              <Input
+                type="time"
+                aria-label={`${t('therapists.break')} ${dayLabels[rule.weekday]} ${t('therapists.scheduleStart')}`}
+                value={rule.break_start}
+                onChange={(event) =>
+                  handleRuleChange(rule.weekday, { break_start: event.target.value })
+                }
+                disabled={isDisabled}
+              />
+              <Input
+                type="time"
+                aria-label={`${t('therapists.break')} ${dayLabels[rule.weekday]} ${t('therapists.scheduleEnd')}`}
+                value={rule.break_end}
+                onChange={(event) =>
+                  handleRuleChange(rule.weekday, { break_end: event.target.value })
+                }
+                disabled={isDisabled}
+              />
+              <div className="col-span-2">
+                {(rule.break_start || rule.break_end) && !isDisabled && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-xs"
+                    onClick={() => handleRuleChange(rule.weekday, { break_start: '', break_end: '' })}
+                  >
+                    {t('therapists.clearBreak')}
+                  </Button>
+                )}
+                {breakIsInvalid(rule) && !isDisabled && (
+                  <span className="text-xs text-destructive">{t('therapists.breakInvalid')}</span>
+                )}
+              </div>
             </div>
           );
         })}
